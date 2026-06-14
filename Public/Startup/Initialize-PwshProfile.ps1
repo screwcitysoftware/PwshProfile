@@ -81,7 +81,7 @@ function Initialize-PwshProfile {
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
         'Fzf', 'Fnm', 'Xh', 'Completions'. Dropping one omits its step; the auto-installing ones
         (Zoxide, Fzf, Fnm, Xh) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
-        registrations (winget, Azure CLI, Tailscale, Docker, 1Password) that run as the final Tools sub-step.
+        registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
 
@@ -267,6 +267,7 @@ function Initialize-PwshProfile {
                     Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
                     Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
                     Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
+                    Invoke-Step "GitHub CLI Completions" { Enable-GithubCliCompletion }
                 }
             }
         }

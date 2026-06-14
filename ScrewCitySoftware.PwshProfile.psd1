@@ -32,6 +32,7 @@
         'Enable-TailscaleCompletion'
         'Enable-DockerCompletion'
         'Enable-1PasswordCompletion'
+        'Enable-GithubCliCompletion'
         'Set-WingetSetting'
         'Show-PwshProfileReadme'
     )

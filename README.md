@@ -261,7 +261,8 @@ ScrewCitySoftware.PwshProfile/
 │   │       ├── Enable-AzCompletion.ps1         # Azure CLI (az) native (argcomplete) tab completion
 │   │       ├── Enable-TailscaleCompletion.ps1  # tailscale (Cobra) tab completion
 │   │       ├── Enable-DockerCompletion.ps1     # docker tab completion via the DockerCompletion module
-│   │       └── Enable-1PasswordCompletion.ps1  # 1Password CLI (op, Cobra) tab completion
+│   │       ├── Enable-1PasswordCompletion.ps1  # 1Password CLI (op, Cobra) tab completion
+│   │       └── Enable-GithubCliCompletion.ps1  # GitHub CLI (gh, Cobra) tab completion
 │   ├── Rendering/
 │   │   ├── Invoke-Step.ps1                # Invoke-Step dispatcher (+ the module-scoped step state)
 │   │   ├── Write-Figlet.ps1               # figlet banner writer
@@ -653,7 +654,7 @@ Get-OhMyPoshTheme | Set-Content ~/my.omp.json   # or: Export-OhMyPoshTheme -Path
 Enable-OhMyPosh -Configuration ~/my.omp.json
 ```
 
-### `Enable-WingetCompletion`, `Enable-AzCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`
+### `Enable-WingetCompletion`, `Enable-AzCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`, `Enable-GithubCliCompletion`
 
 One `Enable-<Tool>Completion` per CLI, used by the **Completions** sub-step under **Tools** (and
 living together under `Public/Tools/Completions/`). Each only registers tab completion (no install
@@ -667,11 +668,11 @@ own — the caller supplies the step label — so they read as thin one-liners u
   is a Python (argcomplete) CLI with no `completion powershell` subcommand, so it drives argcomplete
   via a temp file and the `_ARGCOMPLETE` / `COMP_*` environment variables (the [supported mechanism](https://learn.microsoft.com/cli/azure/use-azure-cli-successfully-powershell#enable-tab-completion-in-powershell)).
   `Initialize-PSReadline` binds `Tab` to menu completion so the candidates render as a navigable list.
-- **`Enable-TailscaleCompletion`** / **`Enable-1PasswordCompletion`** — register completion for the
-  Cobra-based `tailscale` / `op` (1Password) CLIs. Both wrap the module-private
-  `Register-CobraCompletion` engine, which generates `<Command> completion powershell` and activates
-  it via `Invoke-InGlobalScope` (run in global scope so its helpers stay reachable at tab time
-  without being tagged to the module).
+- **`Enable-TailscaleCompletion`** / **`Enable-1PasswordCompletion`** / **`Enable-GithubCliCompletion`** —
+  register completion for the Cobra-based `tailscale` / `op` (1Password) / `gh` (GitHub) CLIs. All
+  wrap the module-private `Register-CobraCompletion` engine, which generates `<Command> completion
+  powershell` and activates it via `Invoke-InGlobalScope` (run in global scope so its helpers stay
+  reachable at tab time without being tagged to the module).
 - **`Enable-DockerCompletion`** — Docker has no built-in PowerShell completion subcommand; its
   completion ships as the community `DockerCompletion` module, which this imports via
   `Import-ModuleSafe`. Guarded by `Get-Command docker`, so the module is never fetched from the
@@ -683,6 +684,7 @@ Enable-AzCompletion
 Enable-TailscaleCompletion
 Enable-DockerCompletion
 Enable-1PasswordCompletion
+Enable-GithubCliCompletion
 ```
 
 ### `Set-WingetSetting`

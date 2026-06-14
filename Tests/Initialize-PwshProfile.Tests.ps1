@@ -37,6 +37,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
         Mock -ModuleName $script:Module Enable-DockerCompletion { }
         Mock -ModuleName $script:Module Enable-1PasswordCompletion { }
+        Mock -ModuleName $script:Module Enable-GithubCliCompletion { }
     }
 
     Context 'defaults reproduce the full startup' {
@@ -54,6 +55,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-DockerCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-1PasswordCompletion -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-GithubCliCompletion -Times 1 -Exactly
         }
     }
 
@@ -129,6 +131,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-DockerCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-1PasswordCompletion -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-GithubCliCompletion -Times 0 -Exactly
         }
 
         It 'leaves xh running when Completions is skipped, since both live under Tools' {
