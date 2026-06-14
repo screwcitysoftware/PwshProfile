@@ -13,7 +13,7 @@ function Initialize-PwshProfile {
           4. Runs "Tools": zoxide, fzf, fnm, and xh — fzf sits next to zoxide (zoxide's
              interactive picker auto-uses fzf when it's on PATH), and fnm follows zoxide since
              Enable-FastNodeManager wraps zoxide's cd hook — then "Completions": winget,
-             Azure CLI, Tailscale, Docker, and 1Password (registration only — these install nothing),
+             Azure CLI, Tailscale, Docker, 1Password, and GitHub CLI (registration only — these install nothing),
              since the completions are operations on the tools.
 
         Each of the three sections is its own top-level Invoke-Step, so each renders its own status

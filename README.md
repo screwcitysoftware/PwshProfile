@@ -435,7 +435,7 @@ shrinks to an import plus this call. In order it shows the startup banner, then 
 top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
 (oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
 (zoxide, fzf, fnm, xh — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`), which ends with the shell
-**completions** (winget, Azure CLI, Tailscale, Docker, 1Password — registration only, no installs) as a nested
+**completions** (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI — registration only, no installs) as a nested
 sub-step, since completions are operations on the tools. Each section renders its own spinner and
 summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
 deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or
