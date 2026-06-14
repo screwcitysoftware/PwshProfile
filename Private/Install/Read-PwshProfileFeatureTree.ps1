@@ -26,8 +26,8 @@ function Read-PwshProfileFeatureTree {
         fallback elsewhere.
 
     .PARAMETER Enabled
-        A hashtable mapping each feature token (PSReadLine, TerminalIcons, PoshGit, Zoxide, Fnm, Xh,
-        Completions) to a boolean for its initial checked state. Missing/true tokens start checked.
+        A hashtable mapping each feature token (PSReadLine, TerminalIcons, PoshGit, Zoxide, Fzf, Fnm,
+        Xh, Completions) to a boolean for its initial checked state. Missing/true tokens start checked.
         On the first wizard pass every token is enabled; when the step is re-edited from the review
         hub, the caller passes the current state so prior choices are preserved.
 
@@ -72,6 +72,7 @@ function Read-PwshProfileFeatureTree {
         )
         Tools  = @(
             [pscustomobject]@{ Label = 'Zoxide (smart cd)'; Token = 'Zoxide' }
+            [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Token = 'Fzf' }
             [pscustomobject]@{ Label = 'Fast Node Manager (fnm)'; Token = 'Fnm' }
             [pscustomobject]@{ Label = 'xh (HTTP client)'; Token = 'Xh' }
             [pscustomobject]@{ Label = 'Shell completions'; Token = 'Completions' }
@@ -100,6 +101,7 @@ function Read-PwshProfileFeatureTree {
         '**Terminal-Icons** — file-type icons in directory listings (`ls` / `Get-ChildItem`).'
         '**posh-git** — git branch and status shown right in the prompt.'
         '**Zoxide** (smart `cd`) — a cd that learns your most-used dirs so you can jump by partial name.'
+        '**fzf** (fuzzy finder) — a fast command-line fuzzy picker; when on PATH, zoxide uses it for its interactive `cdi`/`zi` jump.'
         '**Fast Node Manager** (`fnm`) — install and switch between Node.js versions per project.'
         '**xh** (HTTP client) — a fast, friendly `curl`/HTTPie-style tool for making HTTP requests.'
         '**Shell completions** — Tab completion for `winget`, `tailscale`, `docker`, and `op`.'

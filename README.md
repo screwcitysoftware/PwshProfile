@@ -43,7 +43,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install oh-my-posh, zoxide, fnm, and xh through the first-party
+  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, and xh through the first-party
   `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is missing;
   winget ships with Windows 11). Without winget those steps degrade silently; the rest of startup is
   unaffected.
@@ -252,15 +252,18 @@ ScrewCitySoftware.PwshProfile/
 │   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
 │   ├── Tools/
 │   │   ├── Enable-Zoxide.ps1
+│   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
 │   │   ├── Enable-Xh.ps1
+│   │   ├── Enable-Jq.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
-│   │       ├── Enable-AzCompletion.ps1         # Azure CLI (az) native (argcomplete) tab completion
+│   │       ├── Enable-AzureCliCompletion.ps1   # Azure CLI (az) native (argcomplete) tab completion
 │   │       ├── Enable-TailscaleCompletion.ps1  # tailscale (Cobra) tab completion
 │   │       ├── Enable-DockerCompletion.ps1     # docker tab completion via the DockerCompletion module
-│   │       └── Enable-1PasswordCompletion.ps1  # 1Password CLI (op, Cobra) tab completion
+│   │       ├── Enable-1PasswordCompletion.ps1  # 1Password CLI (op, Cobra) tab completion
+│   │       └── Enable-GithubCliCompletion.ps1  # GitHub CLI (gh, Cobra) tab completion
 │   ├── Rendering/
 │   │   ├── Invoke-Step.ps1                # Invoke-Step dispatcher (+ the module-scoped step state)
 │   │   ├── Write-Figlet.ps1               # figlet banner writer
@@ -432,8 +435,8 @@ The headline entry point: one call that runs the whole default profile startup, 
 shrinks to an import plus this call. In order it shows the startup banner, then runs three
 top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
 (oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
-(zoxide, fnm, xh — fnm after zoxide, since it hooks zoxide's `cd`), which ends with the shell
-**completions** (winget, Azure CLI, Tailscale, Docker, 1Password — registration only, no installs) as a nested
+(zoxide, fzf, fnm, xh — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`), which ends with the shell
+**completions** (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI — registration only, no installs) as a nested
 sub-step, since completions are operations on the tools. Each section renders its own spinner and
 summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
 deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or
@@ -461,8 +464,8 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
-  `PoshGit`, `Zoxide`, `Fnm`, `Xh`, `Completions` (skipping `Zoxide`/`Fnm`/`Xh` also avoids their
-  winget auto-install; `Completions` drops the shell-completion registrations under Tools).
+  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Completions` (skipping `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq` also
+  avoids their winget auto-install; `Completions` drops the shell-completion registrations under Tools).
   oh-my-posh is table stakes — it has no token in either parameter and always runs.
 - **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
   also drops the completions nested under it). `Prompt` is special: because oh-my-posh is
@@ -597,10 +600,11 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-FastNodeManager`, `Enable-Xh`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
-session's PATH so the install is usable immediately), then hooks it into the session. The
+session's PATH so the install is usable immediately), then — for tools that need it — hooks
+it into the session (install-only tools like `Enable-Fzf` and `Enable-Jq` skip this). The
 work is split into nested `Invoke-Step "Install"` / `Invoke-Step "Initialize"` substeps, so
 the two phases show as breadcrumb stages under the spinner. winget's own output is captured
 into a variable (`*>&1`) so it can't tear the live spinner. After install the exe is re-checked
@@ -612,17 +616,27 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   bundled `Assets/Themes/screwcity.omp.json`; pass `-Configuration` to use a different theme.
 - **`Enable-Zoxide [-Command <name>]`** — installs `ajeetdsouza.zoxide` and runs
   `zoxide init powershell --cmd <name>` (default `cd`, replacing the built-in).
+- **`Enable-Fzf`** — installs `junegunn.fzf` (the command-line fuzzy finder) and puts `fzf.exe`
+  on PATH. fzf and zoxide are independent, standalone tools, but **zoxide is built to integrate
+  with fzf**: when `fzf.exe` is on PATH, zoxide's interactive picker (`cdi` / `zi`) uses fzf for
+  fuzzy directory selection. fzf needs no PowerShell init, so this is install-only — there's no
+  Initialize work to do.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
   strategy) and completions, and — when zoxide is active — wraps `__zoxide_cd` so every
   directory change runs `fnm use`. Call after `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
   `http`/`https` to them globally, and registers tab completion for all four names.
+- **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
+  on PATH. jq is a standalone C program with no built-in shell completion, so this is
+  install-only — there's no Initialize work and no completion to register.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
 Enable-Zoxide
+Enable-Fzf
 Enable-FastNodeManager
 Enable-Xh
+Enable-Jq
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -646,7 +660,7 @@ Get-OhMyPoshTheme | Set-Content ~/my.omp.json   # or: Export-OhMyPoshTheme -Path
 Enable-OhMyPosh -Configuration ~/my.omp.json
 ```
 
-### `Enable-WingetCompletion`, `Enable-AzCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`
+### `Enable-WingetCompletion`, `Enable-AzureCliCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`, `Enable-GithubCliCompletion`
 
 One `Enable-<Tool>Completion` per CLI, used by the **Completions** sub-step under **Tools** (and
 living together under `Public/Tools/Completions/`). Each only registers tab completion (no install
@@ -656,15 +670,18 @@ own — the caller supplies the step label — so they read as thin one-liners u
 - **`Enable-WingetCompletion`** — registers a native argument completer for `winget` that
   delegates to `winget complete`, so completion tracks the installed winget version. winget is
   assumed present (it installs every other tool), so there's no install step.
-- **`Enable-AzCompletion`** — registers a native argument completer for the Azure CLI (`az`). `az`
+- **`Enable-AzureCliCompletion`** — registers a native argument completer for the Azure CLI (`az`). `az`
   is a Python (argcomplete) CLI with no `completion powershell` subcommand, so it drives argcomplete
   via a temp file and the `_ARGCOMPLETE` / `COMP_*` environment variables (the [supported mechanism](https://learn.microsoft.com/cli/azure/use-azure-cli-successfully-powershell#enable-tab-completion-in-powershell)).
   `Initialize-PSReadline` binds `Tab` to menu completion so the candidates render as a navigable list.
-- **`Enable-TailscaleCompletion`** / **`Enable-1PasswordCompletion`** — register completion for the
-  Cobra-based `tailscale` / `op` (1Password) CLIs. Both wrap the module-private
-  `Register-CobraCompletion` engine, which generates `<Command> completion powershell` and activates
-  it via `Invoke-InGlobalScope` (run in global scope so its helpers stay reachable at tab time
-  without being tagged to the module).
+- **`Enable-TailscaleCompletion`** / **`Enable-1PasswordCompletion`** / **`Enable-GithubCliCompletion`** —
+  register completion for the Cobra-based `tailscale` / `op` (1Password) / `gh` (GitHub) CLIs. All
+  wrap the module-private `Register-CobraCompletion` engine, which generates `<Command> completion
+  powershell` and activates it via `Invoke-InGlobalScope` (run in global scope so its helpers stay
+  reachable at tab time without being tagged to the module). `tailscale` / `op` take the shell
+  positionally; `gh` is the exception — it requires `completion -s powershell` (a bare positional
+  `powershell` makes gh emit bash), so `Enable-GithubCliCompletion` overrides the engine's default
+  generation args via `Register-CobraCompletion`'s `-CompletionArgument` parameter.
 - **`Enable-DockerCompletion`** — Docker has no built-in PowerShell completion subcommand; its
   completion ships as the community `DockerCompletion` module, which this imports via
   `Import-ModuleSafe`. Guarded by `Get-Command docker`, so the module is never fetched from the
@@ -672,10 +689,11 @@ own — the caller supplies the step label — so they read as thin one-liners u
 
 ```powershell
 Enable-WingetCompletion
-Enable-AzCompletion
+Enable-AzureCliCompletion
 Enable-TailscaleCompletion
 Enable-DockerCompletion
 Enable-1PasswordCompletion
+Enable-GithubCliCompletion
 ```
 
 ### `Set-WingetSetting`
@@ -799,7 +817,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fnm, xh, PwshSpectreConsole,
+- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, PwshSpectreConsole,
   Terminal-Icons, posh-git, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never
   bundled or redistributed here, and remain under their own respective licenses.

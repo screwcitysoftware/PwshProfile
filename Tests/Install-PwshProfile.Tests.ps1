@@ -427,7 +427,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Default install scope (winget)' }
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Winget progress bar style' }
             # Feature tree: everything enabled. Hub: submit (the first choice).
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fnm', 'Xh', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions') } -RemoveParameterType 'Color'
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'What would you like to do?' }
         }
     }
@@ -449,7 +449,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { 'Center' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Banner alignment' }
             Mock Read-SpectreSelection { [pscustomobject]@{ Label = 'x'; Icon = ':gear:' } } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Step marker icon' }
             # Fnm, Xh and Completions left unchecked; the rest enabled.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.StepIcon | Should -Be ':gear:'

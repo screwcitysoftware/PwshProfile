@@ -10,9 +10,10 @@ function Initialize-PwshProfile {
           2. Runs "Shell": the `which` global alias and PSReadLine setup.
           3. Runs "Prompt": oh-my-posh, Terminal-Icons, and posh-git — oh-my-posh first, since
              it is the prompt engine and table stakes for this profile.
-          4. Runs "Tools": zoxide, fnm, and xh — in that order, since Enable-FastNodeManager
-             wraps zoxide's cd hook and must follow Enable-Zoxide — then "Completions": winget,
-             Azure CLI, Tailscale, Docker, and 1Password (registration only — these install nothing),
+          4. Runs "Tools": zoxide, fzf, fnm, and xh — fzf sits next to zoxide (zoxide's
+             interactive picker auto-uses fzf when it's on PATH), and fnm follows zoxide since
+             Enable-FastNodeManager wraps zoxide's cd hook — then "Completions": winget,
+             Azure CLI, Tailscale, Docker, 1Password, and GitHub CLI (registration only — these install nothing),
              since the completions are operations on the tools.
 
         Each of the three sections is its own top-level Invoke-Step, so each renders its own status
@@ -78,9 +79,9 @@ function Initialize-PwshProfile {
 
     .PARAMETER Skip
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
-        'Fnm', 'Xh', 'Completions'. Dropping one omits its step; the auto-installing ones (Zoxide,
-        Fnm, Xh) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
-        registrations (winget, Azure CLI, Tailscale, Docker, 1Password) that run as the final Tools sub-step.
+        'Fzf', 'Fnm', 'Xh', 'Jq', 'Completions'. Dropping one omits its step; the auto-installing ones
+        (Zoxide, Fzf, Fnm, Xh, Jq) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
+        registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
 
@@ -124,8 +125,8 @@ function Initialize-PwshProfile {
 
     .NOTES
         Call from $PROFILE right after Import-Module of the manifest. The Completions step uses the
-        per-tool enablers Enable-WingetCompletion, Enable-AzCompletion, Enable-TailscaleCompletion,
-        Enable-DockerCompletion, and Enable-1PasswordCompletion.
+        per-tool enablers Enable-WingetCompletion, Enable-AzureCliCompletion, Enable-TailscaleCompletion,
+        Enable-DockerCompletion, Enable-1PasswordCompletion, and Enable-GithubCliCompletion.
     #>
     [CmdletBinding(DefaultParameterSetName = 'Bundled')]
     param(
@@ -188,7 +189,7 @@ function Initialize-PwshProfile {
         [string]$StepIcon = '',
 
         [Parameter()]
-        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fnm', 'Xh', 'Completions')]
+        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Completions')]
         [string[]]$Skip = @(),
 
         [Parameter()]
@@ -253,18 +254,21 @@ function Initialize-PwshProfile {
     if ($SkipSection -notcontains 'Tools') {
         Invoke-Step "Tools" -Icon $StepIcon {
             if ($Skip -notcontains 'Zoxide') { Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand } }
+            if ($Skip -notcontains 'Fzf')    { Invoke-Step "fzf" { Enable-Fzf } }
             if ($Skip -notcontains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
             if ($Skip -notcontains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
+            if ($Skip -notcontains 'Jq')     { Invoke-Step "jq" { Enable-Jq } }
             # Shell completions are operations on the tools, so they register as the final Tools
             # sub-step (registration only — these install nothing). Skipped via -Skip Completions,
             # and dropped wholesale when the whole Tools section is skipped.
             if ($Skip -notcontains 'Completions') {
                 Invoke-Step "Completions" {
                     Invoke-Step "Winget Completions"    { Enable-WingetCompletion }
-                    Invoke-Step "Azure CLI Completions" { Enable-AzCompletion }
+                    Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
                     Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
                     Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
                     Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
+                    Invoke-Step "GitHub CLI Completions" { Enable-GithubCliCompletion }
                 }
             }
         }

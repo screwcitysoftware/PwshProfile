@@ -29,13 +29,15 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Import-ModuleSafe { }
         Mock -ModuleName $script:Module Enable-OhMyPosh { }
         Mock -ModuleName $script:Module Enable-Zoxide { }
+        Mock -ModuleName $script:Module Enable-Fzf { }
         Mock -ModuleName $script:Module Enable-FastNodeManager { }
         Mock -ModuleName $script:Module Enable-Xh { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
-        Mock -ModuleName $script:Module Enable-AzCompletion { }
+        Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
         Mock -ModuleName $script:Module Enable-DockerCompletion { }
         Mock -ModuleName $script:Module Enable-1PasswordCompletion { }
+        Mock -ModuleName $script:Module Enable-GithubCliCompletion { }
     }
 
     Context 'defaults reproduce the full startup' {
@@ -44,14 +46,16 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly -ParameterFilter { $Command -eq 'cd' }
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
             # Completions register by default (as the final sub-step of Tools).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-AzCompletion -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-DockerCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-1PasswordCompletion -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-GithubCliCompletion -Times 1 -Exactly
         }
     }
 
@@ -101,6 +105,13 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
         }
 
+        It 'skips fzf but keeps its siblings' {
+            Initialize-PwshProfile -Skip Fzf
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
+        }
+
         It 'skips the banner' {
             Initialize-PwshProfile -Skip Banner
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
@@ -116,10 +127,11 @@ Describe 'Initialize-PwshProfile' {
         It 'skips the completion registrations under Tools' {
             Initialize-PwshProfile -Skip Completions
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-AzCompletion -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-DockerCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-1PasswordCompletion -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-GithubCliCompletion -Times 0 -Exactly
         }
 
         It 'leaves xh running when Completions is skipped, since both live under Tools' {
@@ -132,10 +144,11 @@ Describe 'Initialize-PwshProfile' {
         It 'skips the whole Tools section, including the completions nested under it' {
             Initialize-PwshProfile -SkipSection Tools
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-AzCompletion -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-DockerCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-1PasswordCompletion -Times 0 -Exactly

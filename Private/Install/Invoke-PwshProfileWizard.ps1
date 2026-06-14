@@ -264,6 +264,7 @@ function Invoke-PwshProfileWizard {
             TerminalIcons = ($skip -notcontains 'TerminalIcons')
             PoshGit       = ($skip -notcontains 'PoshGit')
             Zoxide        = ($skip -notcontains 'Zoxide')
+            Fzf           = ($skip -notcontains 'Fzf')
             Fnm           = ($skip -notcontains 'Fnm')
             Xh            = ($skip -notcontains 'Xh')
             Completions   = ($skip -notcontains 'Completions')
@@ -274,7 +275,7 @@ function Invoke-PwshProfileWizard {
         # sub-step under Tools); keep the Banner skip (owned by the banner step). The wizard never
         # emits -SkipSection: unchecking a whole section in the tree just unchecks its leaves.
         $newSkip = @(@($skip | Where-Object { $_ -eq 'Banner' }))
-        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fnm', 'Xh', 'Completions') {
+        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions') {
             if ($selected -notcontains $t) { $newSkip += $t }
         }
         $s.Settings.Skip = $newSkip
