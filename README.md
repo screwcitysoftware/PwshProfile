@@ -255,6 +255,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
 │   │   ├── Enable-Xh.ps1
+│   │   ├── Enable-Jq.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
@@ -463,7 +464,7 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
-  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Completions` (skipping `Zoxide`/`Fzf`/`Fnm`/`Xh` also
+  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Completions` (skipping `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq` also
   avoids their winget auto-install; `Completions` drops the shell-completion registrations under Tools).
   oh-my-posh is table stakes — it has no token in either parameter and always runs.
 - **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
@@ -599,10 +600,11 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
-session's PATH so the install is usable immediately), then hooks it into the session. The
+session's PATH so the install is usable immediately), then — for tools that need it — hooks
+it into the session (install-only tools like `Enable-Fzf` and `Enable-Jq` skip this). The
 work is split into nested `Invoke-Step "Install"` / `Invoke-Step "Initialize"` substeps, so
 the two phases show as breadcrumb stages under the spinner. winget's own output is captured
 into a variable (`*>&1`) so it can't tear the live spinner. After install the exe is re-checked
@@ -624,6 +626,9 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   directory change runs `fnm use`. Call after `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
   `http`/`https` to them globally, and registers tab completion for all four names.
+- **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
+  on PATH. jq is a standalone C program with no built-in shell completion, so this is
+  install-only — there's no Initialize work and no completion to register.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
@@ -631,6 +636,7 @@ Enable-Zoxide
 Enable-Fzf
 Enable-FastNodeManager
 Enable-Xh
+Enable-Jq
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`

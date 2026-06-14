@@ -27,6 +27,7 @@
         'Enable-Fzf'
         'Enable-FastNodeManager'
         'Enable-Xh'
+        'Enable-Jq'
         'Enable-WingetCompletion'
         'Enable-AzureCliCompletion'
         'Enable-TailscaleCompletion'

@@ -79,8 +79,8 @@ function Initialize-PwshProfile {
 
     .PARAMETER Skip
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
-        'Fzf', 'Fnm', 'Xh', 'Completions'. Dropping one omits its step; the auto-installing ones
-        (Zoxide, Fzf, Fnm, Xh) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
+        'Fzf', 'Fnm', 'Xh', 'Jq', 'Completions'. Dropping one omits its step; the auto-installing ones
+        (Zoxide, Fzf, Fnm, Xh, Jq) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
         registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
@@ -189,7 +189,7 @@ function Initialize-PwshProfile {
         [string]$StepIcon = '',
 
         [Parameter()]
-        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions')]
+        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Completions')]
         [string[]]$Skip = @(),
 
         [Parameter()]
@@ -257,6 +257,7 @@ function Initialize-PwshProfile {
             if ($Skip -notcontains 'Fzf')    { Invoke-Step "fzf" { Enable-Fzf } }
             if ($Skip -notcontains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
             if ($Skip -notcontains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
+            if ($Skip -notcontains 'Jq')     { Invoke-Step "jq" { Enable-Jq } }
             # Shell completions are operations on the tools, so they register as the final Tools
             # sub-step (registration only — these install nothing). Skipped via -Skip Completions,
             # and dropped wholesale when the whole Tools section is skipped.
