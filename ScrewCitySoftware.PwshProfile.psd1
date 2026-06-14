@@ -28,7 +28,7 @@
         'Enable-FastNodeManager'
         'Enable-Xh'
         'Enable-WingetCompletion'
-        'Enable-AzCompletion'
+        'Enable-AzureCliCompletion'
         'Enable-TailscaleCompletion'
         'Enable-DockerCompletion'
         'Enable-1PasswordCompletion'

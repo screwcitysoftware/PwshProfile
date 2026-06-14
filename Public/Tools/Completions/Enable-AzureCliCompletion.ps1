@@ -1,4 +1,4 @@
-function Enable-AzCompletion {
+function Enable-AzureCliCompletion {
     <#
     .SYNOPSIS
         Registers native tab completion for the Azure CLI (az) in the current session.
@@ -19,12 +19,12 @@ function Enable-AzCompletion {
         one (the caller supplies the step label) to render it as a startup substep.
 
     .EXAMPLE
-        Enable-AzCompletion
+        Enable-AzureCliCompletion
 
         Registers Azure CLI tab completion if az is installed.
 
     .EXAMPLE
-        Invoke-Step "Azure CLI Completions" { Enable-AzCompletion }
+        Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
 
         Registers it as a rendered startup substep.
 

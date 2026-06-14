@@ -258,7 +258,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
-│   │       ├── Enable-AzCompletion.ps1         # Azure CLI (az) native (argcomplete) tab completion
+│   │       ├── Enable-AzureCliCompletion.ps1   # Azure CLI (az) native (argcomplete) tab completion
 │   │       ├── Enable-TailscaleCompletion.ps1  # tailscale (Cobra) tab completion
 │   │       ├── Enable-DockerCompletion.ps1     # docker tab completion via the DockerCompletion module
 │   │       ├── Enable-1PasswordCompletion.ps1  # 1Password CLI (op, Cobra) tab completion
@@ -654,7 +654,7 @@ Get-OhMyPoshTheme | Set-Content ~/my.omp.json   # or: Export-OhMyPoshTheme -Path
 Enable-OhMyPosh -Configuration ~/my.omp.json
 ```
 
-### `Enable-WingetCompletion`, `Enable-AzCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`, `Enable-GithubCliCompletion`
+### `Enable-WingetCompletion`, `Enable-AzureCliCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`, `Enable-GithubCliCompletion`
 
 One `Enable-<Tool>Completion` per CLI, used by the **Completions** sub-step under **Tools** (and
 living together under `Public/Tools/Completions/`). Each only registers tab completion (no install
@@ -664,7 +664,7 @@ own — the caller supplies the step label — so they read as thin one-liners u
 - **`Enable-WingetCompletion`** — registers a native argument completer for `winget` that
   delegates to `winget complete`, so completion tracks the installed winget version. winget is
   assumed present (it installs every other tool), so there's no install step.
-- **`Enable-AzCompletion`** — registers a native argument completer for the Azure CLI (`az`). `az`
+- **`Enable-AzureCliCompletion`** — registers a native argument completer for the Azure CLI (`az`). `az`
   is a Python (argcomplete) CLI with no `completion powershell` subcommand, so it drives argcomplete
   via a temp file and the `_ARGCOMPLETE` / `COMP_*` environment variables (the [supported mechanism](https://learn.microsoft.com/cli/azure/use-azure-cli-successfully-powershell#enable-tab-completion-in-powershell)).
   `Initialize-PSReadline` binds `Tab` to menu completion so the candidates render as a navigable list.
@@ -680,7 +680,7 @@ own — the caller supplies the step label — so they read as thin one-liners u
 
 ```powershell
 Enable-WingetCompletion
-Enable-AzCompletion
+Enable-AzureCliCompletion
 Enable-TailscaleCompletion
 Enable-DockerCompletion
 Enable-1PasswordCompletion

@@ -125,8 +125,8 @@ function Initialize-PwshProfile {
 
     .NOTES
         Call from $PROFILE right after Import-Module of the manifest. The Completions step uses the
-        per-tool enablers Enable-WingetCompletion, Enable-AzCompletion, Enable-TailscaleCompletion,
-        Enable-DockerCompletion, and Enable-1PasswordCompletion.
+        per-tool enablers Enable-WingetCompletion, Enable-AzureCliCompletion, Enable-TailscaleCompletion,
+        Enable-DockerCompletion, Enable-1PasswordCompletion, and Enable-GithubCliCompletion.
     #>
     [CmdletBinding(DefaultParameterSetName = 'Bundled')]
     param(
@@ -263,7 +263,7 @@ function Initialize-PwshProfile {
             if ($Skip -notcontains 'Completions') {
                 Invoke-Step "Completions" {
                     Invoke-Step "Winget Completions"    { Enable-WingetCompletion }
-                    Invoke-Step "Azure CLI Completions" { Enable-AzCompletion }
+                    Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
                     Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
                     Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
                     Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
