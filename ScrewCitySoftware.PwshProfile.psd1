@@ -45,7 +45,6 @@
             ProjectUri   = 'https://github.com/screwcitysoftware/PwshProfile'
             IconUri      = 'https://raw.githubusercontent.com/screwcitysoftware/PwshProfile/main/Assets/icon.png'
             ReleaseNotes = 'https://github.com/screwcitysoftware/PwshProfile/releases'
-            Prerelease   = 'preview1'
         }
     }
 }
