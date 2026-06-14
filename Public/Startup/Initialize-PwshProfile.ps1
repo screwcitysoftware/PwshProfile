@@ -10,8 +10,9 @@ function Initialize-PwshProfile {
           2. Runs "Shell": the `which` global alias and PSReadLine setup.
           3. Runs "Prompt": oh-my-posh, Terminal-Icons, and posh-git — oh-my-posh first, since
              it is the prompt engine and table stakes for this profile.
-          4. Runs "Tools": zoxide, fnm, and xh — in that order, since Enable-FastNodeManager
-             wraps zoxide's cd hook and must follow Enable-Zoxide — then "Completions": winget,
+          4. Runs "Tools": zoxide, fzf, fnm, and xh — fzf sits next to zoxide (zoxide's
+             interactive picker auto-uses fzf when it's on PATH), and fnm follows zoxide since
+             Enable-FastNodeManager wraps zoxide's cd hook — then "Completions": winget,
              Azure CLI, Tailscale, Docker, and 1Password (registration only — these install nothing),
              since the completions are operations on the tools.
 
@@ -78,8 +79,8 @@ function Initialize-PwshProfile {
 
     .PARAMETER Skip
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
-        'Fnm', 'Xh', 'Completions'. Dropping one omits its step; the auto-installing ones (Zoxide,
-        Fnm, Xh) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
+        'Fzf', 'Fnm', 'Xh', 'Completions'. Dropping one omits its step; the auto-installing ones
+        (Zoxide, Fzf, Fnm, Xh) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
         registrations (winget, Azure CLI, Tailscale, Docker, 1Password) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
@@ -188,7 +189,7 @@ function Initialize-PwshProfile {
         [string]$StepIcon = '',
 
         [Parameter()]
-        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fnm', 'Xh', 'Completions')]
+        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions')]
         [string[]]$Skip = @(),
 
         [Parameter()]
@@ -253,6 +254,7 @@ function Initialize-PwshProfile {
     if ($SkipSection -notcontains 'Tools') {
         Invoke-Step "Tools" -Icon $StepIcon {
             if ($Skip -notcontains 'Zoxide') { Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand } }
+            if ($Skip -notcontains 'Fzf')    { Invoke-Step "fzf" { Enable-Fzf } }
             if ($Skip -notcontains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
             if ($Skip -notcontains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
             # Shell completions are operations on the tools, so they register as the final Tools

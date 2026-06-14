@@ -29,6 +29,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Import-ModuleSafe { }
         Mock -ModuleName $script:Module Enable-OhMyPosh { }
         Mock -ModuleName $script:Module Enable-Zoxide { }
+        Mock -ModuleName $script:Module Enable-Fzf { }
         Mock -ModuleName $script:Module Enable-FastNodeManager { }
         Mock -ModuleName $script:Module Enable-Xh { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
@@ -44,6 +45,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly -ParameterFilter { $Command -eq 'cd' }
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
             # Completions register by default (as the final sub-step of Tools).
@@ -101,6 +103,13 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
         }
 
+        It 'skips fzf but keeps its siblings' {
+            Initialize-PwshProfile -Skip Fzf
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
+        }
+
         It 'skips the banner' {
             Initialize-PwshProfile -Skip Banner
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
@@ -132,6 +141,7 @@ Describe 'Initialize-PwshProfile' {
         It 'skips the whole Tools section, including the completions nested under it' {
             Initialize-PwshProfile -SkipSection Tools
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly

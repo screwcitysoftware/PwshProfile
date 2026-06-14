@@ -24,6 +24,7 @@
         'Get-OhMyPoshTheme'
         'Export-OhMyPoshTheme'
         'Enable-Zoxide'
+        'Enable-Fzf'
         'Enable-FastNodeManager'
         'Enable-Xh'
         'Enable-WingetCompletion'
