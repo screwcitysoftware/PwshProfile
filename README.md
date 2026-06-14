@@ -1,0 +1,805 @@
+# ScrewCitySoftware.PwshProfile
+
+[![CI](https://github.com/screwcitysoftware/PwshProfile/actions/workflows/ci.yml/badge.svg)](https://github.com/screwcitysoftware/PwshProfile/actions/workflows/ci.yml)
+[![PowerShell Gallery](https://img.shields.io/powershellgallery/v/ScrewCitySoftware.PwshProfile?logo=powershell&label=PSGallery)](https://www.powershellgallery.com/packages/ScrewCitySoftware.PwshProfile)
+[![Downloads](https://img.shields.io/powershellgallery/dt/ScrewCitySoftware.PwshProfile?label=downloads)](https://www.powershellgallery.com/packages/ScrewCitySoftware.PwshProfile)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+A small PowerShell module that holds the reusable building blocks for this profile. It is
+imported at the top of `Microsoft.PowerShell_profile.ps1`; the functions it exports are then
+used throughout profile startup.
+
+It's intentionally opinionated: built first for the author's own terminal workflow, with defaults
+chosen to suit that setup rather than to cover every preference. Shared in case it's useful — fork
+or cherry-pick what fits.
+
+> **A note on provenance.** This project was vibe coded with the help of [Claude](https://claude.com/claude-code).
+> The author supplied the taste, the bad ideas, and the final say; Claude supplied the typing, the
+> tests, and the occasional "are you sure about that?" Any elegance is collaborative; any remaining
+> bugs were a human decision.
+
+## About the name
+
+"ScrewCitySoftware" nods to **Screw City** — a nickname for **Rockford, Illinois**, where the
+author grew up. Around the turn of the 20th century, Rockford became a major manufacturing center
+for screws, fasteners, furniture, and machine tools, and the nickname stuck. The 🔩
+(`:nut_and_bolt:`) `Invoke-Step` icon is a nod to that history, and the default banner reads
+"Screw City".
+
+Rockford is **also** known as the **Forest City** — for the elms and shade trees that once lined
+its streets and parks along the Rock River. The module leans into that dual identity with two
+bundled oh-my-posh themes: **`screwcity`** (the original — purples and blues, signature
+`#c9aaff`) and **`forestcity`** (greens, browns, and grays, signature `#8fce72`). Each theme
+carries a matching banner color and step icon, so picking `forestcity` renders the banner in the
+theme's green with a 🌳 (`:deciduous_tree:`) step marker, while `screwcity` keeps the 🔩 / purple
+identity. (The banner *text* defaults to your machine name for either theme.) See
+[Themes](#themes) for how to choose one.
+
+## Installation
+
+### Requirements
+
+- **PowerShell 7.4+** (`pwsh`) — 7.4 is the first release that ships
+  `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
+  self-install its dependencies. It won't load under Windows PowerShell 5.1.
+- **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
+  `Enable-*` tool steps install oh-my-posh, zoxide, fnm, and xh through the first-party
+  `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is missing;
+  winget ships with Windows 11). Without winget those steps degrade silently; the rest of startup is
+  unaffected.
+- **A Nerd Font** in your terminal — the oh-my-posh prompt and Terminal-Icons render powerline
+  glyphs and file icons that only display correctly in a Nerd Font (see below).
+- [PwshSpectreConsole](https://www.powershellgallery.com/packages/PwshSpectreConsole) is
+  **installed automatically** on first import (the module calls `Import-ModuleSafe
+  PwshSpectreConsole`), so there's no manual step for it.
+
+### Install the module
+
+From the PowerShell Gallery:
+
+```powershell
+Install-PSResource ScrewCitySoftware.PwshProfile
+```
+
+### Set up your profile (recommended)
+
+Once the module is installed, the easiest way to wire it into your shell is the
+**`Install-PwshProfile`** wizard — run it once and it writes the bootstrap into your `$PROFILE`
+for you (creating the file if needed, preserving any existing code), and can optionally install the
+Nerd Fonts and show how to point your terminal at them:
+
+```powershell
+Install-PwshProfile        # interactive wizard
+```
+
+To remove the bootstrap later, run `Uninstall-PwshProfile` (it leaves your installed tools and
+fonts in place). Prefer to wire things up by hand? See [Usage](#usage). The Nerd Font and terminal
+steps below are the manual equivalents of what the wizard offers.
+
+### Install a Nerd Font
+
+> The `Install-PwshProfile` wizard can install these for you and then show the terminal-config
+> steps (`Show-NerdFontSetup`). The steps below are the manual route.
+
+The prompt and icons need a Nerd Font. Install Meslo and Cascadia Code with the
+[NerdFonts](https://www.powershellgallery.com/packages/NerdFonts) module:
+
+```powershell
+Install-PSResource NerdFonts
+Install-NerdFont -Name 'Meslo', 'CascadiaCode' -Scope CurrentUser -Variant Standard
+```
+
+This registers Nerd Font faces named **MesloLGM Nerd Font** and **CaskaydiaCove Nerd Font**
+(Nerd Fonts' patched name for Cascadia Code). Use one of those face names when configuring your
+terminal.
+
+### Configure your terminal/editor to use the font
+
+**Windows Terminal** — Settings → select your profile → Appearance → Font face →
+*MesloLGM Nerd Font* (or *CaskaydiaCove Nerd Font*). The equivalent `settings.json` edit:
+
+```jsonc
+// Windows Terminal settings.json — per profile (or under "profiles": { "defaults": { ... } })
+"font": { "face": "MesloLGM Nerd Font" }
+```
+
+**VS Code** — add to `settings.json` (set the integrated terminal font; optionally the editor too):
+
+```jsonc
+"terminal.integrated.fontFamily": "MesloLGM Nerd Font, CaskaydiaCove Nerd Font",
+"editor.fontFamily": "MesloLGM Nerd Font, CaskaydiaCove Nerd Font, Consolas, monospace"
+```
+
+## Usage
+
+The recommended way to wire this into your shell is the **`Install-PwshProfile`** wizard — run
+it once and it writes the bootstrap into your `$PROFILE` (and can install the Nerd Fonts and show the
+terminal setup). To remove it, run **`Uninstall-PwshProfile`**:
+
+```powershell
+Install-PwshProfile        # interactive wizard; re-run any time to change options
+Uninstall-PwshProfile      # remove the bootstrap (installed tools/fonts are left in place)
+```
+
+The bootstrap it writes is just an import plus a call to **`Initialize-PwshProfile`** — the
+orchestrator that runs on every new session. You can also call it directly to run the default
+startup:
+
+```powershell
+Import-Module ScrewCitySoftware.PwshProfile
+
+Initialize-PwshProfile
+```
+
+A few common variations:
+
+```powershell
+Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -Skip Fnm,Xh          # skip individual tools
+Initialize-PwshProfile -SkipSection Tools    # skip a whole section
+```
+
+`Initialize-PwshProfile` takes a handful of options — banner text/color/font, a custom
+theme, and per-tool or per-section skips — all covered under [Exported
+functions](#exported-functions).
+
+### Wiring it into your profile by hand
+
+If you'd rather not use the wizard, a complete `$PROFILE` is just the import, the one call, and your
+own personal extras:
+
+```powershell
+Import-Module ScrewCitySoftware.PwshProfile
+
+Initialize-PwshProfile
+
+# Personal extras stay in the profile:
+& $PSScriptRoot/Initialize-WorkTools.ps1
+. $PSScriptRoot/aliases.ps1
+```
+
+You can also call the individual building blocks directly if you want to assemble a custom
+startup instead of using `Initialize-PwshProfile`:
+
+```powershell
+Write-Figlet 'Screw City' -Font ANSIShadow  # figlet banner in a bundled font
+Invoke-Step "PSReadLine"      { Initialize-PSReadline }
+Invoke-Step "Terminal-Icons"  { Import-ModuleSafe Terminal-Icons }
+```
+
+Full comment-based help is available on each function via `Get-Help <Name> -Full`.
+
+## Themes
+
+The module bundles two oh-my-posh themes under `Assets/Themes`, both built on the same palette-keyed
+structure so they differ only in color:
+
+| Theme        | Identity      | Signature color | Step icon            | Palette                  |
+|--------------|---------------|-----------------|----------------------|--------------------------|
+| `screwcity`  | Screw City    | `#c9aaff` purple | 🔩 `:nut_and_bolt:`   | purples, blues, ambers   |
+| `forestcity` | Forest City   | `#8fce72` green  | 🌳 `:deciduous_tree:` | greens, browns, grays    |
+
+**The installer's first step is the theme choice.** `Install-PwshProfile` opens with a theme prompt —
+pick a bundled theme or supply a path to a theme of your own — and the rest of the wizard pre-fills
+its color/icon prompts from the chosen theme's branding. For a **custom theme** those prompts start
+from neutral defaults (a neutral color, a generic ⚙️ icon) so you brand it fresh. The banner **text**
+defaults to your machine name (`$env:COMPUTERNAME`) for every theme, custom included.
+Whatever you pick is written into the generated bootstrap as `-Theme <name>` (or `-CustomTheme '<path>'`).
+
+Choosing a theme outside the wizard, or by hand in `$PROFILE`:
+
+```powershell
+Initialize-PwshProfile -Theme forestcity                 # bundled theme + matching banner/icon
+Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json   # your own theme file
+```
+
+Picking a bundled theme also sets the banner color and step icon for any you don't override (the
+banner text defaults to your machine name regardless of theme); running `-CustomTheme` by hand keeps
+the neutral screwcity color/icon for any you don't pass (an empty banner text renders no banner).
+
+### Creating a custom theme
+
+oh-my-posh themes are plain JSON, so the easiest way to start your own is from a copy of a bundled
+theme. `Export-OhMyPoshTheme` writes that copy to a path you own (the bundled files live in a
+versioned, possibly read-only install directory, so never edit them in place); `Get-OhMyPoshTheme`
+emits the raw JSON to the pipeline instead, for piping to a file, the clipboard, or an editor:
+
+```powershell
+Export-OhMyPoshTheme -Path ~/my.omp.json                       # copy of screwcity (the default)
+Export-OhMyPoshTheme -Theme forestcity -Path ~/forest.omp.json # start from Forest City instead
+Export-OhMyPoshTheme -Path ~/my.omp.json -Force                # overwrite an existing file
+
+Get-OhMyPoshTheme | Set-Content ~/my.omp.json                  # same, via the pipeline
+Get-OhMyPoshTheme -Theme forestcity | clip                     # copy the JSON to the clipboard
+```
+
+You can edit the JSON by hand, but the easiest path is the visual configurator at
+**<https://jamesmontemagno.github.io/ohmyposh-configurator/>**. It **imports an existing theme** — load
+your `.omp.json` file or copy/paste its JSON — then lets you tweak segments and colors against a live
+preview and export the result back out. A typical round-trip:
+
+1. Export a starting point: `Export-OhMyPoshTheme -Path ~/my.omp.json` (or `Get-OhMyPoshTheme | clip`).
+2. Open the configurator and import that file (or paste the copied JSON).
+3. Adjust segments and colors visually, then download/copy the updated theme back over `~/my.omp.json`.
+4. Point the module at it: `Initialize-PwshProfile -CustomTheme ~/my.omp.json` — re-run
+   `Install-PwshProfile` to bake the choice into your `$PROFILE`, or
+   `Enable-OhMyPosh -Configuration ~/my.omp.json` to try it in the current session.
+
+## Layout
+
+The module follows the standard Public/Private layout, with both trees grouped into feature
+subfolders (`Install/`, `Startup/`, `Prompt/`, `Tools/`, `Rendering/`, `Docs/`, `Core/`). The
+`.psm1` is a generic loader: it recursively dot-sources every `.ps1` under `Public/` (and
+`Private/`, if that folder exists) and exports the public ones, so it never needs editing. The
+subfolders are purely organizational — folder nesting never affects which functions are
+exported (the manifest's `FunctionsToExport` stays a flat list). Each exported function lives in
+its own file named after the function:
+
+```
+ScrewCitySoftware.PwshProfile/
+├── ScrewCitySoftware.PwshProfile.psd1   # manifest: version, explicit FunctionsToExport list
+├── ScrewCitySoftware.PwshProfile.psm1   # loader: recursively dot-sources Public/ (+ Private/), exports
+├── Public/                              # one exported function per file
+│   ├── Install/
+│   │   ├── Install-PwshProfile.ps1   # wizard: write the bootstrap into a profile file
+│   │   └── Uninstall-PwshProfile.ps1 # remove the managed bootstrap block
+│   ├── Startup/
+│   │   ├── Initialize-PwshProfile.ps1 # one-call default profile startup (orchestrator)
+│   │   └── Initialize-PSReadline.ps1
+│   ├── Prompt/
+│   │   ├── Enable-OhMyPosh.ps1
+│   │   ├── Get-OhMyPoshTheme.ps1          # emit the bundled oh-my-posh theme JSON
+│   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
+│   ├── Tools/
+│   │   ├── Enable-Zoxide.ps1
+│   │   ├── Enable-FastNodeManager.ps1
+│   │   ├── Enable-Xh.ps1
+│   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
+│   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
+│   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
+│   │       ├── Enable-AzCompletion.ps1         # Azure CLI (az) native (argcomplete) tab completion
+│   │       ├── Enable-TailscaleCompletion.ps1  # tailscale (Cobra) tab completion
+│   │       ├── Enable-DockerCompletion.ps1     # docker tab completion via the DockerCompletion module
+│   │       └── Enable-1PasswordCompletion.ps1  # 1Password CLI (op, Cobra) tab completion
+│   ├── Rendering/
+│   │   ├── Invoke-Step.ps1                # Invoke-Step dispatcher (+ the module-scoped step state)
+│   │   ├── Write-Figlet.ps1               # figlet banner writer
+│   │   └── Show-FigletFont.ps1            # list / preview the bundled FIGlet fonts
+│   ├── Docs/
+│   │   ├── Show-PwshProfileReadme.ps1       # renders this README (Show-Markdown) or opens it (-Open)
+│   │   └── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
+│   └── Core/
+│       └── Import-ModuleSafe.ps1
+├── Private/                             # internal helpers (loaded, not exported)
+│   ├── Install/                         # Install/Uninstall helpers: marker + block builders,
+│   │   └── *PwshProfile*.ps1       #   the settings wizard, the file writer, defaults
+│   ├── Prompt/
+│   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
+│   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
+│   │   └── Get-BundledThemeBranding.ps1 # banner text/color/icon paired with each bundled theme
+│   ├── Tools/
+│   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers
+│   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
+│   │   └── Completions/
+│   │       └── Register-CobraCompletion.ps1 # shared engine for Cobra CLIs (tailscale, op) — wrapped by the Enable-* enablers
+│   ├── Rendering/
+│   │   ├── Invoke-StepInternal.ps1      # spinner-breadcrumb worker (+ Format-StepStatus)
+│   │   ├── Get-BundledFontPath.ps1      # resolves Assets/Fonts/<name>.flf
+│   │   └── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
+│   └── Core/
+│       └── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
+├── Assets/                              # bundled assets
+│   ├── Themes/
+│   │   ├── screwcity.omp.json   # default oh-my-posh theme — Screw City (purple/blue)
+│   │   └── forestcity.omp.json  # alternate theme — Forest City (green/brown/gray)
+│   └── Fonts/                           # 25 bundled FIGlet fonts (see Write-Figlet / Show-FigletFont)
+│       ├── *.flf                        # ANSIShadow, Colossal, Doom, Slant, Small, ... (run Show-FigletFont)
+│       └── README.md                    # font sources + license/attribution
+└── Tests/                               # Pester 5 tests
+```
+
+To add a function: create `Verb-Noun.ps1` in the matching `Public/` subfolder (file name ==
+function name), add the name to `FunctionsToExport` in the `.psd1`, and document it below. Pick
+the subfolder by responsibility (`Tools/` for tool/completion enablers, `Prompt/` for
+oh-my-posh, etc.); the loader recurses, so the exact folder is organizational only. Internal
+helpers go in the matching `Private/` subfolder — the loader picks them up but does not export
+them.
+
+## Exported functions
+
+### `Install-PwshProfile`
+
+A one-time, re-runnable setup wizard (built on PwshSpectreConsole) that writes the module's
+bootstrap — the import plus a tailored `Initialize-PwshProfile` call — into a profile file,
+wrapped in managed marker comments. By default it targets `$PROFILE`. It **wires the module into
+your profile file**; it does not install the module itself from the gallery (use
+`Install-PSResource ScrewCitySoftware.PwshProfile` for that).
+
+Each step opens with a rounded header panel — its title, a `step N of 6` progress counter, and a
+short description — and secondary prompts carry an indented hint line beneath them (the feature step
+shows a one-line-per-feature legend). The descriptions are syntax-highlighted: tool names in the
+accent color, code literals (file types, commands like `cd` / `z`, paths) in cyan, body prose in soft
+grey — so you don't need to already know the tools. The review/intro/result panels share the same
+glyphs and highlighting. Each selection (theme, alignment, font, step icon) confirms your choice with
+a `✓ <value>` line once its menu collapses.
+
+The wizard walks one forward pass, then lets you revise anything before committing:
+
+1. **Nerd Fonts** — a single yes/no: say yes to install the recommended Meslo + CascadiaCode pair for
+   the prompt glyphs via the [NerdFonts](https://www.powershellgallery.com/packages/NerdFonts) module
+   (CurrentUser scope, no admin required); say no and nothing is installed.
+2. **Winget** — a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
+   settings: default install **scope** (`user` / `machine`), **progress-bar** style, whether to
+   **anonymize displayed paths**, and whether to **suppress install notes**. It shows your current
+   values first (noting any that differ from the recommended default) and asks whether to change them
+   — **defaulting to No**, so pressing Enter keeps them and skips the per-setting prompts. The values
+   are merged into your `settings.json` via [`Set-WingetSetting`](#set-wingetsetting) when you submit
+   (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
+3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
+   your own (see [Themes](#themes)). The choice seeds the banner color and step icon the later prompts
+   are pre-filled with; a custom path seeds neutral color/icon so you brand those fresh. The banner
+   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme.
+4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
+   noting anything off the theme default) and asks whether to change it — **defaulting to No**. On
+   yes, a show/hide question gates the rest: say no and the banner is disabled (`-Skip Banner`) and
+   the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
+5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
+   current icon floated to the top and a "custom shortcode" escape.
+6. **Features** — a grouped tree under the **Shell / Prompt / Tools** sections (shell completions
+   sit under Tools) that starts with **everything checked**; uncheck a feature (or a whole section)
+   to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed.
+
+It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
+or **Cancel** to exit without writing anything.
+
+Your existing profile is never destroyed:
+
+- A missing file (and its parent directory) is created.
+- An existing **managed block** is replaced in place, so you can re-run the wizard any time to
+  change options. Re-runs start from the module defaults.
+- Any other existing content is preserved, with the block prepended above it.
+- A profile that already has a bare `Import-Module ScrewCitySoftware.PwshProfile` (no markers) is
+  left untouched unless `-Force` is given.
+
+The file is written as UTF-8 without a BOM. Spectre prompts only render in an interactive console;
+when they're unavailable the command warns and writes the default settings non-interactively.
+
+- **`-Path`** — the profile file to configure (default `$PROFILE`, current user / current host).
+  `$PROFILE` is host-specific, so the VS Code and ISE hosts use different files.
+- **`-Force`** — prepend the managed block even when the file already has a bare module import (no
+  markers).
+- **`-PassThru`** — emit a result object (`Path`, `Action`, `Changed`); by default the command
+  returns nothing.
+
+Supports `-WhatIf` / `-Confirm`.
+
+```powershell
+Install-PwshProfile                              # wizard → writes $PROFILE
+Install-PwshProfile -WhatIf                      # walk the wizard, preview the write
+Install-PwshProfile -Path $PROFILE.CurrentUserAllHosts   # the all-hosts profile
+Install-PwshProfile -Path ~/Documents/PowerShell/Microsoft.VSCode_profile.ps1  # VS Code host
+```
+
+To **change settings**, just re-run `Install-PwshProfile` (it rewrites the block in place); to
+**remove** the bootstrap, use [`Uninstall-PwshProfile`](#uninstall-pwshprofile).
+
+### `Uninstall-PwshProfile`
+
+Removes the marker-wrapped bootstrap block that `Install-PwshProfile` wrote, leaving every other
+line in the profile intact. By default it targets `$PROFILE`.
+
+It touches **only the profile file** — it does **not** uninstall any tools, Nerd Fonts, or modules
+that were installed during setup; it just stops the module from initializing on future sessions. A
+hand-written, unmanaged `Import-Module ScrewCitySoftware.PwshProfile` (no markers) is left untouched,
+since that's your own code rather than the managed injection.
+
+- **`-Path`** — the profile file to clean (default `$PROFILE`, current user / current host).
+- **`-PassThru`** — emit a result object (`Path`, `Action` = `Removed` | `NotInstalled`, `Changed`);
+  by default the command returns nothing.
+
+Supports `-WhatIf` / `-Confirm`. If removing the block leaves the file empty, the empty file is left
+in place rather than deleted.
+
+```powershell
+Uninstall-PwshProfile                            # remove the block from $PROFILE
+Uninstall-PwshProfile -WhatIf                    # preview the removal
+Uninstall-PwshProfile -Path $PROFILE.CurrentUserAllHosts
+```
+
+### `Show-NerdFontSetup`
+
+Renders a panel with the exact steps to point **Windows Terminal** and **VS Code** at an installed
+Nerd Font, so the oh-my-posh prompt glyphs render. `Install-PwshProfile` shows it automatically
+when you choose fonts (including in a `-WhatIf` preview); run it any time to see the steps again.
+
+It handles a common gotcha: the font **family name** you select in the terminal is not the catalog
+name you install — `Meslo` installs as `MesloLGM Nerd Font`, and `CascadiaCode` as `CaskaydiaCove
+Nerd Font`. Pass `-Font` with the catalog name(s) you installed and the panel names the matching
+families; with no `-Font` it shows the recommended pairing. If PwshSpectreConsole isn't loaded, the
+same text is written plainly.
+
+- **`-Font`** — the Nerd Font catalog name(s) you installed (e.g. `Meslo`, `CascadiaCode`), as
+  accepted by `Install-NerdFont`. Unrecognized names fall back to the recommended pairing.
+
+```powershell
+Show-NerdFontSetup                       # recommended families
+Show-NerdFontSetup -Font Meslo, CascadiaCode
+```
+
+### `Initialize-PwshProfile`
+
+The headline entry point: one call that runs the whole default profile startup, so `$PROFILE`
+shrinks to an import plus this call. In order it shows the startup banner, then runs three
+top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
+(oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
+(zoxide, fnm, xh — fnm after zoxide, since it hooks zoxide's `cd`), which ends with the shell
+**completions** (winget, Azure CLI, Tailscale, Docker, 1Password — registration only, no installs) as a nested
+sub-step, since completions are operations on the tools. Each section renders its own spinner and
+summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
+deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or
+`aliases.ps1`) — those stay in `$PROFILE`.
+
+- **`-Theme`** — the bundled oh-my-posh theme: `screwcity` (default) or `forestcity` (tab-completes,
+  discovered from `Assets/Themes`). Resolved to its file and forwarded to `Enable-OhMyPosh
+  -Configuration`. The choice also seeds the banner color and step icon below. Mutually
+  exclusive with `-CustomTheme`.
+- **`-CustomTheme`** — path (relative or absolute) to a custom oh-my-posh theme, forwarded to
+  `Enable-OhMyPosh -Configuration` in place of a bundled theme. Validated to exist at call time.
+  Mutually exclusive with `-Theme`; banner color/icon fall back to the screwcity defaults.
+- **`-BannerText`** — banner text (defaults to your machine name, `$env:COMPUTERNAME`, for every
+  theme; an empty/whitespace value renders no banner).
+- **`-BannerColor`** — any Spectre color name or hex (defaults to the theme's signature color —
+  `#c9aaff` / `#8fce72`).
+- **`-BannerAlignment`** — `Left`, `Center`, or `Right` (default `Left`).
+- **`-BannerFont`** — a bundled FIGlet font for the banner, forwarded to `Write-Figlet -Font`
+  (see `Write-Figlet` for the list). Mutually exclusive with `-BannerFontPath`.
+- **`-BannerFontPath`** — path to a custom `.flf` font for the banner, forwarded to
+  `Write-Figlet -FontPath`. Mutually exclusive with `-BannerFont`.
+- **`-ZoxideCommand`** — zoxide's jump command, forwarded to `Enable-Zoxide -Command` (default
+  `cd`; pass e.g. `z` to keep the built-in `cd`).
+- **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
+  theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
+  No trailing space needed — the separator before the step text is added at render time.
+- **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
+  `PoshGit`, `Zoxide`, `Fnm`, `Xh`, `Completions` (skipping `Zoxide`/`Fnm`/`Xh` also avoids their
+  winget auto-install; `Completions` drops the shell-completion registrations under Tools).
+  oh-my-posh is table stakes — it has no token in either parameter and always runs.
+- **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
+  also drops the completions nested under it). `Prompt` is special: because oh-my-posh is
+  unskippable, passing it drops only the cosmetic extras (Terminal-Icons + posh-git) and warns that
+  oh-my-posh was kept.
+
+```powershell
+Initialize-PwshProfile                                   # Screw City theme: purple, 🔩, machine-name banner
+Initialize-PwshProfile -Theme forestcity                 # Forest City theme: green, 🌳, machine-name banner
+Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -BannerFont ANSIShadow            # large block banner font
+Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Skip Fnm,Xh
+Initialize-PwshProfile -Skip Completions                 # skip the shell-completion registrations
+```
+
+### `Invoke-Step`
+
+Runs a named startup step, rendered with PwshSpectreConsole. While running, the top-level
+call shows a transient status spinner; nested steps update its text to the full breadcrumb
+path (e.g. `⠼ 🔩 Tools › fnm › Install`), restoring the parent's path when they finish. When
+the top-level step completes, the spinner clears itself and a single summary line is written
+with the total elapsed time — nested substeps leave no output of their own:
+
+```
+🔩 Shell............................................ [  42ms]
+🔩 Prompt........................................... [ 880ms]
+🔩 Tools............................................ [3120ms]
+```
+
+Only the top-level step's icon is shown. If PwshSpectreConsole isn't loaded, steps still run
+— silently, with no rendering — so startup never fails over presentation.
+
+A `Write-Warning` raised inside a step (e.g. a module that fails to load) would otherwise be
+wiped off-screen when the spinner clears. Instead, warnings are captured while the spinner
+runs and re-printed underneath the step's summary line, so they stay readable in scrollback:
+
+```
+🔩 Prompt........................................... [ 880ms]
+WARNING: Import-ModuleSafe: could not import 'Terminal-Icons': <reason>
+```
+
+Each *top-level* `Invoke-Step` opens its own spinner and writes its own summary line; wrap
+the whole startup in one outer step (`Invoke-Step "Profile" { ... }`) for a single continuous
+spinner and exactly one summary line.
+
+```powershell
+Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons }
+
+Invoke-Step "Completions" {
+    Invoke-Step "Tailscale" { Enable-TailscaleCompletion }
+}
+```
+
+### `Import-ModuleSafe`
+
+Imports a module, installing it first (`Install-PSResource`, CurrentUser scope, PSGallery by
+default) if it isn't already available. Install/import failures are reported as warnings and
+swallowed so profile startup continues. An optional `-Initialize` script block runs once the
+module has imported successfully.
+
+```powershell
+Import-ModuleSafe Terminal-Icons
+Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true }
+```
+
+### `Initialize-PSReadline`
+
+Configures PSReadLine for the session: history options, prediction source/view, edit mode,
+bell style, and key handlers. `UpArrow`/`DownArrow` do history search; `Tab` triggers menu
+completion (a navigable list of completions); `Alt+w` saves the current line to history without
+executing it; `Alt+(` wraps the selection (or whole line) in parentheses. Safe to call more than once.
+Does nothing if PSReadLine isn't available, so a minimal host never throws out of startup.
+
+```powershell
+Initialize-PSReadline
+```
+
+### `Write-Figlet`
+
+Renders text as figlet (large ASCII) art via PwshSpectreConsole. It powers the startup banner
+(`Initialize-PwshProfile` calls it) but is a general-purpose writer — call it anywhere you
+want big ASCII text. It writes only the figlet text (no trailing blank line); add your own
+spacing if you want a gap after it. If PwshSpectreConsole isn't loaded, it renders nothing
+rather than failing.
+
+> **Renamed (breaking):** this was `Show-ProfileBanner`. There is no compatibility alias —
+> update any `$PROFILE` that called `Show-ProfileBanner`. Beyond the name, `-Text` is now
+> **required** (the old `$env:COMPUTERNAME` default is gone) and the trailing blank line the
+> banner used to print is no longer emitted.
+
+- **`-Text`** — text to render (**required**, position 0).
+- **`-Color`** — any Spectre color name or hex (default `#c9aaff`, the bundled theme's purple).
+- **`-Alignment`** — `Left`, `Center`, or `Right` (default `Left`).
+- **`-Font`** — a bundled FIGlet font (default `ANSIShadow`; tab-completes). Mutually exclusive with `-FontPath`.
+- **`-FontPath`** — path to your own `.flf` font file. Mutually exclusive with `-Font`.
+
+The module bundles **25** verified-readable FIGlet fonts spanning sizes, so you can match the font
+to the message length. Run `Show-FigletFont` to list them (or `-Preview` to see samples). A
+representative selection:
+
+| Category   | `-Font` values                                                                 |
+| ---------- | ------------------------------------------------------------------------------ |
+| Compact    | `Small`, `Mini`, `SmSlant`                                                     |
+| Medium     | `Standard`, `Slant`, `Ogre`, `Shadow`, `Speed`, `Cybermedium`, `Graffiti`      |
+| Large/bold | `ANSIShadow`, `Colossal`, `Doom`, `ANSIRegular`, `Banner3`, `Block`, `SubZero`, `Univers`, `StarWars`, `Epic`, `Nancyj` |
+| Decorative | `Larry3D`, `Isometric1`, `3D-ASCII`, `Bloody`                                  |
+
+```powershell
+Write-Figlet 'Screw City'                                  # ANSIShadow, purple, Left (defaults)
+Write-Figlet 'DEPLOY' -Font Doom -Color Green -Alignment Center
+Write-Figlet 'A longer status message' -Font Small         # compact font fits long text
+Write-Figlet 'Hi' -FontPath ~/.fonts/custom.flf            # your own .flf
+```
+
+### `Show-FigletFont`
+
+Surfaces the bundled FIGlet fonts so you can pick one for `Write-Figlet -Font` (or
+`Initialize-PwshProfile -BannerFont`). **By default it lists the font names**; pass `-Preview`
+to render a labelled sample of each instead.
+
+- **`-Font`** — one or more bundled fonts to act on (default: all; tab-completes).
+- **`-Preview`** — render samples instead of listing names.
+- **`-Text`** — preview only: the string to render in each sample (default: each font's own name).
+
+```powershell
+Show-FigletFont                                       # list every bundled font name
+Show-FigletFont -Preview                              # render a sample of each
+Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subset, custom text
+```
+
+> Note: not every `.flf` in the wild loads under Spectre's FIGlet parser. The bundled fonts are
+> verified to render; if a custom `-FontPath` fails to load, try a different file. (See
+> `Assets/Fonts/README.md` for sources and license.)
+
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-FastNodeManager`, `Enable-Xh`
+
+Each installs a CLI tool with winget if it isn't already on PATH (patching the current
+session's PATH so the install is usable immediately), then hooks it into the session. The
+work is split into nested `Invoke-Step "Install"` / `Invoke-Step "Initialize"` substeps, so
+the two phases show as breadcrumb stages under the spinner. winget's own output is captured
+into a variable (`*>&1`) so it can't tear the live spinner. After install the exe is re-checked
+with `Get-Command`; if it still isn't on PATH the captured output is surfaced via `Write-Warning`
+and Initialize (also `Get-Command`-guarded) is skipped, so startup continues either way.
+
+- **`Enable-OhMyPosh [-Configuration <path>]`** — installs `JanDeDobbeleer.OhMyPosh` (user
+  scope) and runs `oh-my-posh init pwsh` with a theme via `--config`. Defaults to the module's
+  bundled `Assets/Themes/screwcity.omp.json`; pass `-Configuration` to use a different theme.
+- **`Enable-Zoxide [-Command <name>]`** — installs `ajeetdsouza.zoxide` and runs
+  `zoxide init powershell --cmd <name>` (default `cd`, replacing the built-in).
+- **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
+  strategy) and completions, and — when zoxide is active — wraps `__zoxide_cd` so every
+  directory change runs `fnm use`. Call after `Enable-Zoxide`.
+- **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
+  `http`/`https` to them globally, and registers tab completion for all four names.
+
+```powershell
+Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
+Enable-Zoxide
+Enable-FastNodeManager
+Enable-Xh
+```
+
+### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
+
+Get a starting copy of a bundled oh-my-posh theme so you can customize it. Both take `-Theme`
+(`screwcity` default, or `forestcity`; tab-completes) and read `Assets/Themes/<Theme>.omp.json`;
+neither exposes that in-module path as an edit target — when the module is installed from a
+repository it lives in a versioned, possibly read-only directory, so edits there would be lost on the
+next update. Customize a copy *you* own and point `Enable-OhMyPosh -Configuration` (or
+`Initialize-PwshProfile -CustomTheme`) at it.
+
+- **`Get-OhMyPoshTheme [-Theme <name>]`** — emits the bundled theme's raw JSON to the pipeline
+  (prints at a prompt; pipe to `clip`, a file, or an editor). Throws if the bundled theme is missing.
+- **`Export-OhMyPoshTheme -Path <dest> [-Theme <name>] [-Force]`** — copies the bundled theme to
+  `<dest>`. The path is required (console output is `Get-OhMyPoshTheme`'s job); an existing file is
+  left untouched unless `-Force` is given. Supports `-WhatIf`/`-Confirm`.
+
+```powershell
+Get-OhMyPoshTheme | Set-Content ~/my.omp.json   # or: Export-OhMyPoshTheme -Path ~/my.omp.json
+# edit ~/my.omp.json, then:
+Enable-OhMyPosh -Configuration ~/my.omp.json
+```
+
+### `Enable-WingetCompletion`, `Enable-AzCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`
+
+One `Enable-<Tool>Completion` per CLI, used by the **Completions** sub-step under **Tools** (and
+living together under `Public/Tools/Completions/`). Each only registers tab completion (no install
+phase), guards on its tool so a missing CLI is skipped silently, and opens no `Invoke-Step` of its
+own — the caller supplies the step label — so they read as thin one-liners under the orchestrator.
+
+- **`Enable-WingetCompletion`** — registers a native argument completer for `winget` that
+  delegates to `winget complete`, so completion tracks the installed winget version. winget is
+  assumed present (it installs every other tool), so there's no install step.
+- **`Enable-AzCompletion`** — registers a native argument completer for the Azure CLI (`az`). `az`
+  is a Python (argcomplete) CLI with no `completion powershell` subcommand, so it drives argcomplete
+  via a temp file and the `_ARGCOMPLETE` / `COMP_*` environment variables (the [supported mechanism](https://learn.microsoft.com/cli/azure/use-azure-cli-successfully-powershell#enable-tab-completion-in-powershell)).
+  `Initialize-PSReadline` binds `Tab` to menu completion so the candidates render as a navigable list.
+- **`Enable-TailscaleCompletion`** / **`Enable-1PasswordCompletion`** — register completion for the
+  Cobra-based `tailscale` / `op` (1Password) CLIs. Both wrap the module-private
+  `Register-CobraCompletion` engine, which generates `<Command> completion powershell` and activates
+  it via `Invoke-InGlobalScope` (run in global scope so its helpers stay reachable at tab time
+  without being tagged to the module).
+- **`Enable-DockerCompletion`** — Docker has no built-in PowerShell completion subcommand; its
+  completion ships as the community `DockerCompletion` module, which this imports via
+  `Import-ModuleSafe`. Guarded by `Get-Command docker`, so the module is never fetched from the
+  gallery on a machine without Docker.
+
+```powershell
+Enable-WingetCompletion
+Enable-AzCompletion
+Enable-TailscaleCompletion
+Enable-DockerCompletion
+Enable-1PasswordCompletion
+```
+
+### `Set-WingetSetting`
+
+Merges a curated set of [winget](https://learn.microsoft.com/windows/package-manager/winget/)
+client preferences into winget's user settings. It reads the current settings, sets only the keys
+you pass, and writes the full object back, so unrelated settings — and the `$schema` key that drives
+editor IntelliSense — are preserved. This is what the install wizard's **Winget** step calls when
+you submit, but it's also useful on its own.
+
+The read and write go through Microsoft's first-party
+[`Microsoft.WinGet.Client`](https://www.powershellgallery.com/packages/Microsoft.WinGet.Client/)
+module (`Get-WinGetUserSetting` / `Set-WinGetUserSetting`), loaded on demand via `Import-ModuleSafe`
+(installed CurrentUser if absent) — so it's not a startup dependency. Like the rest of the module
+it's failure-tolerant: if the module can't load or the write fails it warns rather than throwing.
+
+- **`-Scope`** — default install scope, written to `installBehavior.preferences.scope`: `user` or
+  `machine`. `user` *prefers* a per-user installer (no admin prompt) and falls back to machine when
+  a package offers none — it never hard-requires user scope, so installs don't fail.
+- **`-ProgressBar`** — `visual.progressBar` style: `accent`, `rainbow`, `retro`, `sixel`, or
+  `disabled`.
+- **`-AnonymizePath`** — `[bool]` for `visual.anonymizeDisplayedPaths`; replaces known folders with
+  their environment-variable names (e.g. `%LOCALAPPDATA%`) in winget output.
+- **`-DisableInstallNote`** — `[bool]` for `installBehavior.disableInstallNotes`; suppresses the
+  notes some packages print after a successful install.
+
+Supports `-WhatIf` / `-Confirm`.
+
+```powershell
+Set-WingetSetting -Scope user -ProgressBar rainbow -AnonymizePath $true -DisableInstallNote $false
+Set-WingetSetting -Scope machine -WhatIf        # preview only the scope change
+```
+
+### `Show-PwshProfileReadme`
+
+Renders this README straight from the installed module so the docs are one command away from any
+session. By default it prints to the console via `Show-Markdown`; pass `-Open` to hand `README.md`
+to the application registered for `.md` files instead (via `Invoke-Item`). Throws if the bundled
+README can't be found.
+
+- **`-Open`** — open the README in your default Markdown application instead of rendering it in the
+  console.
+
+```powershell
+Show-PwshProfileReadme          # render in the console with Show-Markdown
+Show-PwshProfileReadme -Open    # open README.md in the default Markdown app
+```
+
+## Development
+
+To hack on the module, clone the repo and import the manifest directly — re-run with `-Force`
+after each change to reload your working copy:
+
+```powershell
+Import-Module ./ScrewCitySoftware.PwshProfile.psd1 -Force
+```
+
+Adding a function is the three touches described under [Layout](#layout) (a new `Public/<area>/`
+file, its name in `FunctionsToExport`, and a README section); a module-level test enforces that
+those stay in sync and that every function carries comment-based help.
+
+For console-rendering changes (`Invoke-Step`, `Write-Figlet`), eyeball the result in a fresh
+`pwsh -NoProfile` session with the module imported — the Spectre spinner only renders in an
+interactive console, so the tests mock it rather than see it:
+
+```powershell
+pwsh -NoProfile
+Import-Module ./ScrewCitySoftware.PwshProfile.psd1
+Invoke-Step "Demo" { Start-Sleep -Milliseconds 50 }
+```
+
+### Tests
+
+The `Tests/` folder holds Pester 5 tests: module-level checks (valid manifest, exports match
+the manifest, every function documented) plus per-function behavior tests across the module —
+`Invoke-Step` rendering, `Import-ModuleSafe` install/import/failure paths, the profile
+install/uninstall/wizard logic, and the rest. Install Pester with `Install-PSResource Pester`
+if it's missing.
+
+```powershell
+Invoke-Pester -Path ./Tests
+```
+
+### Build & release
+
+[`build.ps1`](build.ps1) is a dependency-free task runner — each `-Task` maps to a function and
+they run in order. The default chain lints, tests, and stages a shippable copy of the module:
+
+```powershell
+./build.ps1                       # Bootstrap -> Analyze -> Test -> Build
+./build.ps1 -Task Analyze, Test   # what CI runs on pull requests
+```
+
+`Build` stages **only** the shippable files (`.psd1`, `.psm1`, `Public/`, `Private/`, `Assets/`,
+`README.md`, `LICENSE`) into `Output/ScrewCitySoftware.PwshProfile/`, so `Tests/`, `CLAUDE.md`,
+and `.github/` never reach the gallery package.
+
+CI runs lint + tests on every push and pull request
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Publishing to the PowerShell Gallery is
+automated on release ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)). To cut a
+release:
+
+1. Bump `ModuleVersion` in the manifest (and set `Prerelease` for a preview, e.g. `preview1`).
+2. Push, then create a GitHub release tagged `vX.Y.Z` (or `vX.Y.Z-preview1`) with notes describing
+   the changes — the [Releases page](https://github.com/screwcitysoftware/PwshProfile/releases) is
+   the changelog. The workflow guards that the tag and manifest version agree, then builds and runs
+   `Publish-PSResource`.
+
+The publish workflow reads the gallery API key from the `PSGALLERY_API_KEY` repository secret.
+
+## License
+
+This project's code and original assets (including the `screwcity.omp.json` and
+`forestcity.omp.json` oh-my-posh themes) are released under the MIT License — see
+[`LICENSE`](LICENSE).
+
+Two carve-outs:
+
+- **Bundled FIGlet fonts** (`Assets/Fonts/*.flf`) are not original to this project and are *not*
+  covered by the MIT grant above. They remain under the permissive
+  [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
+  preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
+  sources and attribution.
+- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fnm, xh, PwshSpectreConsole,
+  Terminal-Icons, posh-git, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
+  module used for package installs and winget user-setting changes) are *invoked* at runtime, never
+  bundled or redistributed here, and remain under their own respective licenses.

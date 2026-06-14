@@ -1,0 +1,30 @@
+# Pester / test output
+[Tt]est[Rr]esults/
+testResults.xml
+coverage*.xml
+*.coverage
+
+# Module build / publish artifacts
+[Oo]utput/
+artifacts/
+*.nupkg
+
+# Logs & temp
+*.log
+*.tmp
+
+# Editor / IDE
+.vs/
+.vscode/
+*.code-workspace
+
+# OS cruft
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Local-only / secrets
+*.local.ps1
+secrets.ps1
+*.pfx
+*.key

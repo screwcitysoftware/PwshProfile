@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-test:
+    name: Lint & Test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Bootstrap dependencies
+        shell: pwsh
+        run: ./build.ps1 -Task Bootstrap
+
+      - name: Analyze (PSScriptAnalyzer)
+        shell: pwsh
+        run: ./build.ps1 -Task Analyze
+
+      - name: Test (Pester)
+        shell: pwsh
+        run: ./build.ps1 -Task Test
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pester-results
+          path: Output/testResults.xml
+          if-no-files-found: warn

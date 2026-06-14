@@ -1,0 +1,244 @@
+{
+  "$schema": "https://raw.githubusercontent.com/JanDeDobbeleer/oh-my-posh/main/themes/schema.json",
+  "version": 2,
+  "final_space": true,
+  "console_title_template": "{{ .Shell }} :: {{ .Folder }}",
+  "blocks": [
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "segments": [
+        {
+          "type": "root",
+          "style": "powerline",
+          "foreground": "p:amber-bright",
+          "background": "p:amber-deep",
+          "template": " \uf09c ",
+          "powerline_symbol": "\ue0c4",
+          "leading_diamond": "\ue0b6",
+          "trailing_diamond": "\ue0b4"
+        },
+        {
+          "type": "os",
+          "style": "powerline",
+          "foreground": "p:indigo-bright",
+          "background": "p:indigo-deep",
+          "template": " {{ if .WSL }}\uf83c WSL{{ else }}{{ .Icon }}{{ end }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "windows": "\ue62a",
+            "ubuntu": "\ue73a",
+            "macos": "\ue711"
+          }
+        },
+        {
+          "type": "path",
+          "style": "powerline",
+          "foreground": "p:purple-light",
+          "background": "p:purple-mid",
+          "template": " \uf07b {{ .Path }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "style": "folder",
+            "max_depth": 3,
+            "folder_separator_icon": "/",
+            "home_icon": "~"
+          }
+        },
+        {
+          "type": "git",
+          "style": "powerline",
+          "foreground": "p:rose-bright",
+          "foreground_templates": [
+            "{{ if .UpstreamGone }}p:rose-warn{{ end }}",
+            "{{ if gt .Behind 0 }}p:amber-bright{{ end }}"
+          ],
+          "background": "p:rose-deep",
+          "template": " {{ .UpstreamIcon }} {{ .HEAD }}{{ if or .Working.Changed .Staging.Changed }}<p:amber-bright> *</>{{ end }}{{ if not .UpstreamGone }}{{ if gt .Ahead 0 }} \uf062{{ .Ahead }}{{ end }}{{ if gt .Behind 0 }} \uf063{{ .Behind }}{{ end }}{{ end }}{{ if .UpstreamGone }} \uf127{{ end }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "fetch_status": true,
+            "fetch_upstream_icon": true,
+            "branch_max_length": 24,
+            "truncate_symbol": "\u2026"
+          }
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "right",
+      "overflow": "hidden",
+      "segments": [
+        {
+          "type": "az",
+          "style": "powerline",
+          "alias": "AzCli",
+          "foreground": "p:blue-bright",
+          "background": "p:blue-deep",
+          "template": " \uebd8 {{ if .Segments.AzPwsh }}{{ if ne .Segments.AzPwsh.Name .Name }}cli\u00b7{{ end }}{{ end }}{{ .Name }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "source": "cli"
+          }
+        },
+        {
+          "type": "az",
+          "style": "powerline",
+          "alias": "AzPwsh",
+          "foreground": "p:blue-bright",
+          "background": "p:blue-deep",
+          "template": "{{ if .Segments.AzCli }}{{ if ne .Segments.AzCli.Name .Name }} pwsh\u00b7{{ .Name }} {{ end }}{{ else }} \uebd8 {{ .Name }} {{ end }}",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "source": "pwsh"
+          }
+        },
+        {
+          "type": "dotnet",
+          "style": "powerline",
+          "foreground": "p:violet-bright",
+          "background": "p:violet-deep",
+          "template": " \ue77f {{ .Full }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "display_mode": "files"
+          }
+        },
+        {
+          "type": "node",
+          "style": "powerline",
+          "foreground": "p:green-bright",
+          "background": "p:green-deep",
+          "template": " \ue718 {{ .Full }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "display_mode": "files",
+            "fetch_package_manager": false
+          }
+        },
+        {
+          "type": "docker",
+          "style": "powerline",
+          "foreground": "p:cyan-bright",
+          "background": "p:cyan-deep",
+          "template": " \uf308 {{ .Context }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "display_mode": "context"
+          }
+        }
+      ]
+    },
+    {
+      "type": "rprompt",
+      "alignment": "right",
+      "segments": [
+        {
+          "type": "exit",
+          "style": "powerline",
+          "foreground": "p:green-mid",
+          "foreground_templates": [
+            "{{ if gt .Code 0 }}p:red-bright{{ end }}"
+          ],
+          "background": "p:green-deep",
+          "background_templates": [
+            "{{ if gt .Code 0 }}p:red-deep{{ end }}"
+          ],
+          "template": "{{ if gt .Code 0 }} \uf00d {{ .Code }} {{ else }} \uf00c {{ end }}",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "always_enabled": true
+          }
+        },
+        {
+          "type": "executiontime",
+          "style": "powerline",
+          "foreground": "p:indigo-bright",
+          "background": "p:indigo-deep",
+          "template": " {{ .FormattedMs }} ",
+          "powerline_symbol": "\ue0c4",
+          "options": {
+            "threshold": 3000,
+            "style": "austin",
+            "always_enabled": true
+          }
+        },
+        {
+          "type": "time",
+          "style": "powerline",
+          "foreground": "p:gray-bright",
+          "background": "p:gray-deep",
+          "template": " {{ .CurrentDate | date .Format }} ",
+          "powerline_symbol": "\ue0c4"
+        }
+      ]
+    },
+    {
+      "type": "prompt",
+      "alignment": "left",
+      "newline": true,
+      "segments": [
+        {
+          "type": "text",
+          "style": "plain",
+          "foreground": "p:purple-light",
+          "template": "\u276f"
+        }
+      ]
+    }
+  ],
+  "transient_prompt": {
+    "foreground": "p:purple-light",
+    "background": "transparent",
+    "template": "<p:purple-light>\u276f</> "
+  },
+  "secondary_prompt": {
+    "foreground": "p:rose-bright",
+    "background": "transparent",
+    "template": "\u276f\u276f "
+  },
+  "palette": {
+    "purple-deep": "#1a1033",
+    "purple-mid": "#221840",
+    "purple-bright": "#b8a4f0",
+    "purple-light": "#c9aaff",
+    "blue-deep": "#0a1e36",
+    "blue-mid": "#0d1e3d",
+    "blue-bright": "#5ba4d4",
+    "blue-light": "#7bb3f0",
+    "cyan-deep": "#0b1e2e",
+    "cyan-mid": "#0d2a40",
+    "cyan-bright": "#2496ed",
+    "cyan-light": "#60b8f5",
+    "rose-deep": "#1c1220",
+    "rose-mid": "#8b2d4a",
+    "rose-bright": "#e8668f",
+    "rose-light": "#f4a0bc",
+    "rose-warn": "#c94a6e",
+    "green-deep": "#0e2618",
+    "green-mid": "#3dba72",
+    "green-bright": "#43c97e",
+    "green-light": "#7de0aa",
+    "violet-deep": "#1f0e2a",
+    "violet-mid": "#2e1840",
+    "violet-bright": "#9f7be7",
+    "violet-light": "#c4a8f5",
+    "indigo-deep": "#0f0f2a",
+    "indigo-mid": "#1a1a40",
+    "indigo-bright": "#6b6bcc",
+    "indigo-light": "#9898e0",
+    "amber-deep": "#2b1a00",
+    "amber-mid": "#3d2600",
+    "amber-bright": "#ffb347",
+    "amber-light": "#ffd080",
+    "red-deep": "#2a0c0c",
+    "red-mid": "#3d1010",
+    "red-bright": "#e05e5e",
+    "red-light": "#f09090",
+    "gray-deep": "#1a1a1a",
+    "gray-mid": "#2e2e2e",
+    "gray-bright": "#8a8a8a",
+    "gray-light": "#c4c4c4"
+  }
+}

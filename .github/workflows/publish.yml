@@ -1,0 +1,40 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    name: Publish to PowerShell Gallery
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Verify release tag matches manifest version
+        shell: pwsh
+        run: |
+          $tag = '${{ github.event.release.tag_name }}' -replace '^v', ''
+          $manifest = Import-PowerShellDataFile ./ScrewCitySoftware.PwshProfile.psd1
+          $version = $manifest.ModuleVersion
+          $prerelease = $manifest.PrivateData.PSData.Prerelease
+          if ($prerelease) { $version = "$version-$prerelease" }
+          if ($tag -ne $version) {
+              throw "Release tag '$tag' does not match manifest version '$version'. Bump ModuleVersion (and Prerelease) to match the tag, or tag the release v$version."
+          }
+          Write-Host "Tag and manifest agree on version $version."
+
+      - name: Bootstrap dependencies
+        shell: pwsh
+        run: ./build.ps1 -Task Bootstrap
+
+      - name: Analyze, Test, Build
+        shell: pwsh
+        run: ./build.ps1 -Task Analyze, Test, Build
+
+      - name: Publish to PowerShell Gallery
+        shell: pwsh
+        env:
+          PSGALLERY_API_KEY: ${{ secrets.PSGALLERY_API_KEY }}
+        run: ./build.ps1 -Task Publish
