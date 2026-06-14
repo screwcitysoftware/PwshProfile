@@ -678,7 +678,10 @@ own — the caller supplies the step label — so they read as thin one-liners u
   register completion for the Cobra-based `tailscale` / `op` (1Password) / `gh` (GitHub) CLIs. All
   wrap the module-private `Register-CobraCompletion` engine, which generates `<Command> completion
   powershell` and activates it via `Invoke-InGlobalScope` (run in global scope so its helpers stay
-  reachable at tab time without being tagged to the module).
+  reachable at tab time without being tagged to the module). `tailscale` / `op` take the shell
+  positionally; `gh` is the exception — it requires `completion -s powershell` (a bare positional
+  `powershell` makes gh emit bash), so `Enable-GithubCliCompletion` overrides the engine's default
+  generation args via `Register-CobraCompletion`'s `-CompletionArgument` parameter.
 - **`Enable-DockerCompletion`** — Docker has no built-in PowerShell completion subcommand; its
   completion ships as the community `DockerCompletion` module, which this imports via
   `Import-ModuleSafe`. Guarded by `Get-Command docker`, so the module is never fetched from the
