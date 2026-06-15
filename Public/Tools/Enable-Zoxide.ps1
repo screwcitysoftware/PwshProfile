@@ -32,10 +32,8 @@ function Enable-Zoxide {
     )
 
     Invoke-Step "Install" {
-        # zoxide is a winget portable: its exe lands in the Links dir.
-        Install-WingetPackageSafe -Id 'ajeetdsouza.zoxide' -Exe 'zoxide.exe' `
-            -PathDir (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links') `
-            -CallerName 'Enable-Zoxide'
+        # zoxide is a winget portable: its exe lands in the default Links dir.
+        Install-WingetPackageSafe -Id 'ajeetdsouza.zoxide' -Exe 'zoxide.exe' -CallerName 'Enable-Zoxide'
     }
 
     Invoke-Step "Initialize" {

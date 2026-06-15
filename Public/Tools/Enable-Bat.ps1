@@ -69,10 +69,8 @@ function Enable-Bat {
     )
 
     Invoke-Step "Install" {
-        # bat is a winget portable: its exe lands in the Links dir.
-        Install-WingetPackageSafe -Id 'sharkdp.bat' -Exe 'bat.exe' `
-            -PathDir (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links') `
-            -CallerName 'Enable-Bat'
+        # bat is a winget portable: its exe lands in the default Links dir.
+        Install-WingetPackageSafe -Id 'sharkdp.bat' -Exe 'bat.exe' -CallerName 'Enable-Bat'
     }
 
     Invoke-Step "Initialize" {

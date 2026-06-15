@@ -10,11 +10,12 @@ function Initialize-PwshProfile {
           2. Runs "Shell": the `which` global alias and PSReadLine setup.
           3. Runs "Prompt": oh-my-posh, Terminal-Icons, and posh-git — oh-my-posh first, since
              it is the prompt engine and table stakes for this profile.
-          4. Runs "Tools": zoxide, fzf, fnm, xh, jq, and bat — fzf sits next to zoxide (zoxide's
-             interactive picker auto-uses fzf when it's on PATH), and fnm follows zoxide since
-             Enable-FastNodeManager wraps zoxide's cd hook — then "Completions": winget,
-             Azure CLI, Tailscale, Docker, 1Password, and GitHub CLI (registration only — these install nothing),
-             since the completions are operations on the tools.
+          4. Runs "Tools": zoxide, fzf, fnm, xh, jq, bat, and fd — fzf sits next to zoxide (zoxide's
+             interactive picker auto-uses fzf when it's on PATH), fnm follows zoxide since
+             Enable-FastNodeManager wraps zoxide's cd hook, and fd follows fzf so it can wire fzf to
+             use fd as its file source — then "Completions": winget, Azure CLI, Tailscale, Docker,
+             1Password, and GitHub CLI (registration only — these install nothing), since the
+             completions are operations on the tools.
 
         Each of the three sections is its own top-level Invoke-Step, so each renders its own status
         spinner and a single summary line (Completions is a nested step under Tools). Steps that
@@ -27,12 +28,17 @@ function Initialize-PwshProfile {
         carry a matching banner color and step marker — picking 'forestcity' defaults the banner to
         the theme's green with a 🌳 marker, while 'screwcity' keeps purple / 🔩 — applied only to the
         banner color/icon you don't set explicitly. The theme likewise seeds bat's syntax theme
-        (-BatTheme) so bat's colors blend with the prompt (screwcity -> Dracula, forestcity ->
-        gruvbox-dark).
+        (-BatTheme), fd's LS_COLORS palette (-FdColors), and fzf's picker palette (-FzfColors) so
+        those tools' colors blend with the prompt (screwcity -> Dracula/purple, forestcity ->
+        gruvbox-dark/green). fzf also gets the `full` UI style and — via the PSFzf module — Ctrl+T
+        (file picker, with a bat preview when bat is in play) and Ctrl+R (fuzzy history) key
+        bindings, fd-backed traversal, and the Ctrl+G fuzzy-git chords (when git is present). Those
+        PSFzf pickers are sized to fill the shell (--height=100%), overriding PSFzf's inline 40%
+        default; a bare fzf and zoxide's `cdi` keep their native alternate-screen fullscreen.
         Use -ZoxideCommand to rename zoxide's jump command, -StepIcon to rebrand the step marker,
-        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -Skip to opt
-        out of individual tools (e.g. to avoid an unwanted winget auto-install), and -SkipSection to
-        opt out of whole sections.
+        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -FdColors /
+        -FzfColors to tune fd's and fzf's colors, -Skip to opt out of individual tools (e.g. to avoid
+        an unwanted winget auto-install), and -SkipSection to opt out of whole sections.
 
         It deliberately runs only the module's own startup — any other personal profile scripts you
         keep in $PROFILE are left untouched.
@@ -88,6 +94,17 @@ function Initialize-PwshProfile {
         Forwarded to Enable-Bat as -ReplaceCat: when set, aliases cat -> bat for the session (so the
         built-in cat, an alias for Get-Content, is replaced by bat). Off by default.
 
+    .PARAMETER FdColors
+        The LS_COLORS spec, forwarded to Enable-Fd as -LsColors (sets $env:LS_COLORS) so fd's output
+        is tinted to match the prompt. When omitted, defaults to the selected theme's branding
+        (screwcity's purple-led palette or forestcity's green-led one). fd stays a standalone utility
+        and never replaces Get-ChildItem. Note: LS_COLORS is shared with ls/eza.
+
+    .PARAMETER FzfColors
+        The fzf `--color` spec, forwarded to Enable-Fzf as -Colors (folded into $env:FZF_DEFAULT_OPTS)
+        so fzf's picker palette matches the prompt. When omitted, defaults to the selected theme's
+        branding (screwcity's purple/cyan or forestcity's green/gold).
+
     .PARAMETER StepIcon
         The marker printed before each top-level step description, forwarded to Invoke-Step as
         -Icon. Defaults to ':nut_and_bolt:' (a Spectre emoji shortcode, rendered as 🔩). No trailing
@@ -95,8 +112,8 @@ function Initialize-PwshProfile {
 
     .PARAMETER Skip
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
-        'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Completions'. Dropping one omits its step; the auto-installing
-        ones (Zoxide, Fzf, Fnm, Xh, Jq, Bat) thereby decline an unwanted winget install. 'Completions' drops the
+        'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Completions'. Dropping one omits its step; the auto-installing
+        ones (Zoxide, Fzf, Fnm, Xh, Jq, Bat, Fd) thereby decline an unwanted winget install. 'Completions' drops the
         shell-completion registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
@@ -212,11 +229,19 @@ function Initialize-PwshProfile {
         [Parameter()]
         [switch]$ReplaceCat,
 
+        # Empty-string sentinels resolved in the body from the selected theme's branding (like
+        # BatTheme), so -Theme alone gives fd and fzf matching color palettes.
+        [Parameter()]
+        [string]$FdColors = '',
+
+        [Parameter()]
+        [string]$FzfColors = '',
+
         [Parameter()]
         [string]$StepIcon = '',
 
         [Parameter()]
-        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Completions')]
+        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Completions')]
         [string[]]$Skip = @(),
 
         [Parameter()]
@@ -241,6 +266,9 @@ function Initialize-PwshProfile {
     if (-not $PSBoundParameters.ContainsKey('StepIcon'))    { $StepIcon    = $branding.StepIcon }
     # bat's syntax theme follows the prompt theme unless set explicitly (screwcity -> Dracula, etc.).
     if (-not $PSBoundParameters.ContainsKey('BatTheme'))    { $BatTheme    = $branding.BatTheme }
+    # fd's and fzf's color palettes likewise follow the prompt theme unless set explicitly.
+    if (-not $PSBoundParameters.ContainsKey('FdColors'))    { $FdColors    = $branding.LsColors }
+    if (-not $PSBoundParameters.ContainsKey('FzfColors'))   { $FzfColors   = $branding.FzfColors }
 
     if ($Skip -notcontains 'Banner' -and -not [string]::IsNullOrWhiteSpace($BannerText)) {
         # Forward the font only when supplied; -Font and -FontPath are mutually exclusive on
@@ -283,11 +311,28 @@ function Initialize-PwshProfile {
     if ($SkipSection -notcontains 'Tools') {
         Invoke-Step "Tools" -Icon $StepIcon {
             if ($Skip -notcontains 'Zoxide') { Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand } }
-            if ($Skip -notcontains 'Fzf')    { Invoke-Step "fzf" { Enable-Fzf } }
+            if ($Skip -notcontains 'Fzf') {
+                Invoke-Step "fzf" {
+                    # Preview files with bat only when bat is in play (not skipped). The preview runs
+                    # at fzf-use time — by then the Bat step (which follows) has installed bat; bat
+                    # inherits $env:BAT_THEME so the preview colors match the prompt.
+                    $fzfPreview = if ($Skip -notcontains 'Bat') { 'bat --color=always --style=numbers {}' } else { '' }
+                    # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell);
+                    # -UseFd follows the Fd skip (PSFzf uses fd for traversal); -GitKeyBindings is
+                    # always requested and Enable-Fzf drops it when git isn't on PATH. -Height '100%'
+                    # makes those PSFzf widgets fill the shell instead of PSFzf's inline 40% default.
+                    Enable-Fzf -Colors $FzfColors -Style 'full' -Height '100%' -PreviewCommand $fzfPreview `
+                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' `
+                        -UseFd:($Skip -notcontains 'Fd') -GitKeyBindings
+                }
+            }
             if ($Skip -notcontains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
             if ($Skip -notcontains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
             if ($Skip -notcontains 'Jq')     { Invoke-Step "jq" { Enable-Jq } }
             if ($Skip -notcontains 'Bat')    { Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat } }
+            # fd follows fzf so fzf.exe is already on PATH when -IntegrateFzf is evaluated; fd wires
+            # fzf to use fd as its source only when fzf is itself enabled (not skipped) and present.
+            if ($Skip -notcontains 'Fd')     { Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf:($Skip -notcontains 'Fzf') } }
             # Shell completions are operations on the tools, so they register as the final Tools
             # sub-step (registration only — these install nothing). Skipped via -Skip Completions,
             # and dropped wholesale when the whole Tools section is skipped.

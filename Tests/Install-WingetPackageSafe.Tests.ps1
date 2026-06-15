@@ -24,6 +24,26 @@ Describe 'Install-WingetPackageSafe' -Skip:(-not $HasWinGetClient) {
         }
     }
 
+    It 'defaults -PathDir to the WinGet Links directory when omitted' {
+        InModuleScope ScrewCitySoftware.PwshProfile {
+            Mock Import-ModuleSafe { }
+            Mock Install-WinGetPackage { [pscustomobject]@{ Status = 'Ok'; InstallerErrorCode = 0 } }
+
+            $fakeExe = 'sc-not-a-real-exe-' + [guid]::NewGuid() + '.exe'
+            $links = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+            $savedPath = $env:Path
+            try {
+                # -PathDir omitted: it should resolve to the shared portable Links dir.
+                Install-WingetPackageSafe -Id 'Some.Package' -Exe $fakeExe `
+                    -CallerName 'Test' -WarningAction SilentlyContinue
+                ($env:Path -split ';') | Should -Contain $links
+            }
+            finally {
+                $env:Path = $savedPath
+            }
+        }
+    }
+
     It 'maps -Scope user to Install-WinGetPackage -Scope User, patches PATH, and warns when the exe is missing' {
         InModuleScope ScrewCitySoftware.PwshProfile {
             Mock Import-ModuleSafe { }

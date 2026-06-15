@@ -64,6 +64,9 @@ Describe 'Get-BundledThemeBranding' {
             $b.BannerColor | Should -Be '#c9aaff'
             $b.StepIcon    | Should -Be ':nut_and_bolt:'
             $b.BatTheme    | Should -Be 'Dracula'
+            # fd (LS_COLORS) and fzf color specs blend with the purple/cyan palette.
+            $b.LsColors    | Should -Match 'di=1;38;2;201;170;255'
+            $b.FzfColors   | Should -Match 'pointer:#c9aaff'
         }
     }
 
@@ -74,6 +77,9 @@ Describe 'Get-BundledThemeBranding' {
             $b.BannerColor | Should -Be '#8fce72'
             $b.StepIcon    | Should -Be ':deciduous_tree:'
             $b.BatTheme    | Should -Be 'gruvbox-dark'
+            # fd (LS_COLORS) and fzf color specs blend with the green/gold palette.
+            $b.LsColors    | Should -Match 'di=1;38;2;143;206;114'
+            $b.FzfColors   | Should -Match 'pointer:#8fce72'
         }
     }
 

@@ -34,6 +34,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Xh { }
         Mock -ModuleName $script:Module Enable-Jq { }
         Mock -ModuleName $script:Module Enable-Bat { }
+        Mock -ModuleName $script:Module Enable-Fd { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
         Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
@@ -48,13 +49,20 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly -ParameterFilter { $Command -eq 'cd' }
-            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly
+            # fzf enables by default with the screwcity blend, full style, bat preview, PSFzf
+            # Ctrl+T/Ctrl+R bindings, fd traversal, and git chords.
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $Colors -like '*pointer:#c9aaff*' -and $Style -eq 'full' -and $Height -eq '100%' -and $PreviewCommand -like 'bat *' -and `
+                    $ProviderChord -eq 'Ctrl+t' -and $HistoryChord -eq 'Ctrl+r' -and $UseFd -and $GitKeyBindings }
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
             # bat enables by default with the screwcity blend theme and cat left intact.
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
                 -ParameterFilter { $Theme -eq 'Dracula' -and $Style -eq 'numbers,changes,header' -and -not $ReplaceCat }
+            # fd enables by default with the screwcity LS_COLORS blend and fzf integration on.
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
+                -ParameterFilter { $LsColors -like '*di=1;38;2;201;170;255*' -and $IntegrateFzf }
             # Completions register by default (as the final sub-step of Tools).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly
@@ -94,6 +102,22 @@ Describe 'Initialize-PwshProfile' {
             Initialize-PwshProfile -Theme forestcity
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
                 -ParameterFilter { $Theme -eq 'gruvbox-dark' }
+        }
+
+        It 'blends fd and fzf with the forestcity palette by default' {
+            Initialize-PwshProfile -Theme forestcity
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
+                -ParameterFilter { $LsColors -like '*di=1;38;2;143;206;114*' }
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $Colors -like '*pointer:#8fce72*' }
+        }
+
+        It 'forwards explicit -FdColors and -FzfColors, overriding the theme blend' {
+            Initialize-PwshProfile -FdColors 'di=0' -FzfColors 'pointer:#ff0000'
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
+                -ParameterFilter { $LsColors -eq 'di=0' }
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $Colors -eq 'pointer:#ff0000' }
         }
 
         It 'forwards -StepIcon to the top-level Invoke-Step calls' {
@@ -143,6 +167,27 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
         }
 
+        It 'skips fd but keeps its siblings (and drops fzf''s -UseFd)' {
+            Initialize-PwshProfile -Skip Fd
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly
+            # fzf still enables, but without fd in play it doesn't ask PSFzf to use fd.
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { -not $UseFd }
+        }
+
+        It 'keeps fd but drops its fzf integration when fzf is skipped' {
+            Initialize-PwshProfile -Skip Fzf
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
+                -ParameterFilter { -not $IntegrateFzf }
+        }
+
+        It 'keeps fzf full style but drops the bat preview when bat is skipped' {
+            Initialize-PwshProfile -Skip Bat
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $Style -eq 'full' -and [string]::IsNullOrEmpty($PreviewCommand) }
+        }
+
         It 'skips the banner' {
             Initialize-PwshProfile -Skip Banner
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
@@ -180,6 +225,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Jq -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 0 -Exactly

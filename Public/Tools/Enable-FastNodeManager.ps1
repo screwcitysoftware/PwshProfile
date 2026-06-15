@@ -28,10 +28,8 @@ function Enable-FastNodeManager {
     param()
 
     Invoke-Step "Install" {
-        # fnm is a winget portable: its exe lands in the Links dir.
-        Install-WingetPackageSafe -Id 'Schniz.fnm' -Exe 'fnm.exe' `
-            -PathDir (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links') `
-            -CallerName 'Enable-FastNodeManager'
+        # fnm is a winget portable: its exe lands in the default Links dir.
+        Install-WingetPackageSafe -Id 'Schniz.fnm' -Exe 'fnm.exe' -CallerName 'Enable-FastNodeManager'
     }
 
     Invoke-Step "Initialize" {

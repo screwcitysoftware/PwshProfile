@@ -43,15 +43,19 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, and xh through the first-party
-  `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is missing;
-  winget ships with Windows 11). Without winget those steps degrade silently; the rest of startup is
-  unaffected.
+  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, and fd through the
+  first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
+  missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
+  startup is unaffected.
 - **A Nerd Font** in your terminal — the oh-my-posh prompt and Terminal-Icons render powerline
   glyphs and file icons that only display correctly in a Nerd Font (see below).
 - [PwshSpectreConsole](https://www.powershellgallery.com/packages/PwshSpectreConsole) is
   **installed automatically** on first import (the module calls `Import-ModuleSafe
   PwshSpectreConsole`), so there's no manual step for it.
+- **Runtime PowerShell modules** — Terminal-Icons (file icons), posh-git (git status in the prompt),
+  and [PSFzf](https://github.com/kelleyma49/PSFzf) (fzf's Ctrl+T/Ctrl+R key bindings on Windows —
+  distinct from the fzf CLI installed via winget) are auto-installed from PSGallery on first use via
+  `Import-ModuleSafe`. Each failure is non-fatal, so startup continues if one can't install.
 
 ### Install the module
 
@@ -257,6 +261,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Xh.ps1
 │   │   ├── Enable-Jq.ps1
 │   │   ├── Enable-Bat.ps1
+│   │   ├── Enable-Fd.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
@@ -280,9 +285,9 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
-│   │   └── Get-BundledThemeBranding.ps1 # banner text/color/icon paired with each bundled theme
+│   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors paired with each bundled theme
 │   ├── Tools/
-│   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers
+│   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers (-PathDir defaults to the WinGet\Links dir)
 │   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
 │   │   └── Completions/
 │   │       └── Register-CobraCompletion.ps1 # shared engine for Cobra CLIs (tailscale, op) — wrapped by the Enable-* enablers
@@ -349,11 +354,12 @@ The wizard walks one forward pass, then lets you revise anything before committi
    the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
 5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
    current icon floated to the top and a "custom shortcode" escape.
-6. **Features** — a grouped tree under the **Shell / Prompt / Tools** sections (shell completions
-   sit under Tools) that starts with **everything checked**; uncheck a feature (or a whole section)
-   to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed. If
-   `zoxide` stays enabled you're prompted for its jump command, and if `bat` stays enabled you're
+6. **Features** — a grouped tree under the **Shell / Prompt / Tools** sections (shell completions and
+   `fd` sit under Tools) that starts with **everything checked**; uncheck a feature (or a whole
+   section) to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed.
+   If `zoxide` stays enabled you're prompted for its jump command, and if `bat` stays enabled you're
    asked whether to replace the built-in `cat` with it (**defaulting to Yes**, emitting `-ReplaceCat`).
+   When `fzf` stays enabled it also gains the PSFzf Ctrl+T/Ctrl+R key bindings.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -438,7 +444,7 @@ The headline entry point: one call that runs the whole default profile startup, 
 shrinks to an import plus this call. In order it shows the startup banner, then runs three
 top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
 (oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
-(zoxide, fzf, fnm, xh, jq, bat — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`), which ends with the shell
+(zoxide, fzf, fnm, xh, jq, bat, fd — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`, fd after fzf so it can wire fzf to use fd as its source), which ends with the shell
 **completions** (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI — registration only, no installs) as a nested
 sub-step, since completions are operations on the tools. Each section renders its own spinner and
 summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -470,11 +476,19 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   `numbers,changes,header`.
 - **`-ReplaceCat`** — forwarded to `Enable-Bat -ReplaceCat`: aliases `cat` → `bat` for the session
   (replacing the built-in `cat`, an alias for `Get-Content`). Off by default.
+- **`-FdColors`** — fd's `LS_COLORS` palette, forwarded to `Enable-Fd -LsColors` (sets
+  `$env:LS_COLORS`). Defaults to the active theme's blend (purple-led for screwcity, green-led for
+  forestcity). fd stays standalone — it never replaces `Get-ChildItem`. (`LS_COLORS` is shared with
+  `ls`/`eza`.)
+- **`-FzfColors`** — fzf's picker palette, forwarded to `Enable-Fzf -Colors` (folded into
+  `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for screwcity,
+  green/gold for forestcity).
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
-  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Completions` (skipping `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq`/`Bat` also
+  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Completions` (skipping
+  `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq`/`Bat`/`Fd` also
   avoids their winget auto-install; `Completions` drops the shell-completion registrations under Tools).
   oh-my-posh is table stakes — it has no token in either parameter and always runs.
 - **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
@@ -611,11 +625,11 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
-it into the session (install-only tools like `Enable-Fzf` and `Enable-Jq` skip this). The
+it into the session (install-only tools like `Enable-Jq` skip this). The
 work is split into nested `Invoke-Step "Install"` / `Invoke-Step "Initialize"` substeps, so
 the two phases show as breadcrumb stages under the spinner. winget's own output is captured
 into a variable (`*>&1`) so it can't tear the live spinner. After install the exe is re-checked
@@ -627,11 +641,27 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   bundled `Assets/Themes/screwcity.omp.json`; pass `-Configuration` to use a different theme.
 - **`Enable-Zoxide [-Command <name>]`** — installs `ajeetdsouza.zoxide` and runs
   `zoxide init powershell --cmd <name>` (default `cd`, replacing the built-in).
-- **`Enable-Fzf`** — installs `junegunn.fzf` (the command-line fuzzy finder) and puts `fzf.exe`
-  on PATH. fzf and zoxide are independent, standalone tools, but **zoxide is built to integrate
-  with fzf**: when `fzf.exe` is on PATH, zoxide's interactive picker (`cdi` / `zi`) uses fzf for
-  fuzzy directory selection. fzf needs no PowerShell init, so this is install-only — there's no
-  Initialize work to do.
+- **`Enable-Fzf [-Colors <spec>] [-Style <preset>] [-Height <value>] [-PreviewCommand <cmd>]
+  [-ProviderChord <chord>] [-HistoryChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
+  fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
+  `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi`) from
+  `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full` — applied only on
+  fzf ≥ 0.54); it carries **no** `--preview`, so directory pickers stay clean. `-PreviewCommand` is
+  written to `$env:FZF_CTRL_T_OPTS` instead — scoped to the **Ctrl+T file picker** (so the bat
+  preview shows for file searches but never for directory pickers like zoxide's `cdi`). Because fzf
+  ships **no** PowerShell key bindings, `-ProviderChord`/`-HistoryChord`/`-UseFd`/`-GitKeyBindings`
+  install/import the **PSFzf** module and call `Set-PsFzfOption` to bind **Ctrl+T** (fd-sourced file
+  picker with the bat preview) and **Ctrl+R** (fuzzy history, overriding native reverse-search), make
+  PSFzf use fd for traversal (`-EnableFd`), and register the **Ctrl+G** fuzzy-git chords (only when
+  git is on PATH). `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
+  widget-only opts, read in preference to `$env:FZF_DEFAULT_OPTS`): without it PSFzf forces an inline
+  `--height=40%`; `Initialize-PwshProfile` passes `100%` so the pickers fill the shell, while
+  `$env:FZF_DEFAULT_OPTS` stays height-free so a bare `fzf` keeps its alternate-screen fullscreen.
+  `Initialize-PwshProfile` passes the theme blend, `full` style, `100%` height, the bat preview
+  (when bat is in play), `Ctrl+t`/`Ctrl+r`, `-UseFd` (when fd is in play), and `-GitKeyBindings`. fzf
+  owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND`)
+  lives in `Enable-Fd`. zoxide's interactive picker (`cdi` / `zi`) reuses
+  fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
   strategy) and completions, and — when zoxide is active — wraps `__zoxide_cd` so every
   directory change runs `fnm use`. Call after `Enable-Zoxide`.
@@ -646,15 +676,25 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   passes the active theme's blend: screwcity → `Dracula`, forestcity → `gruvbox-dark`) and
   `$env:BAT_STYLE` to `-Style` (default `numbers,changes,header`), registers bat's PowerShell
   completer (`bat --completion ps1`), and — with `-ReplaceCat` — aliases `cat` → `bat` globally.
+- **`Enable-Fd [-LsColors <spec>] [-IntegrateFzf]`** — installs `sharkdp.fd` (a fast, friendly
+  `find` alternative that respects `.gitignore`). In Initialize it sets `$env:LS_COLORS` to
+  `-LsColors` (so fd's output matches the prompt — `Initialize-PwshProfile` passes the active
+  theme's truecolor blend), registers fd's PowerShell completer (`fd --gen-completions powershell`),
+  and — with `-IntegrateFzf`, when `fzf.exe` is present — points a bare `fzf` at fd as its file
+  source via `$env:FZF_DEFAULT_COMMAND` (the Ctrl+T picker uses PSFzf's own fd provider). **fd is
+  standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
+  `ls`/`eza`.) Enabled after `Enable-Fzf`
+  so `fzf.exe` is on PATH when integration is evaluated.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
 Enable-Zoxide
-Enable-Fzf
+Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
 Enable-FastNodeManager
 Enable-Xh
 Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
+Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -835,7 +875,8 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, PwshSpectreConsole,
-  Terminal-Icons, posh-git, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
+- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd,
+  PwshSpectreConsole,
+  Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never
   bundled or redistributed here, and remain under their own respective licenses.
