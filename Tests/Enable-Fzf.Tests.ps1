@@ -71,9 +71,21 @@ Describe 'Enable-Fzf' {
         $env:FZF_DEFAULT_OPTS        | Should -Be '--ansi --color=pointer:#c9aaff'
     }
 
-    It 'leaves _PSFZF_FZF_DEFAULT_OPTS untouched when no -Height is given' {
+    It 'mirrors the height-free global opts into _PSFZF_FZF_DEFAULT_OPTS when no -Height is given' {
         Enable-Fzf
-        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -BeNullOrEmpty
+        # Without a --height the var simply mirrors the global opts (PSFzf still applies its own
+        # default height); it must not carry a --height it was never asked for.
+        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi'
+        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Not -Match '--height'
+    }
+
+    It 'resets stale _PSFZF_FZF_DEFAULT_OPTS / FZF_CTRL_T_OPTS on a reload that drops -Height / -PreviewCommand' {
+        # Simulate a prior reload that set both, then a reload that asks for neither.
+        $env:_PSFZF_FZF_DEFAULT_OPTS = '--ansi --height=40%'
+        $env:FZF_CTRL_T_OPTS         = "--preview 'stale'"
+        Enable-Fzf
+        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Not -Match '--height'
+        $env:FZF_CTRL_T_OPTS         | Should -BeNullOrEmpty
     }
 
     It 'does not import PSFzf when only -GitKeyBindings is requested and git is absent' {

@@ -342,6 +342,14 @@ function Initialize-PwshProfile {
         # (guarded like the rest of the module so a missing PwshSpectreConsole never throws).
         if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
     }
+    elseif (-not $NoBanner) {
+        # Banner text resolved empty (e.g. $env:COMPUTERNAME unset) so the banner is suppressed above
+        # to avoid throwing into Write-Figlet. Warn for any explicitly-bound banner param so the silent
+        # drop is visible, matching the -NoBanner coupling warnings.
+        foreach ($p in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath') {
+            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied but no banner text resolved (banner suppressed); ignoring it." }
+        }
+    }
 
     # Core always renders. oh-my-posh and the `which` alias are always-on (not catalog tokens); the
     # rest are opt-in. PSReadLine runs before oh-my-posh, so PSFzf (in the WinGet section, which runs

@@ -196,15 +196,20 @@ function Enable-Fzf {
             # FZF_DEFAULT_OPTS, so giving it its own opts (= the base + an explicit --height) both
             # suppresses that 40% default and sizes the pickers, while FZF_DEFAULT_OPTS stays
             # height-free → a bare fzf and zoxide's cdi keep their native alternate-screen fullscreen.
-            if (-not [string]::IsNullOrWhiteSpace($Height)) {
-                $env:_PSFZF_FZF_DEFAULT_OPTS = "$env:FZF_DEFAULT_OPTS --height=$Height"
+            # Assign unconditionally (like FZF_DEFAULT_OPTS above) so a live-session reload that drops
+            # -Height resets to the height-free baseline rather than leaving a stale --height behind.
+            $env:_PSFZF_FZF_DEFAULT_OPTS = if (-not [string]::IsNullOrWhiteSpace($Height)) {
+                "$env:FZF_DEFAULT_OPTS --height=$Height"
             }
+            else { $env:FZF_DEFAULT_OPTS }
 
             # The bat preview is scoped to PSFzf's Ctrl+T file picker (FZF_CTRL_T_OPTS), never the
             # global opts — so it shows for file searches but not for directory pickers like cdi.
-            if (-not [string]::IsNullOrWhiteSpace($PreviewCommand)) {
-                $env:FZF_CTRL_T_OPTS = "--preview '$PreviewCommand'"
+            # Assign unconditionally so a reload that drops -PreviewCommand clears a stale preview.
+            $env:FZF_CTRL_T_OPTS = if (-not [string]::IsNullOrWhiteSpace($PreviewCommand)) {
+                "--preview '$PreviewCommand'"
             }
+            else { '' }
 
             # fzf ships no PowerShell key bindings — PSFzf provides them. Build the option set first
             # (the Ctrl+G git chords only when git is present, so a git-less machine isn't left with

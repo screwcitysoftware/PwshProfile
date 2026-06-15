@@ -276,6 +276,20 @@ Describe 'Initialize-PwshProfile' {
         It 'rejects an empty -BannerText' {
             { Initialize-PwshProfile -BannerText '' } | Should -Throw
         }
+
+        It 'warns and ignores banner params when the banner text resolves empty' {
+            # The only way BannerText resolves empty (ValidateNotNullOrEmpty rejects an explicit '')
+            # is an unset $env:COMPUTERNAME default. The banner is then suppressed; an explicitly
+            # passed banner param must warn rather than vanish silently.
+            $saved = $env:COMPUTERNAME
+            try {
+                $env:COMPUTERNAME = ''
+                Initialize-PwshProfile -EnableAll -BannerColor Green -WarningVariable warnings -WarningAction SilentlyContinue
+                Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
+                $warnings | Should -Not -BeNullOrEmpty
+            }
+            finally { $env:COMPUTERNAME = $saved }
+        }
     }
 
     Context 'theme selection and branding' {

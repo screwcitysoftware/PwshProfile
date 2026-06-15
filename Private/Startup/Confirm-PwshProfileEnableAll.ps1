@@ -55,7 +55,7 @@ function Confirm-PwshProfileEnableAll {
 
         # Plain fallback when PwshSpectreConsole isn't available — still interactive, so safe to ask.
         $answer = Read-Host "$message [y/N]"
-        return ($answer -match '^\s*y')
+        return ($answer -match '^\s*y(es)?\s*$')
     }
     catch {
         Write-Warning "Confirm-PwshProfileEnableAll: could not prompt ($($_.Exception.Message)); enabling nothing. Pass -Enable/-EnableAll or run Install-PwshProfile."

@@ -149,7 +149,7 @@ function Install-PwshProfile {
 
     # The wizard returns $null when the user cancels at the review screen — write nothing.
     if ($null -eq $settings) {
-        if ($interactive -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
+        if (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue) {
             if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
             '[grey]Setup cancelled — no changes made.[/]' |
                 Format-SpectrePanel -Header '• Cancelled' -Border Rounded -Color Grey -Expand | Out-Host
@@ -196,7 +196,7 @@ function Install-PwshProfile {
 
     $call = Build-PwshProfileInitializeCall -Setting $settings
 
-    if ($interactive -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
+    if (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue) {
         $preview = Get-PwshProfileBlock -InitializeCall $call
         $preview | Format-SpectrePanel -Header "Bootstrap for $Path" -Border Rounded -Color $accent -Expand | Out-Host
     }
@@ -207,7 +207,7 @@ function Install-PwshProfile {
     if ($Force) { $writeArgs.Force = $true }
     $result = Write-PwshProfileBlock @writeArgs
 
-    if ($interactive -and -not $WhatIfPreference -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
+    if (-not $WhatIfPreference -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
         $color = 'Green'
         $msg = switch ($result.Action) {
             'AlreadyPresent' { 'Already configured — no changes made.' }

@@ -121,7 +121,7 @@ function Build-PwshProfileInitializeCall {
     # under -NoBanner, and tool-specific params (zoxide/bat) only emit when that tool is enabled.
     $bannerKeys = @('BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont')
     $keyTool = @{ ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat' }
-    foreach ($key in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle') {
+    foreach ($key in @($bannerKeys + @('StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle'))) {
         if ($noBanner -and $bannerKeys -contains $key) { continue }
         if ($keyTool.ContainsKey($key) -and $enabledSet -notcontains $keyTool[$key]) { continue }
         $v = & $value $key
