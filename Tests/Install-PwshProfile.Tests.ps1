@@ -134,6 +134,15 @@ Describe 'Build-PwshProfileInitializeCall' {
         }
     }
 
+    It 'emits -ReplaceMore as a bare switch when opted in' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.ReplaceMore = $true
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -ReplaceMore'
+        }
+    }
+
     It 'omits -ReplaceCat at its default (off)' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
@@ -465,7 +474,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Default install scope (winget)' }
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Winget progress bar style' }
             # Feature tree: everything enabled. Hub: submit (the first choice).
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'What would you like to do?' }
         }
     }
@@ -487,7 +496,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { 'Center' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Banner alignment' }
             Mock Read-SpectreSelection { [pscustomobject]@{ Label = 'x'; Icon = ':gear:' } } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Step marker icon' }
             # Fnm, Xh and Completions left unchecked; the rest enabled.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Bat', 'Fd') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Bat', 'Fd', 'Less') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.StepIcon | Should -Be ':gear:'
@@ -516,12 +525,34 @@ Describe 'Invoke-PwshProfileWizard' {
     It 'leaves ReplaceCat off (and skips the cat prompt) when bat is unchecked' {
         InModuleScope $script:Module {
             # bat unchecked; the cat-override prompt must not run.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Fd', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.Skip | Should -Contain 'Bat'
             $s.ReplaceCat | Should -BeFalse
             Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
+        }
+    }
+
+    It 'sets ReplaceMore when less stays enabled and the pager-override is confirmed' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.ReplaceMore | Should -BeTrue
+            $s.Skip | Should -Not -Contain 'Less'
+        }
+    }
+
+    It 'leaves ReplaceMore off (and skips the pager prompt) when less is unchecked' {
+        InModuleScope $script:Module {
+            # less unchecked; the pager-override prompt must not run.
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Completions') } -RemoveParameterType 'Color'
+
+            $s = Invoke-PwshProfileWizard
+            $s.Skip | Should -Contain 'Less'
+            $s.ReplaceMore | Should -BeFalse
+            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
         }
     }
 

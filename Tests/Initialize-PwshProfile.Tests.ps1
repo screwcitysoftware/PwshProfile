@@ -35,6 +35,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Jq { }
         Mock -ModuleName $script:Module Enable-Bat { }
         Mock -ModuleName $script:Module Enable-Fd { }
+        Mock -ModuleName $script:Module Enable-Less { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
         Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
@@ -63,6 +64,9 @@ Describe 'Initialize-PwshProfile' {
             # fd enables by default with the screwcity LS_COLORS blend and fzf integration on.
             Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
                 -ParameterFilter { $LsColors -like '*di=1;38;2;201;170;255*' -and $IntegrateFzf }
+            # less enables by default with the pager-override left off.
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
+                -ParameterFilter { -not $ReplaceMore }
             # Completions register by default (as the final sub-step of Tools).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly
@@ -90,6 +94,12 @@ Describe 'Initialize-PwshProfile' {
             Initialize-PwshProfile -ReplaceCat -BatStyle 'plain'
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
                 -ParameterFilter { $ReplaceCat -and $Style -eq 'plain' }
+        }
+
+        It 'forwards -ReplaceMore to Enable-Less' {
+            Initialize-PwshProfile -ReplaceMore
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
+                -ParameterFilter { $ReplaceMore }
         }
 
         It 'forwards an explicit -BatTheme, overriding the theme blend' {
@@ -186,6 +196,13 @@ Describe 'Initialize-PwshProfile' {
             Initialize-PwshProfile -Skip Bat
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { $Style -eq 'full' -and [string]::IsNullOrEmpty($PreviewCommand) }
+        }
+
+        It 'skips less but keeps its siblings' {
+            Initialize-PwshProfile -Skip Less
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly
         }
 
         It 'skips the banner' {

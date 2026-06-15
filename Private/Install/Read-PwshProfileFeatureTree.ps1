@@ -27,7 +27,7 @@ function Read-PwshProfileFeatureTree {
 
     .PARAMETER Enabled
         A hashtable mapping each feature token (PSReadLine, TerminalIcons, PoshGit, Zoxide, Fzf, Fnm,
-        Xh, Bat, Fd, Completions) to a boolean for its initial checked state. Missing/true tokens start checked.
+        Xh, Bat, Fd, Less, Completions) to a boolean for its initial checked state. Missing/true tokens start checked.
         On the first wizard pass every token is enabled; when the step is re-edited from the review
         hub, the caller passes the current state so prior choices are preserved.
 
@@ -71,12 +71,13 @@ function Read-PwshProfileFeatureTree {
             [pscustomobject]@{ Label = 'posh-git'; Token = 'PoshGit' }
         )
         Tools  = @(
-            [pscustomobject]@{ Label = 'Zoxide (smart cd)'; Token = 'Zoxide' }
+            [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide' }
             [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Token = 'Fzf' }
-            [pscustomobject]@{ Label = 'Fast Node Manager (fnm)'; Token = 'Fnm' }
+            [pscustomobject]@{ Label = 'fnm (Fast Node Manager)'; Token = 'Fnm' }
             [pscustomobject]@{ Label = 'xh (HTTP client)'; Token = 'Xh' }
             [pscustomobject]@{ Label = 'bat (cat replacement)'; Token = 'Bat' }
             [pscustomobject]@{ Label = 'fd (file finder)'; Token = 'Fd' }
+            [pscustomobject]@{ Label = 'less (pager)'; Token = 'Less' }
             [pscustomobject]@{ Label = 'Shell completions'; Token = 'Completions' }
         )
     }
@@ -102,12 +103,13 @@ function Read-PwshProfileFeatureTree {
         '**PSReadLine** config — nicer command-line editing: history search, syntax colors, prediction.'
         '**Terminal-Icons** — file-type icons in directory listings (`ls` / `Get-ChildItem`).'
         '**posh-git** — git branch and status shown right in the prompt.'
-        '**Zoxide** (smart `cd`) — a cd that learns your most-used dirs so you can jump by partial name.'
+        '**zoxide** (smart `cd`) — a cd that learns your most-used dirs so you can jump by partial name.'
         '**fzf** (fuzzy finder) — a fast command-line fuzzy picker (full UI style; via PSFzf adds `Ctrl+T` file picker with a `bat` preview, `Ctrl+R` fuzzy history, and `Ctrl+G` git pickers); when on PATH, zoxide uses it for its interactive `cdi`/`zi` jump.'
-        '**Fast Node Manager** (`fnm`) — install and switch between Node.js versions per project.'
+        '**fnm** (Fast Node Manager) — install and switch between Node.js versions per project.'
         '**xh** (HTTP client) — a fast, friendly `curl`/HTTPie-style tool for making HTTP requests.'
         '**bat** (cat replacement) — a `cat` with syntax highlighting and git integration; its theme blends with the prompt. You can replace the built-in `cat` with it.'
         '**fd** (file finder) — a fast, friendly `find` alternative that respects `.gitignore`; its colors blend with the prompt and, with fzf, drive fzf''s file search. Standalone — it does not replace `Get-ChildItem`.'
+        '**less** (pager) — a full-featured pager (color, search, backward scroll) that replaces the limited `more.com`; it is what lets `bat` page with color. You can route `help`/`more` and color CLIs through it.'
         '**Shell completions** — Tab completion for `winget`, `tailscale`, `docker`, and `op`.'
     ) -Accent $accent -Code $CodeColor
 

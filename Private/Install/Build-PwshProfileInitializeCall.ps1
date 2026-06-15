@@ -22,14 +22,15 @@ function Build-PwshProfileInitializeCall {
         double-quoted so values like $env:COMPUTERNAME interpolate at profile startup (embedded
         double quotes and backticks are backtick-escaped; $ is intentionally left unescaped). The
         -Skip / -SkipSection arrays are emitted as comma-joined tokens (their values come from a
-        ValidateSet, so they need no quoting) and only when non-empty. The boolean -ReplaceCat is
-        emitted as a bare switch when it differs from the default ($false) and is truthy.
+        ValidateSet, so they need no quoting) and only when non-empty. The boolean switches -ReplaceCat
+        and -ReplaceMore are each emitted as a bare switch when they differ from the default ($false)
+        and are truthy.
 
     .PARAMETER Setting
         The settings hashtable (keys as produced by Get-PwshProfileDefault / the wizard:
         Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-        ZoxideCommand, BatTheme, BatStyle, ReplaceCat, Skip, SkipSection). Keys that are absent fall
-        back to the default and are not emitted.
+        ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, Skip, SkipSection). Keys that are
+        absent fall back to the default and are not emitted.
 
     .PARAMETER Default
         The baseline to compare against. When omitted it is resolved as Get-PwshProfileDefault for
@@ -64,6 +65,12 @@ function Build-PwshProfileInitializeCall {
         Build-PwshProfileInitializeCall -Setting $s
 
         Returns 'Initialize-PwshProfile -ReplaceCat' (a bare switch, since cat -> bat was opted in).
+
+    .EXAMPLE
+        $s = Get-PwshProfileDefault; $s.ReplaceMore = $true
+        Build-PwshProfileInitializeCall -Setting $s
+
+        Returns 'Initialize-PwshProfile -ReplaceMore' (a bare switch, since more -> less was opted in).
     #>
     [CmdletBinding()]
     param(
@@ -111,10 +118,14 @@ function Build-PwshProfileInitializeCall {
         }
     }
 
-    # Boolean switch: emitted as a bare flag only when it differs from the default ($false) and is set.
+    # Boolean switches: emitted as bare flags only when they differ from the default ($false) and are set.
     $replaceCat = & $value 'ReplaceCat'
     if ([bool]$replaceCat -ne [bool]$Default['ReplaceCat'] -and $replaceCat) {
         $parts.Add('-ReplaceCat')
+    }
+    $replaceMore = & $value 'ReplaceMore'
+    if ([bool]$replaceMore -ne [bool]$Default['ReplaceMore'] -and $replaceMore) {
+        $parts.Add('-ReplaceMore')
     }
 
     # Array parameters: emit comma-joined tokens only when non-empty (default is empty).

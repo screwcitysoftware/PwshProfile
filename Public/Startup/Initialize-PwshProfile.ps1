@@ -10,10 +10,11 @@ function Initialize-PwshProfile {
           2. Runs "Shell": the `which` global alias and PSReadLine setup.
           3. Runs "Prompt": oh-my-posh, Terminal-Icons, and posh-git — oh-my-posh first, since
              it is the prompt engine and table stakes for this profile.
-          4. Runs "Tools": zoxide, fzf, fnm, xh, jq, bat, and fd — fzf sits next to zoxide (zoxide's
-             interactive picker auto-uses fzf when it's on PATH), fnm follows zoxide since
-             Enable-FastNodeManager wraps zoxide's cd hook, and fd follows fzf so it can wire fzf to
-             use fd as its file source — then "Completions": winget, Azure CLI, Tailscale, Docker,
+          4. Runs "Tools": zoxide, fzf, fnm, xh, jq, bat, fd, and less — fzf sits next to zoxide
+             (zoxide's interactive picker auto-uses fzf when it's on PATH), fnm follows zoxide since
+             Enable-FastNodeManager wraps zoxide's cd hook, fd follows fzf so it can wire fzf to
+             use fd as its file source, and less is bat's pager (and PowerShell's, via $env:PAGER) —
+             then "Completions": winget, Azure CLI, Tailscale, Docker,
              1Password, and GitHub CLI (registration only — these install nothing), since the
              completions are operations on the tools.
 
@@ -36,7 +37,8 @@ function Initialize-PwshProfile {
         PSFzf pickers are sized to fill the shell (--height=100%), overriding PSFzf's inline 40%
         default; a bare fzf and zoxide's `cdi` keep their native alternate-screen fullscreen.
         Use -ZoxideCommand to rename zoxide's jump command, -StepIcon to rebrand the step marker,
-        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -FdColors /
+        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -ReplaceMore
+        to route the pager (more.com -> less) through $env:PAGER and alias more -> less, -FdColors /
         -FzfColors to tune fd's and fzf's colors, -Skip to opt out of individual tools (e.g. to avoid
         an unwanted winget auto-install), and -SkipSection to opt out of whole sections.
 
@@ -94,6 +96,11 @@ function Initialize-PwshProfile {
         Forwarded to Enable-Bat as -ReplaceCat: when set, aliases cat -> bat for the session (so the
         built-in cat, an alias for Get-Content, is replaced by bat). Off by default.
 
+    .PARAMETER ReplaceMore
+        Forwarded to Enable-Less as -ReplaceMore: when set, sets $env:PAGER to 'less' (so PowerShell's
+        `help`, bat, git, delta, and gh page through less instead of more.com) and aliases more -> less
+        for the session. Off by default.
+
     .PARAMETER FdColors
         The LS_COLORS spec, forwarded to Enable-Fd as -LsColors (sets $env:LS_COLORS) so fd's output
         is tinted to match the prompt. When omitted, defaults to the selected theme's branding
@@ -112,8 +119,8 @@ function Initialize-PwshProfile {
 
     .PARAMETER Skip
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
-        'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Completions'. Dropping one omits its step; the auto-installing
-        ones (Zoxide, Fzf, Fnm, Xh, Jq, Bat, Fd) thereby decline an unwanted winget install. 'Completions' drops the
+        'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions'. Dropping one omits its step; the auto-installing
+        ones (Zoxide, Fzf, Fnm, Xh, Jq, Bat, Fd, Less) thereby decline an unwanted winget install. 'Completions' drops the
         shell-completion registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
@@ -229,6 +236,9 @@ function Initialize-PwshProfile {
         [Parameter()]
         [switch]$ReplaceCat,
 
+        [Parameter()]
+        [switch]$ReplaceMore,
+
         # Empty-string sentinels resolved in the body from the selected theme's branding (like
         # BatTheme), so -Theme alone gives fd and fzf matching color palettes.
         [Parameter()]
@@ -241,7 +251,7 @@ function Initialize-PwshProfile {
         [string]$StepIcon = '',
 
         [Parameter()]
-        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Completions')]
+        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions')]
         [string[]]$Skip = @(),
 
         [Parameter()]
@@ -333,6 +343,9 @@ function Initialize-PwshProfile {
             # fd follows fzf so fzf.exe is already on PATH when -IntegrateFzf is evaluated; fd wires
             # fzf to use fd as its source only when fzf is itself enabled (not skipped) and present.
             if ($Skip -notcontains 'Fd')     { Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf:($Skip -notcontains 'Fzf') } }
+            # less is bat's pager (and PowerShell's via $env:PAGER); it has no init-time dependency
+            # on the other tools, so its position is free. -ReplaceMore is opt-in (set by the wizard).
+            if ($Skip -notcontains 'Less')   { Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore } }
             # Shell completions are operations on the tools, so they register as the final Tools
             # sub-step (registration only — these install nothing). Skipped via -Skip Completions,
             # and dropped wholesale when the whole Tools section is skipped.

@@ -10,14 +10,15 @@ function Get-PwshProfileDefault {
         can set:
 
           Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, Skip (string[]), SkipSection (string[]).
+          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, Skip (string[]), SkipSection (string[]).
 
         BannerText defaults to the literal '$env:COMPUTERNAME' for every theme (it interpolates to the
         machine name at startup) — matching Initialize-PwshProfile's runtime default, so a kept default
         emits no -BannerText. The banner color, step icon, and bat theme are still seeded from the
         selected theme via Get-BundledThemeBranding (a forestcity default carries the green/🌳/gruvbox-dark
-        identity, screwcity the purple/🔩/Dracula one). ReplaceCat defaults to $false (the baseline), so
-        opting cat -> bat in emits -ReplaceCat. The remaining values are kept identical to Initialize-PwshProfile's own
+        identity, screwcity the purple/🔩/Dracula one). ReplaceCat and ReplaceMore default to $false (the
+        baseline), so opting cat -> bat or more -> less in emits -ReplaceCat / -ReplaceMore. The remaining
+        values are kept identical to Initialize-PwshProfile's own
         parameter defaults so that "all defaults" for a given theme produces a bare (or theme-only)
         Initialize-PwshProfile call. A fresh hashtable is returned on every call so callers can mutate
         it freely.
@@ -59,6 +60,7 @@ function Get-PwshProfileDefault {
         BatTheme        = $branding.BatTheme
         BatStyle        = 'numbers,changes,header'
         ReplaceCat      = $false
+        ReplaceMore     = $false
         Skip            = @()
         SkipSection     = @()
     }

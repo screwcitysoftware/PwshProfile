@@ -19,7 +19,10 @@ function Enable-Bat {
               * Registers bat's PowerShell tab completion. bat emits a Register-ArgumentCompleter
                 script via `bat --completion ps1`; it is run through Invoke-InGlobalScope (not a bare
                 Invoke-Expression) so the registered completer lands in the true global scope and
-                isn't tagged to this module — see Private/Core/Invoke-InGlobalScope.ps1.
+                isn't tagged to this module — see Private/Core/Invoke-InGlobalScope.ps1. When
+                -ReplaceCat is set, the completer's -CommandName is extended to also cover the `cat`
+                alias (PowerShell completers don't follow aliases), so `cat <Tab>` completes bat's
+                flags too — the same trick Enable-Xh uses for http/https.
 
         If the install doesn't produce bat.exe on PATH, a warning is emitted (with winget's captured
         output) and Initialize is skipped (guarded by Get-Command) so profile startup continues.
@@ -37,7 +40,9 @@ function Enable-Bat {
 
     .PARAMETER ReplaceCat
         When set, aliases cat -> bat.exe in the global scope, so the built-in cat (an alias for
-        Get-Content) is replaced by bat for the session. Off by default, leaving cat untouched.
+        Get-Content) is replaced by bat for the session, and extends bat's registered completer to the
+        `cat` alias so it tab-completes like `bat`. Off by default, leaving cat (and its completion)
+        untouched.
 
     .EXAMPLE
         Enable-Bat -Theme Dracula
@@ -52,9 +57,12 @@ function Enable-Bat {
     .NOTES
         Unlike jq, bat ships a PowerShell completer: `bat --completion ps1` emits a
         Register-ArgumentCompleter script, registered here in the Initialize substep (run in the
-        global scope so it isn't attributed to the module). bat's themes blend with the bundled
-        oh-my-posh themes when driven through Initialize-PwshProfile (screwcity -> Dracula,
-        forestcity -> gruvbox-dark).
+        global scope so it isn't attributed to the module). Its -CommandName is `'bat'` (bat uses
+        `-Native` and single quotes, unlike xh's `'xh'`); under -ReplaceCat a string -replace extends
+        it to `'bat', 'cat'` so the cat alias completes — coupled to that exact literal, so a future
+        bat build that re-quotes it would silently drop only the alias's completion (bat still
+        completes). bat's themes blend with the bundled oh-my-posh themes when driven through
+        Initialize-PwshProfile (screwcity -> Dracula, forestcity -> gruvbox-dark).
     #>
     [CmdletBinding()]
     param(
@@ -87,7 +95,18 @@ function Enable-Bat {
 
             # Register bat's completer in the global scope (not this module's) so it isn't tagged to
             # the module — see Private/Core/Invoke-InGlobalScope.ps1.
-            Invoke-InGlobalScope ((bat --completion ps1) | Out-String)
+            $batCompletion = bat --completion ps1
+            if ($ReplaceCat) {
+                # Extend bat's own completer registration to also cover the `cat` alias, so `cat <Tab>`
+                # completes bat's flags. PowerShell completers don't follow aliases, so the alias must be
+                # named explicitly. Coupled to bat's exact output (the literal `-CommandName 'bat'`; note
+                # bat uses `-Native` and single quotes — unlike xh's `-CommandName 'xh'`). If a future bat
+                # build changes that quoting/spacing the replace silently no-ops and `cat` loses completion
+                # (bat itself still completes). Gated on -ReplaceCat: without the alias, `cat` is still
+                # Get-Content, and registering bat's flag completer onto it would be wrong.
+                $batCompletion = $batCompletion -replace "-CommandName 'bat'", "-CommandName 'bat', 'cat'"
+            }
+            Invoke-InGlobalScope ($batCompletion | Out-String)
         }
     }
 }

@@ -43,7 +43,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, and fd through the
+  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, and less through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -262,6 +262,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Jq.ps1
 │   │   ├── Enable-Bat.ps1
 │   │   ├── Enable-Fd.ps1
+│   │   ├── Enable-Less.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
@@ -357,8 +358,10 @@ The wizard walks one forward pass, then lets you revise anything before committi
 6. **Features** — a grouped tree under the **Shell / Prompt / Tools** sections (shell completions and
    `fd` sit under Tools) that starts with **everything checked**; uncheck a feature (or a whole
    section) to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed.
-   If `zoxide` stays enabled you're prompted for its jump command, and if `bat` stays enabled you're
-   asked whether to replace the built-in `cat` with it (**defaulting to Yes**, emitting `-ReplaceCat`).
+   If `zoxide` stays enabled you're prompted for its jump command; if `bat` stays enabled you're
+   asked whether to replace the built-in `cat` with it (**defaulting to Yes**, emitting `-ReplaceCat`);
+   and if `less` stays enabled you're asked whether to make it the default pager (**defaulting to
+   Yes**, emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`).
    When `fzf` stays enabled it also gains the PSFzf Ctrl+T/Ctrl+R key bindings.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
@@ -444,7 +447,7 @@ The headline entry point: one call that runs the whole default profile startup, 
 shrinks to an import plus this call. In order it shows the startup banner, then runs three
 top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
 (oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
-(zoxide, fzf, fnm, xh, jq, bat, fd — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`, fd after fzf so it can wire fzf to use fd as its source), which ends with the shell
+(zoxide, fzf, fnm, xh, jq, bat, fd, less — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`, fd after fzf so it can wire fzf to use fd as its source, less as bat's/PowerShell's pager), which ends with the shell
 **completions** (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI — registration only, no installs) as a nested
 sub-step, since completions are operations on the tools. Each section renders its own spinner and
 summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -476,6 +479,9 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   `numbers,changes,header`.
 - **`-ReplaceCat`** — forwarded to `Enable-Bat -ReplaceCat`: aliases `cat` → `bat` for the session
   (replacing the built-in `cat`, an alias for `Get-Content`). Off by default.
+- **`-ReplaceMore`** — forwarded to `Enable-Less -ReplaceMore`: sets `$env:PAGER` to `less` (so
+  PowerShell's `help`, `bat`, `git`, `delta`, and `gh` page through less instead of `more.com`) and
+  aliases `more` → `less` for the session. Off by default.
 - **`-FdColors`** — fd's `LS_COLORS` palette, forwarded to `Enable-Fd -LsColors` (sets
   `$env:LS_COLORS`). Defaults to the active theme's blend (purple-led for screwcity, green-led for
   forestcity). fd stays standalone — it never replaces `Get-ChildItem`. (`LS_COLORS` is shared with
@@ -487,8 +493,8 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
-  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Completions` (skipping
-  `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq`/`Bat`/`Fd` also
+  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Completions` (skipping
+  `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq`/`Bat`/`Fd`/`Less` also
   avoids their winget auto-install; `Completions` drops the shell-completion registrations under Tools).
   oh-my-posh is table stakes — it has no token in either parameter and always runs.
 - **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
@@ -504,6 +510,7 @@ Initialize-PwshProfile -BannerFont ANSIShadow            # large block banner fo
 Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Skip Fnm,Xh
 Initialize-PwshProfile -Skip Completions                 # skip the shell-completion registrations
 Initialize-PwshProfile -ReplaceCat                       # alias cat -> bat (themed syntax highlighting)
+Initialize-PwshProfile -ReplaceMore                      # make less the default pager (replace more.com)
 ```
 
 ### `Invoke-Step`
@@ -625,7 +632,7 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -675,7 +682,9 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `$env:BAT_THEME` to `-Theme` (so bat's colors match the prompt — `Initialize-PwshProfile`
   passes the active theme's blend: screwcity → `Dracula`, forestcity → `gruvbox-dark`) and
   `$env:BAT_STYLE` to `-Style` (default `numbers,changes,header`), registers bat's PowerShell
-  completer (`bat --completion ps1`), and — with `-ReplaceCat` — aliases `cat` → `bat` globally.
+  completer (`bat --completion ps1`), and — with `-ReplaceCat` — aliases `cat` → `bat` globally
+  and extends that completer to the `cat` alias so `cat <Tab>` completes bat's flags too
+  (PowerShell completers don't follow aliases — the same trick `Enable-Xh` uses for `http`/`https`).
 - **`Enable-Fd [-LsColors <spec>] [-IntegrateFzf]`** — installs `sharkdp.fd` (a fast, friendly
   `find` alternative that respects `.gitignore`). In Initialize it sets `$env:LS_COLORS` to
   `-LsColors` (so fd's output matches the prompt — `Initialize-PwshProfile` passes the active
@@ -685,6 +694,15 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
   `ls`/`eza`.) Enabled after `Enable-Fzf`
   so `fzf.exe` is on PATH when integration is evaluated.
+- **`Enable-Less [-Options <string>] [-ReplaceMore]`** — installs `jftuga.less` (GNU less compiled
+  standalone for Windows — a full-featured pager with color, search, and backward scroll, far beyond
+  the built-in `more.com`). In Initialize it sets `$env:LESS` to `-Options` (default `-R -F -i`: raw
+  color passthrough, quit-if-one-screen, smart-case search) and — with `-ReplaceMore` — sets
+  `$env:PAGER` to `less` (so PowerShell's own `help`, `bat`, `git`, `delta`, and `gh` page through
+  less rather than `more.com`) and aliases `more` → `less` globally. less is also what gives
+  `Enable-Bat` color paging: bat's default pager is less, so without it on PATH bat can't page colored
+  output. Unlike bat/fd, less ships no PowerShell completer and has no palette, so it registers no
+  completion and isn't themed — `$env:LESS` carries functional defaults only.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
@@ -695,6 +713,7 @@ Enable-Xh
 Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
 Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
+Enable-Less -ReplaceMore
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -875,7 +894,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd,
+- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never

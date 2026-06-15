@@ -269,6 +269,7 @@ function Invoke-PwshProfileWizard {
             Xh            = ($skip -notcontains 'Xh')
             Bat           = ($skip -notcontains 'Bat')
             Fd            = ($skip -notcontains 'Fd')
+            Less          = ($skip -notcontains 'Less')
             Completions   = ($skip -notcontains 'Completions')
         }
         $selected = @(Read-PwshProfileFeatureTree -Enabled $enabledMap -Color $s.Accent -CodeColor $s.Code)
@@ -277,7 +278,7 @@ function Invoke-PwshProfileWizard {
         # sub-step under Tools); keep the Banner skip (owned by the banner step). The wizard never
         # emits -SkipSection: unchecking a whole section in the tree just unchecks its leaves.
         $newSkip = @(@($skip | Where-Object { $_ -eq 'Banner' }))
-        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Completions') {
+        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Less', 'Completions') {
             if ($selected -notcontains $t) { $newSkip += $t }
         }
         $s.Settings.Skip = $newSkip
@@ -302,6 +303,18 @@ function Invoke-PwshProfileWizard {
         else {
             # bat is opted out, so the cat-override setting is moot — keep it off.
             $s.Settings.ReplaceCat = $false
+        }
+
+        if ($selected -contains 'Less') {
+            Write-PwshProfilePromptHelp @(
+                '**less** is a full-featured pager (color, search, backward scroll) — far beyond the built-in `more.com`; it is also what lets **bat** page with color.'
+                'Make less the default pager? This sets `$env:PAGER` to less (so `help` and color CLIs page through it) and aliases `more` -> less. `more.com` stays available.'
+            ) -Accent $s.Accent -Code $s.Code
+            $s.Settings.ReplaceMore = [bool](Read-SpectreConfirm -Message 'Make less the default pager (replace more)?' -Color $s.Accent -DefaultAnswer 'y')
+        }
+        else {
+            # less is opted out, so the pager-override setting is moot — keep it off.
+            $s.Settings.ReplaceMore = $false
         }
     }
 
@@ -423,6 +436,10 @@ function Invoke-PwshProfileWizard {
         # Note the cat -> bat takeover, when opted in and bat is still enabled.
         if ($set.ReplaceCat -and (@($set.Skip) -notcontains 'Bat')) {
             $featuresLine += " [grey]·[/] [$code]cat→bat[/]"
+        }
+        # Note the more -> less takeover, when opted in and less is still enabled.
+        if ($set.ReplaceMore -and (@($set.Skip) -notcontains 'Less')) {
+            $featuresLine += " [grey]·[/] [$code]more→less[/]"
         }
         $fontsLine = if (@($set.NerdFont).Count) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '

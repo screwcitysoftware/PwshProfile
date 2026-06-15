@@ -5,7 +5,7 @@
     Author            = 'Jason Rotello'
     CompanyName       = 'Screw City Software'   # "Screw City" = Rockford, Illinois (screw/fastener heritage)
     Copyright         = '(c) 2026 Jason Rotello / Screw City Software. Licensed under the MIT License.'
-    Description       = 'Reusable building blocks for PowerShell profile startup: timed startup steps, safe module imports, PSReadLine setup, and CLI tool enablers (oh-my-posh, zoxide, fzf/PSFzf, fnm, xh, jq, bat, fd).'
+    Description       = 'Reusable building blocks for PowerShell profile startup: timed startup steps, safe module imports, PSReadLine setup, and CLI tool enablers (oh-my-posh, zoxide, fzf/PSFzf, fnm, xh, jq, bat, fd, less).'
     PowerShellVersion = '7.4'
 
     # Explicit export list (no wildcards) so module discovery doesn't have to load the
@@ -30,6 +30,7 @@
         'Enable-Jq'
         'Enable-Bat'
         'Enable-Fd'
+        'Enable-Less'
         'Enable-WingetCompletion'
         'Enable-AzureCliCompletion'
         'Enable-TailscaleCompletion'
@@ -45,7 +46,7 @@
 
     PrivateData       = @{
         PSData = @{
-            Tags         = @('profile', 'startup', 'PSReadLine', 'oh-my-posh', 'zoxide', 'fzf', 'PSFzf', 'fnm', 'xh', 'jq', 'bat', 'fd')
+            Tags         = @('profile', 'startup', 'PSReadLine', 'oh-my-posh', 'zoxide', 'fzf', 'PSFzf', 'fnm', 'xh', 'jq', 'bat', 'fd', 'less')
             LicenseUri   = 'https://opensource.org/licenses/MIT'
             ProjectUri   = 'https://github.com/screwcitysoftware/PwshProfile'
             IconUri      = 'https://raw.githubusercontent.com/screwcitysoftware/PwshProfile/main/Assets/icon.png'
