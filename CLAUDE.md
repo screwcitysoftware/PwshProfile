@@ -20,7 +20,17 @@ Reload after changes:
 Import-Module ./ScrewCitySoftware.PwshProfile.psd1 -Force
 ```
 
-Run the tests (Pester 5; `Install-PSResource Pester` if missing):
+Run the checks the way CI does (Pester 5 + PSScriptAnalyzer; `build.ps1 -Task Bootstrap`
+installs them if missing) — this lints **and** runs the Pester suite under
+`Set-StrictMode -Version Latest`, so a clean local run matches a clean CI run:
+
+```powershell
+./build.ps1 -Task Analyze, Test
+```
+
+For a quicker inner loop you can call Pester directly, but note it skips PSScriptAnalyzer and
+does **not** set StrictMode — so it can hide failures CI catches (e.g. reads of unset
+variables, lint findings). Confirm with `build.ps1` before pushing:
 
 ```powershell
 Invoke-Pester -Path ./Tests
