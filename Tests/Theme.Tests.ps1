@@ -63,6 +63,7 @@ Describe 'Get-BundledThemeBranding' {
             $b.DisplayName | Should -Be 'Screw City'
             $b.BannerColor | Should -Be '#c9aaff'
             $b.StepIcon    | Should -Be ':nut_and_bolt:'
+            $b.BatTheme    | Should -Be 'Dracula'
         }
     }
 
@@ -72,6 +73,7 @@ Describe 'Get-BundledThemeBranding' {
             $b.DisplayName | Should -Be 'Forest City'
             $b.BannerColor | Should -Be '#8fce72'
             $b.StepIcon    | Should -Be ':deciduous_tree:'
+            $b.BatTheme    | Should -Be 'gruvbox-dark'
         }
     }
 

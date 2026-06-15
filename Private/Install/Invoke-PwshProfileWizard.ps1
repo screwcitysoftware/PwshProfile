@@ -267,6 +267,7 @@ function Invoke-PwshProfileWizard {
             Fzf           = ($skip -notcontains 'Fzf')
             Fnm           = ($skip -notcontains 'Fnm')
             Xh            = ($skip -notcontains 'Xh')
+            Bat           = ($skip -notcontains 'Bat')
             Completions   = ($skip -notcontains 'Completions')
         }
         $selected = @(Read-PwshProfileFeatureTree -Enabled $enabledMap -Color $s.Accent -CodeColor $s.Code)
@@ -275,7 +276,7 @@ function Invoke-PwshProfileWizard {
         # sub-step under Tools); keep the Banner skip (owned by the banner step). The wizard never
         # emits -SkipSection: unchecking a whole section in the tree just unchecks its leaves.
         $newSkip = @(@($skip | Where-Object { $_ -eq 'Banner' }))
-        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions') {
+        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Completions') {
             if ($selected -notcontains $t) { $newSkip += $t }
         }
         $s.Settings.Skip = $newSkip
@@ -288,6 +289,18 @@ function Invoke-PwshProfileWizard {
                 'Prefer `z` to leave the built-in cd untouched and add a separate `z` command (the zoxide convention). Press Enter to keep `cd`.'
             ) -Accent $s.Accent -Code $s.Code
             $s.Settings.ZoxideCommand = Read-SpectreText -Message "zoxide's jump command (replaces cd)" -DefaultAnswer $s.Settings.ZoxideCommand
+        }
+
+        if ($selected -contains 'Bat') {
+            Write-PwshProfilePromptHelp @(
+                '**bat** is a `cat` with syntax highlighting, line numbers, and git change marks; its colors are themed to match your prompt.'
+                'Replace the built-in `cat` (an alias for `Get-Content`) with **bat**, so `cat file` renders highlighted? Plain redirection and piping still work.'
+            ) -Accent $s.Accent -Code $s.Code
+            $s.Settings.ReplaceCat = [bool](Read-SpectreConfirm -Message 'Replace the built-in cat (Get-Content) with bat?' -Color $s.Accent -DefaultAnswer 'y')
+        }
+        else {
+            # bat is opted out, so the cat-override setting is moot — keep it off.
+            $s.Settings.ReplaceCat = $false
         }
     }
 
@@ -406,6 +419,10 @@ function Invoke-PwshProfileWizard {
             "all except [$code]$($disabled -join ', ')[/]"
         }
         else { '[grey]all enabled[/]' }
+        # Note the cat -> bat takeover, when opted in and bat is still enabled.
+        if ($set.ReplaceCat -and (@($set.Skip) -notcontains 'Bat')) {
+            $featuresLine += " [grey]·[/] [$code]cat→bat[/]"
+        }
         $fontsLine = if (@($set.NerdFont).Count) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }

@@ -27,7 +27,7 @@ function Read-PwshProfileFeatureTree {
 
     .PARAMETER Enabled
         A hashtable mapping each feature token (PSReadLine, TerminalIcons, PoshGit, Zoxide, Fzf, Fnm,
-        Xh, Completions) to a boolean for its initial checked state. Missing/true tokens start checked.
+        Xh, Bat, Completions) to a boolean for its initial checked state. Missing/true tokens start checked.
         On the first wizard pass every token is enabled; when the step is re-edited from the review
         hub, the caller passes the current state so prior choices are preserved.
 
@@ -75,6 +75,7 @@ function Read-PwshProfileFeatureTree {
             [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Token = 'Fzf' }
             [pscustomobject]@{ Label = 'Fast Node Manager (fnm)'; Token = 'Fnm' }
             [pscustomobject]@{ Label = 'xh (HTTP client)'; Token = 'Xh' }
+            [pscustomobject]@{ Label = 'bat (cat replacement)'; Token = 'Bat' }
             [pscustomobject]@{ Label = 'Shell completions'; Token = 'Completions' }
         )
     }
@@ -104,6 +105,7 @@ function Read-PwshProfileFeatureTree {
         '**fzf** (fuzzy finder) — a fast command-line fuzzy picker; when on PATH, zoxide uses it for its interactive `cdi`/`zi` jump.'
         '**Fast Node Manager** (`fnm`) — install and switch between Node.js versions per project.'
         '**xh** (HTTP client) — a fast, friendly `curl`/HTTPie-style tool for making HTTP requests.'
+        '**bat** (cat replacement) — a `cat` with syntax highlighting and git integration; its theme blends with the prompt. You can replace the built-in `cat` with it.'
         '**Shell completions** — Tab completion for `winget`, `tailscale`, `docker`, and `op`.'
     ) -Accent $accent -Code $CodeColor
 

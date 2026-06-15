@@ -22,13 +22,14 @@ function Build-PwshProfileInitializeCall {
         double-quoted so values like $env:COMPUTERNAME interpolate at profile startup (embedded
         double quotes and backticks are backtick-escaped; $ is intentionally left unescaped). The
         -Skip / -SkipSection arrays are emitted as comma-joined tokens (their values come from a
-        ValidateSet, so they need no quoting) and only when non-empty.
+        ValidateSet, so they need no quoting) and only when non-empty. The boolean -ReplaceCat is
+        emitted as a bare switch when it differs from the default ($false) and is truthy.
 
     .PARAMETER Setting
         The settings hashtable (keys as produced by Get-PwshProfileDefault / the wizard:
         Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-        ZoxideCommand, Skip, SkipSection). Keys that are absent fall back to the default and are
-        not emitted.
+        ZoxideCommand, BatTheme, BatStyle, ReplaceCat, Skip, SkipSection). Keys that are absent fall
+        back to the default and are not emitted.
 
     .PARAMETER Default
         The baseline to compare against. When omitted it is resolved as Get-PwshProfileDefault for
@@ -57,6 +58,12 @@ function Build-PwshProfileInitializeCall {
 
         Returns 'Initialize-PwshProfile -BannerText "$env:COMPUTERNAME"' — double-quoted so the
         banner shows the machine name at startup.
+
+    .EXAMPLE
+        $s = Get-PwshProfileDefault; $s.ReplaceCat = $true
+        Build-PwshProfileInitializeCall -Setting $s
+
+        Returns 'Initialize-PwshProfile -ReplaceCat' (a bare switch, since cat -> bat was opted in).
     #>
     [CmdletBinding()]
     param(
@@ -96,12 +103,18 @@ function Build-PwshProfileInitializeCall {
 
     # Scalar string parameters: emit only when they differ from the (themed) default. BannerText is
     # double-quoted (interpolation); the rest are single-quoted (verbatim).
-    foreach ($key in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'StepIcon', 'ZoxideCommand') {
+    foreach ($key in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle') {
         $v = & $value $key
         if ($v -ne $Default[$key]) {
             $rendered = if ($key -eq 'BannerText') { & $quoteDouble $v } else { & $quote $v }
             $parts.Add("-$key $rendered")
         }
+    }
+
+    # Boolean switch: emitted as a bare flag only when it differs from the default ($false) and is set.
+    $replaceCat = & $value 'ReplaceCat'
+    if ([bool]$replaceCat -ne [bool]$Default['ReplaceCat'] -and $replaceCat) {
+        $parts.Add('-ReplaceCat')
     }
 
     # Array parameters: emit comma-joined tokens only when non-empty (default is empty).

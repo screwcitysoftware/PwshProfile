@@ -10,7 +10,7 @@ function Initialize-PwshProfile {
           2. Runs "Shell": the `which` global alias and PSReadLine setup.
           3. Runs "Prompt": oh-my-posh, Terminal-Icons, and posh-git — oh-my-posh first, since
              it is the prompt engine and table stakes for this profile.
-          4. Runs "Tools": zoxide, fzf, fnm, and xh — fzf sits next to zoxide (zoxide's
+          4. Runs "Tools": zoxide, fzf, fnm, xh, jq, and bat — fzf sits next to zoxide (zoxide's
              interactive picker auto-uses fzf when it's on PATH), and fnm follows zoxide since
              Enable-FastNodeManager wraps zoxide's cd hook — then "Completions": winget,
              Azure CLI, Tailscale, Docker, 1Password, and GitHub CLI (registration only — these install nothing),
@@ -26,10 +26,13 @@ function Initialize-PwshProfile {
         defaults to the machine name ($env:COMPUTERNAME) regardless of theme; the bundled themes each
         carry a matching banner color and step marker — picking 'forestcity' defaults the banner to
         the theme's green with a 🌳 marker, while 'screwcity' keeps purple / 🔩 — applied only to the
-        banner color/icon you don't set explicitly.
+        banner color/icon you don't set explicitly. The theme likewise seeds bat's syntax theme
+        (-BatTheme) so bat's colors blend with the prompt (screwcity -> Dracula, forestcity ->
+        gruvbox-dark).
         Use -ZoxideCommand to rename zoxide's jump command, -StepIcon to rebrand the step marker,
-        -Skip to opt out of individual tools (e.g. to avoid an unwanted winget auto-install), and
-        -SkipSection to opt out of whole sections.
+        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -Skip to opt
+        out of individual tools (e.g. to avoid an unwanted winget auto-install), and -SkipSection to
+        opt out of whole sections.
 
         It deliberately runs only the module's own startup — any other personal profile scripts you
         keep in $PROFILE are left untouched.
@@ -72,6 +75,19 @@ function Initialize-PwshProfile {
         The command name zoxide binds for jumping, forwarded to Enable-Zoxide as -Command.
         Defaults to 'cd' (replacing the built-in cd); pass e.g. 'z' to keep cd intact.
 
+    .PARAMETER BatTheme
+        The bat syntax-highlighting theme, forwarded to Enable-Bat as -Theme (sets $env:BAT_THEME).
+        When omitted, defaults to the selected theme's branding (screwcity's 'Dracula' or forestcity's
+        'gruvbox-dark') so bat's colors blend with the prompt. A value from `bat --list-themes`.
+
+    .PARAMETER BatStyle
+        The bat layout, forwarded to Enable-Bat as -Style (sets $env:BAT_STYLE) — a comma-separated
+        list of components. Defaults to 'numbers,changes,header'.
+
+    .PARAMETER ReplaceCat
+        Forwarded to Enable-Bat as -ReplaceCat: when set, aliases cat -> bat for the session (so the
+        built-in cat, an alias for Get-Content, is replaced by bat). Off by default.
+
     .PARAMETER StepIcon
         The marker printed before each top-level step description, forwarded to Invoke-Step as
         -Icon. Defaults to ':nut_and_bolt:' (a Spectre emoji shortcode, rendered as 🔩). No trailing
@@ -79,9 +95,9 @@ function Initialize-PwshProfile {
 
     .PARAMETER Skip
         Individual tools to skip: 'Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide',
-        'Fzf', 'Fnm', 'Xh', 'Jq', 'Completions'. Dropping one omits its step; the auto-installing ones
-        (Zoxide, Fzf, Fnm, Xh, Jq) thereby decline an unwanted winget install. 'Completions' drops the shell-completion
-        registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
+        'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Completions'. Dropping one omits its step; the auto-installing
+        ones (Zoxide, Fzf, Fnm, Xh, Jq, Bat) thereby decline an unwanted winget install. 'Completions' drops the
+        shell-completion registrations (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI) that run as the final Tools sub-step.
         oh-my-posh is table stakes for this profile and has no token in either parameter — it always
         runs. To skip whole sections, use -SkipSection.
 
@@ -185,11 +201,22 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$ZoxideCommand = 'cd',
 
+        # Empty-string sentinel resolved in the body from the selected theme's branding (like
+        # BannerColor), so -Theme alone gives bat a matching syntax theme.
+        [Parameter()]
+        [string]$BatTheme = '',
+
+        [Parameter()]
+        [string]$BatStyle = 'numbers,changes,header',
+
+        [Parameter()]
+        [switch]$ReplaceCat,
+
         [Parameter()]
         [string]$StepIcon = '',
 
         [Parameter()]
-        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Completions')]
+        [ValidateSet('Banner', 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Completions')]
         [string[]]$Skip = @(),
 
         [Parameter()]
@@ -212,6 +239,8 @@ function Initialize-PwshProfile {
     if (-not $PSBoundParameters.ContainsKey('BannerText'))  { $BannerText  = $env:COMPUTERNAME }
     if (-not $PSBoundParameters.ContainsKey('BannerColor')) { $BannerColor = $branding.BannerColor }
     if (-not $PSBoundParameters.ContainsKey('StepIcon'))    { $StepIcon    = $branding.StepIcon }
+    # bat's syntax theme follows the prompt theme unless set explicitly (screwcity -> Dracula, etc.).
+    if (-not $PSBoundParameters.ContainsKey('BatTheme'))    { $BatTheme    = $branding.BatTheme }
 
     if ($Skip -notcontains 'Banner' -and -not [string]::IsNullOrWhiteSpace($BannerText)) {
         # Forward the font only when supplied; -Font and -FontPath are mutually exclusive on
@@ -258,6 +287,7 @@ function Initialize-PwshProfile {
             if ($Skip -notcontains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
             if ($Skip -notcontains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
             if ($Skip -notcontains 'Jq')     { Invoke-Step "jq" { Enable-Jq } }
+            if ($Skip -notcontains 'Bat')    { Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat } }
             # Shell completions are operations on the tools, so they register as the final Tools
             # sub-step (registration only — these install nothing). Skipped via -Skip Completions,
             # and dropped wholesale when the whole Tools section is skipped.

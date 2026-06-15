@@ -124,6 +124,44 @@ Describe 'Build-PwshProfileInitializeCall' {
                 Should -Be "Initialize-PwshProfile -CustomTheme '~/my.omp.json'"
         }
     }
+
+    It 'emits -ReplaceCat as a bare switch when opted in' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.ReplaceCat = $true
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -ReplaceCat'
+        }
+    }
+
+    It 'omits -ReplaceCat at its default (off)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.ReplaceCat = $false
+            $s.BannerColor = '#00d7ff'   # force a non-bare call so the assertion is meaningful
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
+        }
+    }
+
+    It 'does not emit the default bat theme/style (they follow the theme branding)' {
+        InModuleScope $script:Module {
+            # forestcity's BatTheme (gruvbox-dark) and default style are the themed baseline, so a
+            # forestcity default emits only -Theme.
+            Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity) |
+                Should -Be 'Initialize-PwshProfile -Theme forestcity'
+        }
+    }
+
+    It 'emits a non-default -BatTheme and -BatStyle' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.BatTheme = 'Nord'
+            $s.BatStyle = 'plain'
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain'"
+        }
+    }
 }
 
 Describe 'Get-SpectreColorValue' {
@@ -427,7 +465,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Default install scope (winget)' }
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Winget progress bar style' }
             # Feature tree: everything enabled. Hub: submit (the first choice).
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Completions') } -RemoveParameterType 'Color'
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'What would you like to do?' }
         }
     }
@@ -449,7 +487,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { 'Center' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Banner alignment' }
             Mock Read-SpectreSelection { [pscustomobject]@{ Label = 'x'; Icon = ':gear:' } } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Step marker icon' }
             # Fnm, Xh and Completions left unchecked; the rest enabled.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Bat') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.StepIcon | Should -Be ':gear:'
@@ -462,6 +500,28 @@ Describe 'Invoke-PwshProfileWizard' {
             $s.Skip | Should -Not -Contain 'Zoxide'
             @($s.SkipSection).Count | Should -Be 0
             $s.ZoxideCommand | Should -Be 'cd'
+        }
+    }
+
+    It 'sets ReplaceCat when bat stays enabled and the cat-override is confirmed' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.ReplaceCat | Should -BeTrue
+            $s.Skip | Should -Not -Contain 'Bat'
+        }
+    }
+
+    It 'leaves ReplaceCat off (and skips the cat prompt) when bat is unchecked' {
+        InModuleScope $script:Module {
+            # bat unchecked; the cat-override prompt must not run.
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions') } -RemoveParameterType 'Color'
+
+            $s = Invoke-PwshProfileWizard
+            $s.Skip | Should -Contain 'Bat'
+            $s.ReplaceCat | Should -BeFalse
+            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
         }
     }
 

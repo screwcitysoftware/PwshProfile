@@ -32,6 +32,8 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Fzf { }
         Mock -ModuleName $script:Module Enable-FastNodeManager { }
         Mock -ModuleName $script:Module Enable-Xh { }
+        Mock -ModuleName $script:Module Enable-Jq { }
+        Mock -ModuleName $script:Module Enable-Bat { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
         Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
@@ -49,6 +51,10 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
+            # bat enables by default with the screwcity blend theme and cat left intact.
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
+                -ParameterFilter { $Theme -eq 'Dracula' -and $Style -eq 'numbers,changes,header' -and -not $ReplaceCat }
             # Completions register by default (as the final sub-step of Tools).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly
@@ -70,6 +76,24 @@ Describe 'Initialize-PwshProfile' {
             Initialize-PwshProfile -ZoxideCommand 'z'
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly `
                 -ParameterFilter { $Command -eq 'z' }
+        }
+
+        It 'forwards -ReplaceCat and -BatStyle to Enable-Bat' {
+            Initialize-PwshProfile -ReplaceCat -BatStyle 'plain'
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
+                -ParameterFilter { $ReplaceCat -and $Style -eq 'plain' }
+        }
+
+        It 'forwards an explicit -BatTheme, overriding the theme blend' {
+            Initialize-PwshProfile -BatTheme 'Nord'
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
+                -ParameterFilter { $Theme -eq 'Nord' }
+        }
+
+        It 'blends bat with the forestcity theme by default' {
+            Initialize-PwshProfile -Theme forestcity
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
+                -ParameterFilter { $Theme -eq 'gruvbox-dark' }
         }
 
         It 'forwards -StepIcon to the top-level Invoke-Step calls' {
@@ -112,6 +136,13 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
         }
 
+        It 'skips bat but keeps its siblings' {
+            Initialize-PwshProfile -Skip Bat
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
+        }
+
         It 'skips the banner' {
             Initialize-PwshProfile -Skip Banner
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
@@ -147,6 +178,8 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Jq -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-TailscaleCompletion -Times 0 -Exactly

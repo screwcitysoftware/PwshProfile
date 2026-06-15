@@ -28,6 +28,7 @@
         'Enable-FastNodeManager'
         'Enable-Xh'
         'Enable-Jq'
+        'Enable-Bat'
         'Enable-WingetCompletion'
         'Enable-AzureCliCompletion'
         'Enable-TailscaleCompletion'

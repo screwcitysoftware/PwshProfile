@@ -256,6 +256,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-FastNodeManager.ps1
 │   │   ├── Enable-Xh.ps1
 │   │   ├── Enable-Jq.ps1
+│   │   ├── Enable-Bat.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
@@ -350,7 +351,9 @@ The wizard walks one forward pass, then lets you revise anything before committi
    current icon floated to the top and a "custom shortcode" escape.
 6. **Features** — a grouped tree under the **Shell / Prompt / Tools** sections (shell completions
    sit under Tools) that starts with **everything checked**; uncheck a feature (or a whole section)
-   to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed.
+   to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed. If
+   `zoxide` stays enabled you're prompted for its jump command, and if `bat` stays enabled you're
+   asked whether to replace the built-in `cat` with it (**defaulting to Yes**, emitting `-ReplaceCat`).
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -435,7 +438,7 @@ The headline entry point: one call that runs the whole default profile startup, 
 shrinks to an import plus this call. In order it shows the startup banner, then runs three
 top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
 (oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
-(zoxide, fzf, fnm, xh — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`), which ends with the shell
+(zoxide, fzf, fnm, xh, jq, bat — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`), which ends with the shell
 **completions** (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI — registration only, no installs) as a nested
 sub-step, since completions are operations on the tools. Each section renders its own spinner and
 summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -460,11 +463,18 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   `Write-Figlet -FontPath`. Mutually exclusive with `-BannerFont`.
 - **`-ZoxideCommand`** — zoxide's jump command, forwarded to `Enable-Zoxide -Command` (default
   `cd`; pass e.g. `z` to keep the built-in `cd`).
+- **`-BatTheme`** — bat's syntax theme, forwarded to `Enable-Bat -Theme` (sets `$env:BAT_THEME`).
+  Defaults to the active theme's blend (`Dracula` for screwcity, `gruvbox-dark` for forestcity); a
+  value from `bat --list-themes`.
+- **`-BatStyle`** — bat's layout, forwarded to `Enable-Bat -Style` (sets `$env:BAT_STYLE`); default
+  `numbers,changes,header`.
+- **`-ReplaceCat`** — forwarded to `Enable-Bat -ReplaceCat`: aliases `cat` → `bat` for the session
+  (replacing the built-in `cat`, an alias for `Get-Content`). Off by default.
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
-  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Completions` (skipping `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq` also
+  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Completions` (skipping `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq`/`Bat` also
   avoids their winget auto-install; `Completions` drops the shell-completion registrations under Tools).
   oh-my-posh is table stakes — it has no token in either parameter and always runs.
 - **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
@@ -479,6 +489,7 @@ Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
 Initialize-PwshProfile -BannerFont ANSIShadow            # large block banner font
 Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Skip Fnm,Xh
 Initialize-PwshProfile -Skip Completions                 # skip the shell-completion registrations
+Initialize-PwshProfile -ReplaceCat                       # alias cat -> bat (themed syntax highlighting)
 ```
 
 ### `Invoke-Step`
@@ -600,7 +611,7 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -629,6 +640,12 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 - **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
   on PATH. jq is a standalone C program with no built-in shell completion, so this is
   install-only — there's no Initialize work and no completion to register.
+- **`Enable-Bat [-Theme <name>] [-Style <list>] [-ReplaceCat]`** — installs `sharkdp.bat`
+  (a `cat` clone with syntax highlighting and git integration). In Initialize it sets
+  `$env:BAT_THEME` to `-Theme` (so bat's colors match the prompt — `Initialize-PwshProfile`
+  passes the active theme's blend: screwcity → `Dracula`, forestcity → `gruvbox-dark`) and
+  `$env:BAT_STYLE` to `-Style` (default `numbers,changes,header`), registers bat's PowerShell
+  completer (`bat --completion ps1`), and — with `-ReplaceCat` — aliases `cat` → `bat` globally.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
@@ -637,6 +654,7 @@ Enable-Fzf
 Enable-FastNodeManager
 Enable-Xh
 Enable-Jq
+Enable-Bat -Theme Dracula -ReplaceCat
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`

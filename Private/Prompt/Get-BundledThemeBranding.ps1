@@ -1,20 +1,21 @@
 function Get-BundledThemeBranding {
     <#
     .SYNOPSIS
-        Returns the display name, banner color, and step icon paired with a bundled theme.
+        Returns the display name, banner color, step icon, and bat theme paired with a bundled theme.
 
     .DESCRIPTION
-        Each bundled theme has a matching identity so the startup banner and step marker feel
-        cohesive with the prompt colors:
+        Each bundled theme has a matching identity so the startup banner, step marker, and bat's
+        syntax colors feel cohesive with the prompt colors:
 
-          screwcity  -> 'Screw City'  / #c9aaff (signature purple) / :nut_and_bolt:   (🔩)
-          forestcity -> 'Forest City' / #8fce72 (signature green)  / :deciduous_tree: (🌳)
+          screwcity  -> 'Screw City'  / #c9aaff (signature purple) / :nut_and_bolt:   (🔩) / Dracula
+          forestcity -> 'Forest City' / #8fce72 (signature green)  / :deciduous_tree: (🌳) / gruvbox-dark
 
         DisplayName is the theme's friendly label (shown in the install wizard's theme picker); it is
         NOT the banner text — the default banner text is uniformly $env:COMPUTERNAME for every theme
         (see Get-PwshProfileDefault / Initialize-PwshProfile). The step icon is stored without a
         trailing space; the separator between the glyph and the step text is added at render time
-        (Get-StepIconPrefix).
+        (Get-StepIconPrefix). BatTheme is the `bat --list-themes` value Enable-Bat assigns to
+        $env:BAT_THEME so bat's highlighting matches the prompt palette.
 
         Both Initialize-PwshProfile (at startup, to fill the banner color/icon not explicitly passed)
         and Get-PwshProfileDefault (at install time, to pre-fill the wizard and seed the comparison
@@ -30,7 +31,8 @@ function Get-BundledThemeBranding {
     .EXAMPLE
         Get-BundledThemeBranding -Name forestcity
 
-        Returns @{ DisplayName = 'Forest City'; BannerColor = '#8fce72'; StepIcon = ':deciduous_tree:' }.
+        Returns @{ DisplayName = 'Forest City'; BannerColor = '#8fce72'; StepIcon = ':deciduous_tree:';
+        BatTheme = 'gruvbox-dark' }.
     #>
     [CmdletBinding()]
     param(
@@ -39,8 +41,8 @@ function Get-BundledThemeBranding {
     )
 
     $branding = @{
-        screwcity  = @{ DisplayName = 'Screw City';  BannerColor = '#c9aaff'; StepIcon = ':nut_and_bolt:' }
-        forestcity = @{ DisplayName = 'Forest City'; BannerColor = '#8fce72'; StepIcon = ':deciduous_tree:' }
+        screwcity  = @{ DisplayName = 'Screw City';  BannerColor = '#c9aaff'; StepIcon = ':nut_and_bolt:';   BatTheme = 'Dracula' }
+        forestcity = @{ DisplayName = 'Forest City'; BannerColor = '#8fce72'; StepIcon = ':deciduous_tree:'; BatTheme = 'gruvbox-dark' }
     }
 
     if ($branding.ContainsKey($Name)) { $branding[$Name].Clone() } else { $branding['screwcity'].Clone() }
