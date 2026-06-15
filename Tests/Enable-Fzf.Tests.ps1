@@ -39,6 +39,11 @@ Describe 'Enable-Fzf' {
         $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --color=pointer:#c9aaff'
     }
 
+    It 'folds --style into FZF_DEFAULT_OPTS unconditionally (no version gate)' {
+        Enable-Fzf -Style full
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --style=full'
+    }
+
     It 'scopes the preview to FZF_CTRL_T_OPTS and never leaks it into the global opts' {
         Enable-Fzf -PreviewCommand 'bat {}'
         $env:FZF_CTRL_T_OPTS  | Should -Be "--preview 'bat {}'"

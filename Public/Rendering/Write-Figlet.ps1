@@ -6,8 +6,8 @@ function Write-Figlet {
 
     .DESCRIPTION
         Writes Spectre figlet text to the console. A general-purpose figlet writer: it is used for
-        the profile startup banner (Initialize-PwshProfile / -Skip Banner) but is not banner-
-        specific — call it anywhere you want big ASCII text.
+        the profile startup banner (Initialize-PwshProfile, suppressed via -NoBanner) but is not
+        banner-specific — call it anywhere you want big ASCII text.
 
         By default it uses PwshSpectreConsole's built-in figlet font. Pass -Font to pick one of the
         module's bundled fonts (tab-completes) or -FontPath to point at any .flf file of your own;

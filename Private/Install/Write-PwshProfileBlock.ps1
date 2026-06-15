@@ -6,17 +6,16 @@ function Write-PwshProfileBlock {
 
     .DESCRIPTION
         The safety-critical file writer behind Install-PwshProfile. It places a marker-wrapped
-        bootstrap block (built by Get-PwshProfileBlock — markers, a short guidance comment, the
-        module import, and the supplied Initialize-PwshProfile call) into the target file
-        without ever destroying surrounding code:
+        bootstrap block (built by Get-PwshProfileBlock — markers, a short guidance comment, a tools
+        snapshot, and the supplied Initialize-PwshProfile call) into the target file without ever
+        destroying surrounding code:
 
           # >>> ScrewCitySoftware.PwshProfile bootstrap >>>
-          # Managed by Install-PwshProfile. Re-run it to change these settings, or run
-          # Uninstall-PwshProfile to remove this block (or just delete these marker lines
-          # yourself). Manual edits between the >>> / <<< markers are overwritten on the next
-          # Install — put your own code outside them.
-          Import-Module ScrewCitySoftware.PwshProfile
-
+          # Managed by Install-PwshProfile. To change these settings, RE-RUN Install-PwshProfile rather
+          # than editing by hand: the installer reads the call and the tools list below to prefill your
+          # prior choices and flag tools added since. Manual edits between the >>> / <<< markers are
+          # overwritten on the next Install; put your own code outside them. Uninstall-PwshProfile removes it.
+          # Tools available: PSReadLine,TerminalIcons,PoshGit,Completions,Zoxide,Fzf,Fnm,Xh,Jq,Bat,Fd,Less
           <InitializeCall>
           # <<< ScrewCitySoftware.PwshProfile bootstrap <<<
 

@@ -48,9 +48,9 @@ function Enable-Fzf {
 
     .PARAMETER Style
         An fzf `--style` UI preset ('default', 'minimal', or 'full'). When non-empty it is folded
-        into $env:FZF_DEFAULT_OPTS as "--style=<preset>". `--style` is an fzf 0.54+ feature, so it
-        is applied only when `fzf --version` reports >= 0.54 (older builds silently skip it rather
-        than erroring on every fzf invocation). Initialize-PwshProfile passes 'full'.
+        into $env:FZF_DEFAULT_OPTS as "--style=<preset>". `--style` is an fzf 0.54+ feature; it is
+        applied unconditionally, since the Install substep just installed/confirmed fzf via winget
+        (always a current build). Initialize-PwshProfile passes 'full'.
 
     .PARAMETER Height
         An fzf `--height` value for the PSFzf PSReadLine widgets (Ctrl+T/Ctrl+R/git), e.g. '100%'
@@ -153,12 +153,11 @@ function Enable-Fzf {
             # process-global. --ansi renders ANSI-colored source output (e.g. fd --color=always).
             $opts = [System.Collections.Generic.List[string]]::new()
             $opts.Add('--ansi')
-            if (-not [string]::IsNullOrWhiteSpace($Style)) {
-                # --style is an fzf 0.54+ feature; skip it on older builds so we don't break every
-                # fzf invocation with an unknown-option error.
-                $ver = try { [version](((fzf --version) -split ' ')[0]) } catch { $null }
-                if ($ver -and $ver -ge [version]'0.54') { $opts.Add("--style=$Style") }
-            }
+            # --style is folded in unconditionally: the Install substep just installed/confirmed fzf
+            # via winget, which always ships a current (>=0.54, where --style landed) build, so there's
+            # no pre-0.54 case left to guard — and probing `fzf --version` here would cost a subprocess
+            # on every startup.
+            if (-not [string]::IsNullOrWhiteSpace($Style)) { $opts.Add("--style=$Style") }
             if (-not [string]::IsNullOrWhiteSpace($Colors)) { $opts.Add("--color=$Colors") }
 
             # Always assign OPTS so --ansi is a guaranteed baseline: Enable-Fd's `fd --color=always`

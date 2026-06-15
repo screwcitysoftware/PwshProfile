@@ -10,18 +10,19 @@ function Get-PwshProfileDefault {
         can set:
 
           Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, Skip (string[]), SkipSection (string[]).
+          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, NoBanner, Enable (string[]),
+          EnableAll.
 
         BannerText defaults to the literal '$env:COMPUTERNAME' for every theme (it interpolates to the
         machine name at startup) — matching Initialize-PwshProfile's runtime default, so a kept default
         emits no -BannerText. The banner color, step icon, and bat theme are still seeded from the
         selected theme via Get-BundledThemeBranding (a forestcity default carries the green/🌳/gruvbox-dark
-        identity, screwcity the purple/🔩/Dracula one). ReplaceCat and ReplaceMore default to $false (the
-        baseline), so opting cat -> bat or more -> less in emits -ReplaceCat / -ReplaceMore. The remaining
-        values are kept identical to Initialize-PwshProfile's own
-        parameter defaults so that "all defaults" for a given theme produces a bare (or theme-only)
-        Initialize-PwshProfile call. A fresh hashtable is returned on every call so callers can mutate
-        it freely.
+        identity, screwcity the purple/🔩/Dracula one). ReplaceCat, ReplaceMore, and NoBanner default to
+        $false (the baseline), so opting in emits -ReplaceCat / -ReplaceMore / -NoBanner. Tool selection is
+        opt-in: Enable defaults to an empty list (a first-run wizard starts with nothing checked, forcing an
+        explicit per-tool choice) and EnableAll defaults to $false. The remaining values are kept identical
+        to Initialize-PwshProfile's own parameter defaults. A fresh hashtable is returned on every call so
+        callers can mutate it freely.
 
     .PARAMETER Theme
         The bundled theme whose branding seeds the banner color/icon defaults. Defaults to 'screwcity'.
@@ -61,7 +62,9 @@ function Get-PwshProfileDefault {
         BatStyle        = 'numbers,changes,header'
         ReplaceCat      = $false
         ReplaceMore     = $false
-        Skip            = @()
-        SkipSection     = @()
+        NoBanner        = $false
+        # Opt-in: nothing selected by default (first-run wizard starts all-unchecked).
+        Enable          = @()
+        EnableAll       = $false
     }
 }

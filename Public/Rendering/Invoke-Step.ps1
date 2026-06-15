@@ -16,7 +16,7 @@ function Invoke-Step {
           stashes its [Spectre.Console.StatusContext] in the module-scoped
           $script:StepStatusContext. Nested calls push their description onto the
           $script:StepPath breadcrumb and update the spinner text to the full path (e.g.
-          "🔩 Tools › fnm › Install"), restoring the parent's breadcrumb when they finish.
+          "🔩 WinGet › fnm › Install"), restoring the parent's breadcrumb when they finish.
           Only the top-level step's icon is shown (nested custom icons don't appear).
 
         - When the top-level step completes, the spinner clears itself and a single summary

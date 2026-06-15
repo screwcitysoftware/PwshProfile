@@ -6,9 +6,10 @@ function Build-PwshProfileInitializeCall {
 
     .DESCRIPTION
         Renders the single line that Install-PwshProfile writes into the managed bootstrap
-        block. To keep the generated profile tidy and resilient to future default changes, only
-        the parameters that differ from the defaults are emitted — a settings object equal to the
-        defaults for the screwcity theme yields a bare "Initialize-PwshProfile" with no arguments.
+        block. Most parameters are emitted only when they differ from the defaults, to keep the line
+        tidy. Tool selection is the deliberate exception: it is ALWAYS emitted explicitly (-EnableAll,
+        or -Enable with the chosen tokens, or -Enable @() for nothing), because that explicit pin is
+        what stops a tool added in a later module version from auto-installing on the next shell.
 
         The theme drives the comparison baseline: the banner branding (text/color/icon) is compared
         against Get-PwshProfileDefault for the *selected* theme, so a forestcity install that keeps
@@ -20,17 +21,18 @@ function Build-PwshProfileInitializeCall {
         String values are single-quoted (embedded single quotes are doubled) so values such as
         the ':nut_and_bolt:' step icon survive verbatim. The one exception is -BannerText, which is
         double-quoted so values like $env:COMPUTERNAME interpolate at profile startup (embedded
-        double quotes and backticks are backtick-escaped; $ is intentionally left unescaped). The
-        -Skip / -SkipSection arrays are emitted as comma-joined tokens (their values come from a
-        ValidateSet, so they need no quoting) and only when non-empty. The boolean switches -ReplaceCat
-        and -ReplaceMore are each emitted as a bare switch when they differ from the default ($false)
-        and are truthy.
+        double quotes and backticks are backtick-escaped; $ is intentionally left unescaped).
+
+        Tool-specific params are kept consistent with the selection: -ReplaceCat / -BatTheme / -BatStyle
+        (bat), -ReplaceMore (less), and -ZoxideCommand (zoxide) are emitted only when their tool is in
+        the enabled set, and the banner params are omitted under -NoBanner — so a generated call never
+        carries a flag for a disabled feature.
 
     .PARAMETER Setting
         The settings hashtable (keys as produced by Get-PwshProfileDefault / the wizard:
         Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-        ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, Skip, SkipSection). Keys that are
-        absent fall back to the default and are not emitted.
+        ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, NoBanner, Enable, EnableAll). Keys
+        that are absent fall back to the default and are not emitted.
 
     .PARAMETER Default
         The baseline to compare against. When omitted it is resolved as Get-PwshProfileDefault for
@@ -39,38 +41,33 @@ function Build-PwshProfileInitializeCall {
     .EXAMPLE
         Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault)
 
-        Returns 'Initialize-PwshProfile' (all screwcity defaults, so no arguments).
+        Returns 'Initialize-PwshProfile -Enable @()' (the default has nothing selected, so it pins an
+        empty enable list rather than a bare call).
 
     .EXAMPLE
-        Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity)
-
-        Returns 'Initialize-PwshProfile -Theme forestcity' (the matching Forest City banner branding
-        is the default for that theme, so it is not re-emitted).
-
-    .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.BannerColor = '#00d7ff'; $s.Skip = @('Fnm', 'Xh')
+        $s = Get-PwshProfileDefault -Theme forestcity; $s.Enable = @('Zoxide', 'Bat')
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns "Initialize-PwshProfile -BannerColor '#00d7ff' -Skip Fnm,Xh".
+        Returns 'Initialize-PwshProfile -Theme forestcity -Enable Zoxide,Bat'.
 
     .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.BannerText = '$env:COMPUTERNAME'
+        $s = Get-PwshProfileDefault; $s.EnableAll = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -BannerText "$env:COMPUTERNAME"' — double-quoted so the
-        banner shows the machine name at startup.
+        Returns 'Initialize-PwshProfile -EnableAll' (every current tool plus future additions).
 
     .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.ReplaceCat = $true
+        $s = Get-PwshProfileDefault; $s.Enable = @('Bat'); $s.ReplaceCat = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -ReplaceCat' (a bare switch, since cat -> bat was opted in).
+        Returns 'Initialize-PwshProfile -ReplaceCat -Enable Bat' (the cat -> bat switch is emitted
+        because bat is enabled).
 
     .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.ReplaceMore = $true
+        $s = Get-PwshProfileDefault; $s.Enable = @('Zoxide'); $s.NoBanner = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -ReplaceMore' (a bare switch, since more -> less was opted in).
+        Returns 'Initialize-PwshProfile -NoBanner -Enable Zoxide' (banner params are omitted).
     #>
     [CmdletBinding()]
     param(
@@ -99,6 +96,14 @@ function Build-PwshProfileInitializeCall {
 
     $parts = [System.Collections.Generic.List[string]]::new()
 
+    # Resolve the tool-selection shape up front. -EnableAll covers the whole catalog (and future
+    # additions); otherwise the explicit Enable list is authoritative. The resolved set gates which
+    # tool-specific params are worth emitting, so a disabled tool's flags never appear.
+    $enableAll = [bool](& $value 'EnableAll')
+    $enableList = @(& $value 'Enable')
+    $enabledSet = if ($enableAll) { Get-PwshProfileToolCatalog -Token } else { $enableList }
+    $noBanner = [bool](& $value 'NoBanner')
+
     # Theme selection: a custom theme path takes precedence (and is mutually exclusive with a bundled
     # -Theme); a bundled theme is emitted only when it isn't the screwcity default.
     if ($customTheme) {
@@ -108,9 +113,17 @@ function Build-PwshProfileInitializeCall {
         $parts.Add("-Theme $theme")
     }
 
+    # -NoBanner suppresses the banner; the banner params below are then omitted as moot.
+    if ($noBanner) { $parts.Add('-NoBanner') }
+
     # Scalar string parameters: emit only when they differ from the (themed) default. BannerText is
-    # double-quoted (interpolation); the rest are single-quoted (verbatim).
+    # double-quoted (interpolation); the rest are single-quoted (verbatim). Banner params are skipped
+    # under -NoBanner, and tool-specific params (zoxide/bat) only emit when that tool is enabled.
+    $bannerKeys = @('BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont')
+    $keyTool = @{ ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat' }
     foreach ($key in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle') {
+        if ($noBanner -and $bannerKeys -contains $key) { continue }
+        if ($keyTool.ContainsKey($key) -and $enabledSet -notcontains $keyTool[$key]) { continue }
         $v = & $value $key
         if ($v -ne $Default[$key]) {
             $rendered = if ($key -eq 'BannerText') { & $quoteDouble $v } else { & $quote $v }
@@ -118,26 +131,29 @@ function Build-PwshProfileInitializeCall {
         }
     }
 
-    # Boolean switches: emitted as bare flags only when they differ from the default ($false) and are set.
+    # Boolean switches: emitted as bare flags only when set, differing from the default ($false), and
+    # the owning tool is enabled (the flag is a no-op otherwise).
     $replaceCat = & $value 'ReplaceCat'
-    if ([bool]$replaceCat -ne [bool]$Default['ReplaceCat'] -and $replaceCat) {
+    if ([bool]$replaceCat -ne [bool]$Default['ReplaceCat'] -and $replaceCat -and $enabledSet -contains 'Bat') {
         $parts.Add('-ReplaceCat')
     }
     $replaceMore = & $value 'ReplaceMore'
-    if ([bool]$replaceMore -ne [bool]$Default['ReplaceMore'] -and $replaceMore) {
+    if ([bool]$replaceMore -ne [bool]$Default['ReplaceMore'] -and $replaceMore -and $enabledSet -contains 'Less') {
         $parts.Add('-ReplaceMore')
     }
 
-    # Array parameters: emit comma-joined tokens only when non-empty (default is empty).
-    foreach ($key in 'Skip', 'SkipSection') {
-        $v = @(& $value $key)
-        if ($v.Count -gt 0) {
-            $parts.Add("-$key $($v -join ',')")
-        }
+    # Tool selection is always emitted explicitly — that's what pins the set against future-tool drift.
+    # -EnableAll for "everything + future"; otherwise -Enable with the chosen tokens, or -Enable @()
+    # to deterministically enable nothing without triggering the bare-call prompt.
+    if ($enableAll) {
+        $parts.Add('-EnableAll')
+    }
+    elseif ($enableList.Count -gt 0) {
+        $parts.Add("-Enable $($enableList -join ',')")
+    }
+    else {
+        $parts.Add('-Enable @()')
     }
 
-    if ($parts.Count -eq 0) {
-        return 'Initialize-PwshProfile'
-    }
     return "Initialize-PwshProfile $($parts -join ' ')"
 }

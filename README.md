@@ -125,42 +125,44 @@ Install-PwshProfile        # interactive wizard; re-run any time to change optio
 Uninstall-PwshProfile      # remove the bootstrap (installed tools/fonts are left in place)
 ```
 
-The bootstrap it writes is just an import plus a call to **`Initialize-PwshProfile`** — the
-orchestrator that runs on every new session. You can also call it directly to run the default
-startup:
+The bootstrap it writes is a `# Tools available:` snapshot comment plus a call to
+**`Initialize-PwshProfile`** — the orchestrator that runs on every new session. There's no
+`Import-Module` line: invoking `Initialize-PwshProfile` auto-loads the module. Tool selection is
+**opt-in** — you call it with the tools you want:
 
 ```powershell
-Import-Module ScrewCitySoftware.PwshProfile
-
-Initialize-PwshProfile
+Initialize-PwshProfile -Enable Zoxide,Fzf,Bat,Fd   # only these tools run
 ```
 
 A few common variations:
 
 ```powershell
-Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
-Initialize-PwshProfile -Skip Fnm,Xh          # skip individual tools
-Initialize-PwshProfile -SkipSection Tools    # skip a whole section
+Initialize-PwshProfile -Enable Zoxide,Bat -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -EnableAll                  # every tool, plus any added in future updates
+Initialize-PwshProfile -EnableAll -NoBanner        # everything, no startup banner
 ```
 
-`Initialize-PwshProfile` takes a handful of options — banner text/color/font, a custom
-theme, and per-tool or per-section skips — all covered under [Exported
-functions](#exported-functions).
+A **bare** `Initialize-PwshProfile` has no selection: interactively it asks whether to enable all
+tools, and non-interactively it enables none — so prefer `-Enable`/`-EnableAll` (the wizard always
+writes one of them). `Initialize-PwshProfile` takes a handful of other options — banner text/color/font,
+a custom theme — all covered under [Exported functions](#exported-functions).
 
 ### Wiring it into your profile by hand
 
-If you'd rather not use the wizard, a complete `$PROFILE` is just the import, the one call, and your
-own personal extras:
+If you'd rather not use the wizard, a complete `$PROFILE` is just the one call (the module auto-loads)
+and your own personal extras:
 
 ```powershell
-Import-Module ScrewCitySoftware.PwshProfile
-
-Initialize-PwshProfile
+Initialize-PwshProfile -Enable Zoxide,Fzf,Bat,Fd
 
 # Personal extras stay in the profile:
 & $PSScriptRoot/Initialize-WorkTools.ps1
 . $PSScriptRoot/aliases.ps1
 ```
+
+Changing the managed block is best done by **re-running `Install-PwshProfile`** rather than editing the
+call by hand — on a re-run the installer reads the call and the tools snapshot to pre-fill your prior
+choices and flag newly-added tools.
 
 You can also call the individual building blocks directly if you want to assemble a custom
 startup instead of using `Initialize-PwshProfile`:
@@ -199,7 +201,7 @@ Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json   # your ow
 
 Picking a bundled theme also sets the banner color and step icon for any you don't override (the
 banner text defaults to your machine name regardless of theme); running `-CustomTheme` by hand keeps
-the neutral screwcity color/icon for any you don't pass (an empty banner text renders no banner).
+the neutral screwcity color/icon for any you don't pass (use `-NoBanner` to render no banner).
 
 ### Creating a custom theme
 
@@ -281,8 +283,12 @@ ScrewCitySoftware.PwshProfile/
 │   └── Core/
 │       └── Import-ModuleSafe.ps1
 ├── Private/                             # internal helpers (loaded, not exported)
-│   ├── Install/                         # Install/Uninstall helpers: marker + block builders,
-│   │   └── *PwshProfile*.ps1       #   the settings wizard, the file writer, defaults
+│   ├── Install/                         # Install/Uninstall helpers: marker + block builders, the
+│   │   └── *PwshProfile*.ps1       #   wizard, feature tree, file writer, defaults, call builder, and
+│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser)
+│   ├── Startup/                         # opt-in resolution helpers (shared by startup + the wizard)
+│   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool token set
+│   │   └── Confirm-PwshProfileEnableAll.ps1   # bare-call "enable all?" confirm (guarded, no-hang)
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
@@ -320,10 +326,11 @@ them.
 ### `Install-PwshProfile`
 
 A one-time, re-runnable setup wizard (built on PwshSpectreConsole) that writes the module's
-bootstrap — the import plus a tailored `Initialize-PwshProfile` call — into a profile file,
-wrapped in managed marker comments. By default it targets `$PROFILE`. It **wires the module into
-your profile file**; it does not install the module itself from the gallery (use
-`Install-PSResource ScrewCitySoftware.PwshProfile` for that).
+bootstrap — a tools snapshot comment plus a tailored `Initialize-PwshProfile` call (no `Import-Module`
+line; the call auto-loads the module) — into a profile file, wrapped in managed marker comments. By
+default it targets `$PROFILE`. On a re-run it reads the existing block to pre-fill your prior choices
+and flag tools added since. It **wires the module into your profile file**; it does not install the
+module itself from the gallery (use `Install-PSResource ScrewCitySoftware.PwshProfile` for that).
 
 Each step opens with a rounded header panel — its title, a `step N of 6` progress counter, and a
 short description — and secondary prompts carry an indented hint line beneath them (the feature step
@@ -351,18 +358,22 @@ The wizard walks one forward pass, then lets you revise anything before committi
    text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme.
 4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
    noting anything off the theme default) and asks whether to change it — **defaulting to No**. On
-   yes, a show/hide question gates the rest: say no and the banner is disabled (`-Skip Banner`) and
+   yes, a show/hide question gates the rest: say no and the banner is suppressed (`-NoBanner`) and
    the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
 5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
    current icon floated to the top and a "custom shortcode" escape.
-6. **Features** — a grouped tree under the **Shell / Prompt / Tools** sections (shell completions and
-   `fd` sit under Tools) that starts with **everything checked**; uncheck a feature (or a whole
-   section) to opt out, mapped to `-Skip` / `-SkipSection`. oh-my-posh is always on and isn't listed.
-   If `zoxide` stays enabled you're prompted for its jump command; if `bat` stays enabled you're
-   asked whether to replace the built-in `cat` with it (**defaulting to Yes**, emitting `-ReplaceCat`);
-   and if `less` stays enabled you're asked whether to make it the default pager (**defaulting to
-   Yes**, emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`).
-   When `fzf` stays enabled it also gains the PSFzf Ctrl+T/Ctrl+R key bindings.
+6. **Features** (opt-in) — first a **mode** choice: *pick specific tools*, or *enable everything
+   including tools added in future updates* (emits `-EnableAll`). "Specific" shows a grouped tree under
+   two sections — **Core** (PSReadLine, Terminal-Icons, posh-git, shell completions) and **WinGet** (the
+   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less). On a re-run it **pre-checks your prior
+   selection**; on a clean first run **Core is pre-checked and WinGet is left unchecked** (so the
+   light-install Core stuff is on by default, but each winget install is an explicit opt-in). Tools added
+   to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
+   oh-my-posh is always on and isn't listed. If `zoxide` ends up enabled you're prompted for its jump
+   command; if `bat` is enabled, whether to replace the built-in `cat` (**defaulting to Yes**, emitting
+   `-ReplaceCat`); if `less` is enabled, whether to make it the default pager (**defaulting to Yes**,
+   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). When `fzf` is enabled it
+   also gains the PSFzf Ctrl+T/Ctrl+R key bindings.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -376,8 +387,9 @@ Your existing profile is never destroyed:
 - A profile that already has a bare `Import-Module ScrewCitySoftware.PwshProfile` (no markers) is
   left untouched unless `-Force` is given.
 
-The file is written as UTF-8 without a BOM. Spectre prompts only render in an interactive console;
-when they're unavailable the command warns and writes the default settings non-interactively.
+The file is written as UTF-8 without a BOM. The wizard is **interactive-only**: Spectre prompts only
+render in an interactive console, and when they're unavailable the command warns that an interactive
+session is required and makes no changes.
 
 - **`-Path`** — the profile file to configure (default `$PROFILE`, current user / current host).
   `$PROFILE` is host-specific, so the VS Code and ISE hosts use different files.
@@ -443,16 +455,19 @@ Show-NerdFontSetup -Font Meslo, CascadiaCode
 
 ### `Initialize-PwshProfile`
 
-The headline entry point: one call that runs the whole default profile startup, so `$PROFILE`
-shrinks to an import plus this call. In order it shows the startup banner, then runs three
-top-level `Invoke-Step` sections — **Shell** (the `which` global alias + PSReadLine), **Prompt**
-(oh-my-posh, Terminal-Icons, posh-git — oh-my-posh first, as the prompt engine), and **Tools**
-(zoxide, fzf, fnm, xh, jq, bat, fd, less — fzf next to zoxide, fnm after zoxide since it hooks zoxide's `cd`, fd after fzf so it can wire fzf to use fd as its source, less as bat's/PowerShell's pager), which ends with the shell
-**completions** (winget, Azure CLI, Tailscale, Docker, 1Password, GitHub CLI — registration only, no installs) as a nested
-sub-step, since completions are operations on the tools. Each section renders its own spinner and
-summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
-deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or
-`aliases.ps1`) — those stay in `$PROFILE`.
+The headline entry point: one call that runs the profile startup, so `$PROFILE` shrinks to just this
+call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-EnableAll` (see below).
+In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
+model — **Core** (the `which` global alias, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
+shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
+installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less — fzf
+next to zoxide, fnm after zoxide since it hooks zoxide's `cd`, fd after fzf so it can wire fzf to use fd
+as its source, less as bat's/PowerShell's pager). oh-my-posh and the `which` alias always run; everything
+else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
+WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
+and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
+deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or `aliases.ps1`)
+— those stay in `$PROFILE`.
 
 - **`-Theme`** — the bundled oh-my-posh theme: `screwcity` (default) or `forestcity` (tab-completes,
   discovered from `Assets/Themes`). Resolved to its file and forwarded to `Enable-OhMyPosh
@@ -462,7 +477,7 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   `Enable-OhMyPosh -Configuration` in place of a bundled theme. Validated to exist at call time.
   Mutually exclusive with `-Theme`; banner color/icon fall back to the screwcity defaults.
 - **`-BannerText`** — banner text (defaults to your machine name, `$env:COMPUTERNAME`, for every
-  theme; an empty/whitespace value renders no banner).
+  theme; must be non-empty — use `-NoBanner` to render no banner).
 - **`-BannerColor`** — any Spectre color name or hex (defaults to the theme's signature color —
   `#c9aaff` / `#8fce72`).
 - **`-BannerAlignment`** — `Left`, `Center`, or `Right` (default `Left`).
@@ -492,39 +507,43 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
-- **`-Skip`** — individual tools to opt out of: `Banner`, `PSReadLine`, `TerminalIcons`,
-  `PoshGit`, `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Completions` (skipping
-  `Zoxide`/`Fzf`/`Fnm`/`Xh`/`Jq`/`Bat`/`Fd`/`Less` also
-  avoids their winget auto-install; `Completions` drops the shell-completion registrations under Tools).
-  oh-my-posh is table stakes — it has no token in either parameter and always runs.
-- **`-SkipSection`** — whole sections to opt out of: `Shell`, `Prompt`, `Tools` (skipping `Tools`
-  also drops the completions nested under it). `Prompt` is special: because oh-my-posh is
-  unskippable, passing it drops only the cosmetic extras (Terminal-Icons + posh-git) and warns that
-  oh-my-posh was kept.
+- **`-Enable`** — the tools to enable (opt-in): any of `PSReadLine`, `TerminalIcons`, `PoshGit`,
+  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Completions`. Only the listed tools run
+  (and the auto-installing ones install), so a tool added in a later module version never installs
+  unless you add it here. `-Enable @()` enables nothing. oh-my-posh and the `which` alias always run
+  and are not tokens.
+- **`-EnableAll`** — enable every tool in the catalog, including any added in future module versions
+  (opts into auto-installing future tools). If both `-EnableAll` and `-Enable` are given, `-Enable`
+  wins (the explicit list is the safer choice) and a warning notes `-EnableAll` was ignored.
+- **`-NoBanner`** — render no startup banner. Use this to suppress the banner rather than clearing
+  `-BannerText` (which rejects empty); banner params passed alongside it are warned-and-ignored.
+
+A tool-specific parameter (e.g. `-ReplaceCat`, `-ZoxideCommand`) for a tool that isn't enabled is
+warned about and ignored rather than throwing — and a wizard-generated call only ever emits one for an
+enabled tool.
 
 ```powershell
-Initialize-PwshProfile                                   # Screw City theme: purple, 🔩, machine-name banner
-Initialize-PwshProfile -Theme forestcity                 # Forest City theme: green, 🌳, machine-name banner
-Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
-Initialize-PwshProfile -BannerFont ANSIShadow            # large block banner font
-Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Skip Fnm,Xh
-Initialize-PwshProfile -Skip Completions                 # skip the shell-completion registrations
-Initialize-PwshProfile -ReplaceCat                       # alias cat -> bat (themed syntax highlighting)
-Initialize-PwshProfile -ReplaceMore                      # make less the default pager (replace more.com)
+Initialize-PwshProfile -Enable Zoxide,Bat,Fd            # Screw City theme; only these tools
+Initialize-PwshProfile -Theme forestcity -EnableAll     # Forest City theme; every tool + future ones
+Initialize-PwshProfile -Enable Zoxide,Bat -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -EnableAll -BannerFont ANSIShadow            # large block banner font
+Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Enable Zoxide
+Initialize-PwshProfile -EnableAll -NoBanner             # no startup banner
+Initialize-PwshProfile -Enable Bat -ReplaceCat          # alias cat -> bat (themed syntax highlighting)
+Initialize-PwshProfile -Enable Less -ReplaceMore        # make less the default pager (replace more.com)
 ```
 
 ### `Invoke-Step`
 
 Runs a named startup step, rendered with PwshSpectreConsole. While running, the top-level
 call shows a transient status spinner; nested steps update its text to the full breadcrumb
-path (e.g. `⠼ 🔩 Tools › fnm › Install`), restoring the parent's path when they finish. When
+path (e.g. `⠼ 🔩 WinGet › fnm › Install`), restoring the parent's path when they finish. When
 the top-level step completes, the spinner clears itself and a single summary line is written
 with the total elapsed time — nested substeps leave no output of their own:
 
 ```
-🔩 Shell............................................ [  42ms]
-🔩 Prompt........................................... [ 880ms]
-🔩 Tools............................................ [3120ms]
+🔩 Core............................................ [ 920ms]
+🔩 WinGet.......................................... [3120ms]
 ```
 
 Only the top-level step's icon is shown. If PwshSpectreConsole isn't loaded, steps still run
@@ -535,7 +554,7 @@ wiped off-screen when the spinner clears. Instead, warnings are captured while t
 runs and re-printed underneath the step's summary line, so they stay readable in scrollback:
 
 ```
-🔩 Prompt........................................... [ 880ms]
+🔩 Core............................................ [ 880ms]
 WARNING: Import-ModuleSafe: could not import 'Terminal-Icons': <reason>
 ```
 
@@ -652,8 +671,8 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   [-ProviderChord <chord>] [-HistoryChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
   `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi`) from
-  `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full` — applied only on
-  fzf ≥ 0.54); it carries **no** `--preview`, so directory pickers stay clean. `-PreviewCommand` is
+  `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full`); it carries **no**
+  `--preview`, so directory pickers stay clean. `-PreviewCommand` is
   written to `$env:FZF_CTRL_T_OPTS` instead — scoped to the **Ctrl+T file picker** (so the bat
   preview shows for file searches but never for directory pickers like zoxide's `cdi`). Because fzf
   ships **no** PowerShell key bindings, `-ProviderChord`/`-HistoryChord`/`-UseFd`/`-GitKeyBindings`
@@ -739,7 +758,7 @@ Enable-OhMyPosh -Configuration ~/my.omp.json
 
 ### `Enable-WingetCompletion`, `Enable-AzureCliCompletion`, `Enable-TailscaleCompletion`, `Enable-DockerCompletion`, `Enable-1PasswordCompletion`, `Enable-GithubCliCompletion`
 
-One `Enable-<Tool>Completion` per CLI, used by the **Completions** sub-step under **Tools** (and
+One `Enable-<Tool>Completion` per CLI, used by the **Completions** sub-step under **Core** (and
 living together under `Public/Tools/Completions/`). Each only registers tab completion (no install
 phase), guards on its tool so a missing CLI is skipped silently, and opens no `Invoke-Step` of its
 own — the caller supplies the step label — so they read as thin one-liners under the orchestrator.

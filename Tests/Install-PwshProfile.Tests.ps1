@@ -25,19 +25,19 @@ BeforeAll {
 }
 
 Describe 'Build-PwshProfileInitializeCall' {
-    It 'returns a bare call for default settings' {
+    It 'pins an empty -Enable for default settings (nothing selected yet)' {
         InModuleScope $script:Module {
             Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault) |
-                Should -Be 'Initialize-PwshProfile'
+                Should -Be 'Initialize-PwshProfile -Enable @()'
         }
     }
 
-    It 'emits only changed scalar parameters, single-quoted' {
+    It 'emits only changed scalar parameters, single-quoted (plus the always-emitted -Enable)' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.BannerColor = '#00d7ff'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff' -Enable @()"
         }
     }
 
@@ -45,10 +45,9 @@ Describe 'Build-PwshProfileInitializeCall' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.BannerFont = 'ANSIShadow'   # the default — should be omitted
-            $s.BannerColor = '#00d7ff'     # a non-default dimension so the call isn't bare
-            # The default font must be absent even though another param forces a non-bare call.
+            $s.BannerColor = '#00d7ff'     # a non-default dimension
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff' -Enable @()"
         }
     }
 
@@ -57,17 +56,25 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.BannerFont = 'Doom'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerFont 'Doom'"
+                Should -Be "Initialize-PwshProfile -BannerFont 'Doom' -Enable @()"
         }
     }
 
-    It 'emits Skip and SkipSection as comma-joined tokens' {
+    It 'emits -Enable as comma-joined tokens for a chosen set' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
-            $s.Skip = @('Fnm', 'Xh')
-            $s.SkipSection = @('Shell')
+            $s.Enable = @('Zoxide', 'Bat')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -Skip Fnm,Xh -SkipSection Shell'
+                Should -Be 'Initialize-PwshProfile -Enable Zoxide,Bat'
+        }
+    }
+
+    It 'emits -EnableAll (and no -Enable) when set' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.EnableAll = $true
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -EnableAll'
         }
     }
 
@@ -76,7 +83,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.StepIcon = ":o'clock:"
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -StepIcon ':o''clock:'"
+                Should -Be "Initialize-PwshProfile -StepIcon ':o''clock:' -Enable @()"
         }
     }
 
@@ -87,7 +94,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.BannerText = '$env:USERNAME'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -BannerText "$env:USERNAME"'
+                Should -Be 'Initialize-PwshProfile -BannerText "$env:USERNAME" -Enable @()'
         }
     }
 
@@ -96,14 +103,24 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.BannerText = 'Say "hi"'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -BannerText "Say `"hi`""'
+                Should -Be 'Initialize-PwshProfile -BannerText "Say `"hi`"" -Enable @()'
+        }
+    }
+
+    It 'emits -NoBanner and omits the banner params under it' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.NoBanner = $true
+            $s.BannerColor = '#00d7ff'   # would be emitted, but is moot under -NoBanner
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -NoBanner -Enable @()'
         }
     }
 
     It 'emits only -Theme for a forestcity default (its branding is the themed baseline)' {
         InModuleScope $script:Module {
             Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity) |
-                Should -Be 'Initialize-PwshProfile -Theme forestcity'
+                Should -Be 'Initialize-PwshProfile -Theme forestcity -Enable @()'
         }
     }
 
@@ -112,7 +129,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault -Theme forestcity
             $s.BannerColor = '#00d7ff'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -Theme forestcity -BannerColor '#00d7ff'"
+                Should -Be "Initialize-PwshProfile -Theme forestcity -BannerColor '#00d7ff' -Enable @()"
         }
     }
 
@@ -121,25 +138,37 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.CustomTheme = '~/my.omp.json'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -CustomTheme '~/my.omp.json'"
+                Should -Be "Initialize-PwshProfile -CustomTheme '~/my.omp.json' -Enable @()"
         }
     }
 
-    It 'emits -ReplaceCat as a bare switch when opted in' {
+    It 'emits -ReplaceCat when opted in and bat is enabled' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.ReplaceCat = $true
+            $s.Enable = @('Bat')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -ReplaceCat'
+                Should -Be 'Initialize-PwshProfile -ReplaceCat -Enable Bat'
         }
     }
 
-    It 'emits -ReplaceMore as a bare switch when opted in' {
+    It 'omits -ReplaceCat when bat is not enabled (gated)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.ReplaceCat = $true
+            $s.Enable = @('Zoxide')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Zoxide'
+        }
+    }
+
+    It 'emits -ReplaceMore when opted in and less is enabled' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.ReplaceMore = $true
+            $s.Enable = @('Less')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -ReplaceMore'
+                Should -Be 'Initialize-PwshProfile -ReplaceMore -Enable Less'
         }
     }
 
@@ -147,28 +176,27 @@ Describe 'Build-PwshProfileInitializeCall' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.ReplaceCat = $false
-            $s.BannerColor = '#00d7ff'   # force a non-bare call so the assertion is meaningful
+            $s.BannerColor = '#00d7ff'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff' -Enable @()"
         }
     }
 
-    It 'does not emit the default bat theme/style (they follow the theme branding)' {
+    It 'does not emit the default bat theme/style' {
         InModuleScope $script:Module {
-            # forestcity's BatTheme (gruvbox-dark) and default style are the themed baseline, so a
-            # forestcity default emits only -Theme.
             Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity) |
-                Should -Be 'Initialize-PwshProfile -Theme forestcity'
+                Should -Be 'Initialize-PwshProfile -Theme forestcity -Enable @()'
         }
     }
 
-    It 'emits a non-default -BatTheme and -BatStyle' {
+    It 'emits a non-default -BatTheme and -BatStyle when bat is enabled' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.BatTheme = 'Nord'
             $s.BatStyle = 'plain'
+            $s.Enable = @('Bat')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain'"
+                Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain' -Enable Bat"
         }
     }
 }
@@ -353,13 +381,14 @@ Describe 'Write-PwshProfileBlock' {
         $r.Changed | Should -BeTrue
     }
 
-    It 'writes both markers and the exact bootstrap lines' {
+    It 'writes both markers, the tools snapshot, and the call (no Import-Module)' {
         Invoke-Writer -Path $script:Dest | Out-Null
         $c = Get-Content -LiteralPath $script:Dest -Raw
         $c | Should -Match '# >>> ScrewCitySoftware\.PwshProfile bootstrap >>>'
         $c | Should -Match '# <<< ScrewCitySoftware\.PwshProfile bootstrap <<<'
-        $c | Should -Match 'Import-Module ScrewCitySoftware\.PwshProfile'
+        $c | Should -Match '# Tools available:'
         $c | Should -Match 'Initialize-PwshProfile'
+        $c | Should -Not -Match 'Import-Module ScrewCitySoftware\.PwshProfile'
     }
 
     It 'includes guidance comments pointing at Install and Uninstall' {
@@ -396,11 +425,11 @@ Describe 'Write-PwshProfileBlock' {
     It 'replaces an existing managed block in place on re-run, preserving surrounding content' {
         New-Item -ItemType Directory -Path $script:Dir | Out-Null
         Set-Content -LiteralPath $script:Dest -Value "# top comment`nWrite-Host 'mine'"
-        Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile' | Out-Null
-        $r2 = Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile -Skip Xh'
+        Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile -Enable Zoxide' | Out-Null
+        $r2 = Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile -Enable Xh'
         $c = Get-Content -LiteralPath $script:Dest -Raw
         ([regex]::Matches($c, '# >>> ScrewCitySoftware\.PwshProfile bootstrap >>>')).Count | Should -Be 1
-        $c | Should -Match 'Initialize-PwshProfile -Skip Xh'
+        $c | Should -Match 'Initialize-PwshProfile -Enable Xh'
         $c | Should -Match '# top comment'
         $c | Should -Match "Write-Host 'mine'"
         $r2.Action | Should -Be 'Replaced'
@@ -473,42 +502,75 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Get-WingetSettingDefault { @{ Scope = 'user'; ProgressBar = 'rainbow'; AnonymizePath = $true; DisableInstallNote = $false } }
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Default install scope (winget)' }
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Winget progress bar style' }
-            # Feature tree: everything enabled. Hub: submit (the first choice).
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+            # Features: pick-specific mode by default, with the tree returning everything enabled.
+            Mock Read-SpectreSelection { 'Pick specific tools' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'How should startup tools be selected?' }
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+            # Hub: submit (the first choice).
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'What would you like to do?' }
         }
     }
 
-    It 'returns the theme defaults with no feature skips when everything stays enabled' {
+    It 'enables every tool (and no EnableAll) when the whole tree stays checked' {
         InModuleScope $script:Module {
             $s = Invoke-PwshProfileWizard
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
             $s.BannerColor | Should -Be '#c9aaff'
             $s.StepIcon | Should -Be ':nut_and_bolt:'
-            @($s.Skip).Count | Should -Be 0
-            @($s.SkipSection).Count | Should -Be 0
+            @($s.Enable) | Should -Be @(Get-PwshProfileToolCatalog -Token)
+            $s.EnableAll | Should -BeFalse
+            $s.NoBanner | Should -BeFalse
             $s.NerdFont | Should -BeNullOrEmpty
         }
     }
 
-    It 'maps unchecked features to Skip' {
+    It 'maps the checked features to -Enable, in catalog order' {
         InModuleScope $script:Module {
             Mock Read-SpectreSelection { 'Center' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Banner alignment' }
             Mock Read-SpectreSelection { [pscustomobject]@{ Label = 'x'; Icon = ':gear:' } } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Step marker icon' }
             # Fnm, Xh and Completions left unchecked; the rest enabled.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Bat', 'Fd', 'Less') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Jq', 'Bat', 'Fd', 'Less') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.StepIcon | Should -Be ':gear:'
             $s.BannerAlignment | Should -Be 'Center'
-            $s.Skip | Should -Contain 'Fnm'
-            $s.Skip | Should -Contain 'Xh'
-            $s.Skip | Should -Contain 'Completions'
-            $s.Skip | Should -Not -Contain 'PSReadLine'
-            $s.Skip | Should -Not -Contain 'Banner'
-            $s.Skip | Should -Not -Contain 'Zoxide'
-            @($s.SkipSection).Count | Should -Be 0
+            $s.Enable | Should -Contain 'Zoxide'
+            $s.Enable | Should -Contain 'Jq'
+            $s.Enable | Should -Not -Contain 'Fnm'
+            $s.Enable | Should -Not -Contain 'Xh'
+            $s.Enable | Should -Not -Contain 'Completions'
+            $s.EnableAll | Should -BeFalse
             $s.ZoxideCommand | Should -Be 'cd'
+        }
+    }
+
+    It 'enabling everything sets EnableAll and skips the tree' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreSelection { 'Enable everything, including tools added in future updates' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'How should startup tools be selected?' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.EnableAll | Should -BeTrue
+            Should -Invoke Read-PwshProfileFeatureTree -Times 0 -Exactly
+        }
+    }
+
+    It 'prefills the feature tree from prior -Enable on a re-run' {
+        InModuleScope $script:Module {
+            $s = Invoke-PwshProfileWizard -PriorSetting @{ Enable = @('Zoxide', 'Bat') } -NewTool @('Jq')
+            Should -Invoke Read-PwshProfileFeatureTree -Times 1 -Exactly -ParameterFilter {
+                $Enabled['Zoxide'] -and $Enabled['Bat'] -and -not $Enabled['Fnm'] -and ($New -contains 'Jq')
+            }
+        }
+    }
+
+    It 'on a clean first run pre-checks Core and leaves WinGet tools unchecked' {
+        InModuleScope $script:Module {
+            # No PriorSetting -> first run: the tree opens with non-winget (Core) tokens checked and
+            # the winget tools unchecked.
+            $s = Invoke-PwshProfileWizard
+            Should -Invoke Read-PwshProfileFeatureTree -Times 1 -Exactly -ParameterFilter {
+                $Enabled['PSReadLine'] -and $Enabled['TerminalIcons'] -and $Enabled['PoshGit'] -and $Enabled['Completions'] -and
+                -not $Enabled['Zoxide'] -and -not $Enabled['Bat'] -and -not $Enabled['Fzf']
+            }
         }
     }
 
@@ -518,17 +580,17 @@ Describe 'Invoke-PwshProfileWizard' {
 
             $s = Invoke-PwshProfileWizard
             $s.ReplaceCat | Should -BeTrue
-            $s.Skip | Should -Not -Contain 'Bat'
+            $s.Enable | Should -Contain 'Bat'
         }
     }
 
     It 'leaves ReplaceCat off (and skips the cat prompt) when bat is unchecked' {
         InModuleScope $script:Module {
             # bat unchecked; the cat-override prompt must not run.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
-            $s.Skip | Should -Contain 'Bat'
+            $s.Enable | Should -Not -Contain 'Bat'
             $s.ReplaceCat | Should -BeFalse
             Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
         }
@@ -540,28 +602,28 @@ Describe 'Invoke-PwshProfileWizard' {
 
             $s = Invoke-PwshProfileWizard
             $s.ReplaceMore | Should -BeTrue
-            $s.Skip | Should -Not -Contain 'Less'
+            $s.Enable | Should -Contain 'Less'
         }
     }
 
     It 'leaves ReplaceMore off (and skips the pager prompt) when less is unchecked' {
         InModuleScope $script:Module {
             # less unchecked; the pager-override prompt must not run.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Bat', 'Fd', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Completions') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
-            $s.Skip | Should -Contain 'Less'
+            $s.Enable | Should -Not -Contain 'Less'
             $s.ReplaceMore | Should -BeFalse
             Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
         }
     }
 
-    It 'adds Banner to Skip and skips the theming sub-steps when the banner is declined' {
+    It 'sets NoBanner and skips the theming sub-steps when the banner is declined' {
         InModuleScope $script:Module {
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }
 
             $s = Invoke-PwshProfileWizard
-            $s.Skip | Should -Contain 'Banner'
+            $s.NoBanner | Should -BeTrue
             # Banner text keeps the default machine-name value (the prompts never ran).
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
             Should -Invoke Read-SpectreSelection -Times 0 -Exactly -ParameterFilter { $Message -eq 'Banner alignment' }
@@ -689,7 +751,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Change these banner settings?' }
 
             $s = Invoke-PwshProfileWizard
-            $s.Skip | Should -Not -Contain 'Banner'   # still shown
+            $s.NoBanner | Should -BeFalse   # still shown
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
             Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Show a startup banner?' }
         }
@@ -752,7 +814,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Skip = @(); SkipSection = @(); NerdFont = $null
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
             }
         }
     }
@@ -800,7 +862,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Skip = @(); SkipSection = @(); NerdFont = @('Meslo', 'CascadiaCode')
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = @('Meslo', 'CascadiaCode')
             }
         }
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
@@ -820,7 +882,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Skip = @(); SkipSection = @(); NerdFont = @('Meslo')
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = @('Meslo')
             }
         }
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
@@ -840,7 +902,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Skip = @(); SkipSection = @(); NerdFont = $null
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
                 WingetScope = 'user'; WingetProgressBar = 'retro'
                 WingetAnonymizePath = $true; WingetDisableInstallNote = $false
             }
@@ -861,7 +923,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Skip = @(); SkipSection = @(); NerdFont = $null
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
                 WingetScope = 'user'; WingetProgressBar = 'rainbow'
                 WingetAnonymizePath = $true; WingetDisableInstallNote = $false
             }
