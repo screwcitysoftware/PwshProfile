@@ -4,19 +4,22 @@ function Install-PwshProfile {
         Interactive wizard that wires ScrewCitySoftware.PwshProfile into a PowerShell profile file.
 
     .DESCRIPTION
-        Walks you through a PwshSpectreConsole wizard and writes a marker-wrapped bootstrap block —
-        the module import plus a tailored Initialize-PwshProfile call — into a profile file
-        (by default $PROFILE). It is the one-time setup companion to Initialize-PwshProfile,
-        which then runs every session from inside that block.
+        Walks you through a PwshSpectreConsole wizard and writes a marker-wrapped bootstrap block — a
+        tools snapshot comment plus a tailored Initialize-PwshProfile call (which auto-loads the module
+        when it runs, so no import line is needed) — into a profile file (by default $PROFILE). It is the
+        one-time setup companion to Initialize-PwshProfile, which then runs every session from that block.
+
+        On a re-run it parses the existing block to default each prompt to your previous choices and to
+        flag tools added to the module since (shown "(new)" and starting unchecked).
 
         Note: this wires the module into your profile *file*; it does not install the module itself
         from the gallery (use Install-PSResource ScrewCitySoftware.PwshProfile for that).
 
         The wizard walks one forward pass — an optional Nerd Font install, a set of winget client
         settings, theme, an optional banner (a yes/no that gates the text/color/alignment/font
-        prompts), the step icon, and a grouped feature tree that starts with everything checked
-        (uncheck to opt out; oh-my-posh is always on) — then lands on a review screen where any step
-        can be re-edited before submitting, or the whole setup cancelled without writing. The Nerd
+        prompts), the step icon, and a Features step (pick specific tools from an opt-in tree, or enable
+        everything including future additions; oh-my-posh is always on) — then lands on a review screen
+        where any step can be re-edited before submitting, or the whole setup cancelled without writing. The Nerd
         Font install uses the NerdFonts module (CurrentUser scope, no admin required), defaulting to
         the recommended Meslo + CascadiaCode pairing. The winget settings (default install scope,
         progress-bar style, anonymize-displayed-paths, suppress-install-notes) are pre-filled from
@@ -32,9 +35,9 @@ function Install-PwshProfile {
           - A profile that already contains a bare 'Import-Module ScrewCitySoftware.PwshProfile'
             (no markers) is left untouched unless -Force is given.
 
-        This is a user-invoked setup command (not silent startup), so genuine errors throw. When the
-        Spectre prompt cmdlets are unavailable, it warns and writes the default settings
-        non-interactively rather than failing.
+        This is a user-invoked setup command (not silent startup), so genuine errors throw. It is
+        interactive-only: when the Spectre prompt cmdlets are unavailable it warns that an interactive
+        session is required and makes no changes (rather than guessing at a configuration).
 
     .PARAMETER Path
         The profile file to configure. Defaults to $PROFILE (current user, current host). Pass an
@@ -90,9 +93,10 @@ function Install-PwshProfile {
         [switch]$PassThru
     )
 
-    $def = Get-PwshProfileDefault
-    $accent = $def.BannerColor
-    $code = '#5fd7ff'   # soft cyan for code literals / paths, matching the wizard's highlighting
+    # The wizard's chrome uses fixed colors decoupled from the prompt theme being configured: the
+    # module's signature purple as the accent, soft cyan for code literals / paths.
+    $accent = '#c9aaff'
+    $code = '#5fd7ff'
     $marker = Get-PwshProfileMarker
 
     # Detect an existing managed block so the intro can say "updating" and to drive the wizard.
@@ -104,43 +108,48 @@ function Install-PwshProfile {
         }
     }
 
+    # Interactive-only: the wizard is the only way to make a tool choice, so without prompts there is
+    # nothing sensible to write. Warn and make no changes (no write on a first run; an existing block is
+    # left intact on a re-run) rather than guessing at a configuration.
     $interactive = [bool](Get-Command Read-SpectreSelection -ErrorAction SilentlyContinue)
+    if (-not $interactive) {
+        Write-Warning 'Install-PwshProfile requires an interactive session (PwshSpectreConsole prompts are unavailable); no changes made. Run it in an interactive PowerShell to configure your profile.'
+        return
+    }
 
-    if ($interactive) {
-        Write-Figlet -Text 'Pwsh Profile' -Color $accent
-        if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
-        $pathLine = '`' + $Path + '`'   # render the target path as a cyan code literal
-        $intro = if ($reconfiguring) {
-            "Updating the **ScrewCitySoftware.PwshProfile** bootstrap in:`n$pathLine"
+    # On a re-run, parse the existing managed block so the wizard can default to the prior choices and
+    # flag tools added since (current catalog minus the recorded snapshot). A missing/old snapshot
+    # leaves $newTools empty so nothing is falsely flagged "(new)".
+    $priorSettings = $null
+    $newTools = @()
+    if ($reconfiguring) {
+        $prior = Read-PwshProfileInstalledSetting -Path $Path
+        if ($prior) {
+            $priorSettings = $prior.Settings
+            $snapshot = @($prior.ToolSnapshot)
+            if ($snapshot.Count) {
+                $newTools = @(Get-PwshProfileToolCatalog -Token | Where-Object { $snapshot -notcontains $_ })
+            }
         }
-        else {
-            "This wizard wires **ScrewCitySoftware.PwshProfile** into:`n$pathLine"
-        }
-        Format-PwshProfileHelpMarkup -Text $intro -Accent $accent -Code $code -Body default |
-            Format-SpectrePanel -Header '◆ Profile setup' -Border Rounded -Color $accent -Expand | Out-Host
+    }
 
-        $settings = Invoke-PwshProfileWizard -Reconfiguring:$reconfiguring
+    Write-Figlet -Text 'Pwsh Profile' -Color $accent
+    if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
+    $pathLine = '`' + $Path + '`'   # render the target path as a cyan code literal
+    $intro = if ($reconfiguring) {
+        "Updating the **ScrewCitySoftware.PwshProfile** bootstrap in:`n$pathLine"
     }
     else {
-        Write-Warning 'Install-PwshProfile: PwshSpectreConsole prompts are unavailable; writing default settings non-interactively.'
-        $settings = $def.Clone()
-        # Clone() is shallow, so re-wrap the array values to break aliasing with $def's instances.
-        $settings.Skip = @($def.Skip)
-        $settings.SkipSection = @($def.SkipSection)
-        $settings.NerdFont = $null
-        # Seed the winget settings the same way the wizard would, so a non-interactive install still
-        # applies the user-scope default (existing settings.json values are read first, so this only
-        # adds unset keys / re-affirms current ones).
-        $wingetDef = Get-WingetSettingDefault
-        $settings.WingetScope = $wingetDef.Scope
-        $settings.WingetProgressBar = $wingetDef.ProgressBar
-        $settings.WingetAnonymizePath = $wingetDef.AnonymizePath
-        $settings.WingetDisableInstallNote = $wingetDef.DisableInstallNote
+        "This wizard wires **ScrewCitySoftware.PwshProfile** into:`n$pathLine"
     }
+    Format-PwshProfileHelpMarkup -Text $intro -Accent $accent -Code $code -Body default |
+        Format-SpectrePanel -Header '◆ Profile setup' -Border Rounded -Color $accent -Expand | Out-Host
+
+    $settings = Invoke-PwshProfileWizard -Reconfiguring:$reconfiguring -PriorSetting $priorSettings -NewTool $newTools
 
     # The wizard returns $null when the user cancels at the review screen — write nothing.
     if ($null -eq $settings) {
-        if ($interactive -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
+        if (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue) {
             if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
             '[grey]Setup cancelled — no changes made.[/]' |
                 Format-SpectrePanel -Header '• Cancelled' -Border Rounded -Color Grey -Expand | Out-Host
@@ -187,7 +196,7 @@ function Install-PwshProfile {
 
     $call = Build-PwshProfileInitializeCall -Setting $settings
 
-    if ($interactive -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
+    if (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue) {
         $preview = Get-PwshProfileBlock -InitializeCall $call
         $preview | Format-SpectrePanel -Header "Bootstrap for $Path" -Border Rounded -Color $accent -Expand | Out-Host
     }
@@ -198,7 +207,7 @@ function Install-PwshProfile {
     if ($Force) { $writeArgs.Force = $true }
     $result = Write-PwshProfileBlock @writeArgs
 
-    if ($interactive -and -not $WhatIfPreference -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
+    if (-not $WhatIfPreference -and (Get-Command Format-SpectrePanel -ErrorAction SilentlyContinue)) {
         $color = 'Green'
         $msg = switch ($result.Action) {
             'AlreadyPresent' { 'Already configured — no changes made.' }

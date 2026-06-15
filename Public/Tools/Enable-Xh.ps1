@@ -23,10 +23,8 @@ function Enable-Xh {
     param()
 
     Invoke-Step "Install" {
-        # xh is a winget portable (also ships xhs.exe): its exes land in the Links dir.
-        Install-WingetPackageSafe -Id 'ducaale.xh' -Exe 'xh.exe' `
-            -PathDir (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links') `
-            -CallerName 'Enable-Xh'
+        # xh is a winget portable (also ships xhs.exe): its exes land in the default Links dir.
+        Install-WingetPackageSafe -Id 'ducaale.xh' -Exe 'xh.exe' -CallerName 'Enable-Xh'
     }
 
     Invoke-Step "Initialize" {

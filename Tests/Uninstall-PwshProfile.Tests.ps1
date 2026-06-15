@@ -8,9 +8,8 @@ BeforeAll {
     $script:Close = '# <<< ScrewCitySoftware.PwshProfile bootstrap <<<'
     $script:Block = @(
         $script:Open
-        'Import-Module ScrewCitySoftware.PwshProfile'
-        ''
-        'Initialize-PwshProfile'
+        '# Tools available: PSReadLine,TerminalIcons,PoshGit,Zoxide,Fzf,Fnm,Xh,Jq,Bat,Fd,Less,Completions'
+        'Initialize-PwshProfile -EnableAll'
         $script:Close
     ) -join [Environment]::NewLine
 }
@@ -93,7 +92,7 @@ Describe 'Uninstall-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Skip = @(); SkipSection = @(); NerdFont = $null
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
             }
         }
         Set-Content -LiteralPath $script:Dest -NoNewline -Value "Write-Host 'mine'"

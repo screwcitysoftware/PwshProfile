@@ -29,10 +29,8 @@ function Enable-Jq {
     param()
 
     Invoke-Step "Install" {
-        # jq is a winget portable: its exe lands in the Links dir.
-        Install-WingetPackageSafe -Id 'jqlang.jq' -Exe 'jq.exe' `
-            -PathDir (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links') `
-            -CallerName 'Enable-Jq'
+        # jq is a winget portable: its exe lands in the default Links dir.
+        Install-WingetPackageSafe -Id 'jqlang.jq' -Exe 'jq.exe' -CallerName 'Enable-Jq'
     }
 
     Invoke-Step "Initialize" {

@@ -6,7 +6,7 @@ function Invoke-StepInternal {
     .DESCRIPTION
         Pushes the step's description onto the $script:StepPath breadcrumb and updates the
         spinner whose context Invoke-Step stashed in $script:StepStatusContext (this function
-        assumes it is set) to show the full path, e.g. "🔩 Tools › fnm › Install". When the body
+        assumes it is set) to show the full path, e.g. "🔩 WinGet › fnm › Install". When the body
         finishes the segment is popped and the parent's breadcrumb is restored; the top-level
         segment owns the icon ($script:StepRootIcon) — nested custom icons aren't shown.
 
@@ -53,7 +53,7 @@ function Format-StepStatus {
         markup tags), joins them with ›, and prefixes the top-level step's icon.
 
     .EXAMPLE
-        Format-StepStatus   # e.g. "🔩 Tools › fnm › Install"
+        Format-StepStatus   # e.g. "🔩 WinGet › fnm › Install"
     #>
     $segments = $script:StepPath | ForEach-Object { Get-SpectreEscapedTextSafe $_ }
     return "$(Get-StepIconPrefix $script:StepRootIcon)$($segments -join ' › ')"

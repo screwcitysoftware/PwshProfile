@@ -42,26 +42,40 @@ function Invoke-PwshProfileWizard {
              still-default fields are re-seeded).
           4. Banner: shows the current banner config (shown/hidden plus text/color/alignment/font,
              flagging anything off the theme default) and asks whether to change it — defaulting to No,
-             via Read-PwshProfileSettingChange. On Yes it asks a show/hide yes-no (no disables the
-             banner via -Skip Banner and skips the theming sub-steps; yes prompts text, color,
-             alignment, and bundled font). Clearing the banner text also hides the banner — an empty
-             text renders nothing at startup, so it's treated like a declined banner (-Skip Banner,
-             default text restored) rather than left as a shown-but-blank half-state.
+             via Read-PwshProfileSettingChange. On Yes it asks a show/hide yes-no (no suppresses the
+             banner via -NoBanner and skips the theming sub-steps; yes prompts text, color, alignment,
+             and bundled font). Clearing the banner text also hides the banner — since BannerText must
+             be non-empty, a cleared text is treated like a declined banner (-NoBanner, default text
+             restored) rather than left as a shown-but-blank half-state.
           5. Step icon: always asked (the icon marks every startup step, banner or not) — a curated
              shortcode menu with the current icon floated to the top, plus a "custom shortcode" escape.
-          6. Features: a grouped, all-checked-by-default tree (Read-PwshProfileFeatureTree) under the
-             Shell / Prompt / Tools sections (shell completions sit under Tools); unchecking opts a
-             feature (or a whole section) out, mapped to -Skip / -SkipSection. oh-my-posh is always on
-             and not listed. If zoxide stays enabled, its jump command is prompted.
+          6. Features (opt-in): first a mode choice — pick specific tools, or enable everything
+             including tools added in future updates (-EnableAll). "Specific" shows a grouped tree
+             (Read-PwshProfileFeatureTree) under the Core / WinGet sections (shell completions sit under
+             Core). On a re-run it pre-checks the prior -Enable set; on a clean first run it pre-checks
+             the Core default-on set (WinGet left unchecked). Newly-added tools are tagged "(new)"; the
+             checked set becomes -Enable. oh-my-posh is always on and
+             not listed. If zoxide/bat/less end up enabled, their tuning prompts (jump command, cat→bat,
+             more→less) follow.
 
         Then a review panel summarizes the choices and offers Submit / Edit <step> / Cancel.
 
-        Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and
-        falls back to defaults when they are not.
+        Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and, when
+        they are not, warns that an interactive session is required and makes no changes.
 
     .PARAMETER Reconfiguring
         Indicates the target profile already contains a managed block, so the intro line can say it
         is updating rather than creating. Purely cosmetic.
+
+    .PARAMETER PriorSetting
+        On a re-run, the settings parsed from the existing managed block (via
+        Read-PwshProfileInstalledSetting). Used to seed the wizard so each prompt defaults to last
+        time's choice — the feature tree pre-checks the prior -Enable set, the mode prompt defaults to
+        the prior mode, and theme/banner/icon/tuning prompts pre-fill from it.
+
+    .PARAMETER NewTool
+        Tokens newly available since the prior setup (current catalog minus the recorded snapshot),
+        forwarded to the feature tree so they are tagged "(new)" and start unchecked.
 
     .EXAMPLE
         Invoke-PwshProfileWizard
@@ -72,7 +86,13 @@ function Invoke-PwshProfileWizard {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [switch]$Reconfiguring
+        [switch]$Reconfiguring,
+
+        [Parameter()]
+        [hashtable]$PriorSetting,
+
+        [Parameter()]
+        [string[]]$NewTool = @()
     )
 
     # Shared mutable state, passed by reference into every step so edits from the review hub stick.
@@ -81,8 +101,19 @@ function Invoke-PwshProfileWizard {
     # installer's own UI colors — fixed at the module's signature purple and a soft cyan, and
     # intentionally decoupled from the prompt theme being configured, so the wizard (panels, accents,
     # code-literal highlighting) looks the same whichever theme you pick.
-    $def = Get-PwshProfileDefault
+    # Baseline defaults for the prior theme (so unspecified banner branding inherits that theme's
+    # identity on a re-run), then overlay the parsed prior choices so every prompt defaults to last
+    # time. On a first run PriorSetting is absent and this is just the screwcity defaults.
+    $priorTheme = if ($PriorSetting -and $PriorSetting.ContainsKey('Theme') -and $PriorSetting.Theme) { $PriorSetting.Theme } else { 'screwcity' }
+    $def = Get-PwshProfileDefault -Theme $priorTheme
     $settings = $def.Clone()
+    if ($PriorSetting) {
+        foreach ($k in 'Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont',
+            'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'ReplaceCat', 'ReplaceMore', 'NoBanner',
+            'Enable', 'EnableAll') {
+            if ($PriorSetting.ContainsKey($k)) { $settings[$k] = $PriorSetting[$k] }
+        }
+    }
     $settings.NerdFont = $null
     # winget client settings (applied to winget's settings.json at install time, like NerdFont — not
     # part of the Initialize-PwshProfile bootstrap, so Build-PwshProfileInitializeCall ignores them).
@@ -114,9 +145,11 @@ function Invoke-PwshProfileWizard {
             }
             [pscustomobject]@{ Label = 'Custom path…'; Theme = $null; Custom = $true }
         )
-        # Float the default theme (screwcity) to the top so pressing Enter keeps it.
-        $themeChoices = @($themeChoices | Where-Object { $_.Theme -eq 'screwcity' }) +
-                        @($themeChoices | Where-Object { $_.Theme -ne 'screwcity' })
+        # Float the current theme to the top so pressing Enter keeps it (the prior theme on a re-run,
+        # else the screwcity default).
+        $cur = $s.Settings.Theme
+        $themeChoices = @($themeChoices | Where-Object { $_.Theme -eq $cur }) +
+                        @($themeChoices | Where-Object { $_.Theme -ne $cur })
         $pickTheme = Read-SpectreSelection -Message 'Choose an oh-my-posh theme' -Color $s.Accent -Choices $themeChoices -ChoiceLabelProperty Label
         Write-PwshProfilePromptAnswer $pickTheme.Label -Accent $s.Accent
 
@@ -166,7 +199,7 @@ function Invoke-PwshProfileWizard {
 
         # Show the current banner config, flagging anything off the theme default, then gate (default
         # No) before prompting. Recommended baseline is the current theme's branding ($s.Def).
-        $shown = (@($s.Settings.Skip) -notcontains 'Banner')
+        $shown = -not $s.Settings.NoBanner
         $rows = @([pscustomobject]@{ Label = 'Banner'; Value = $(if ($shown) { 'shown' } else { 'hidden' }); Recommended = 'shown' })
         if ($shown) {
             $rows += [pscustomobject]@{ Label = 'Text';      Value = $s.Settings.BannerText;      Recommended = $s.Def.BannerText }
@@ -178,17 +211,16 @@ function Invoke-PwshProfileWizard {
             return
         }
 
-        if (Read-SpectreConfirm -Message 'Show a startup banner?' -Color $s.Accent -DefaultAnswer 'y') {
-            $s.Settings.Skip = @(@($s.Settings.Skip) | Where-Object { $_ -ne 'Banner' })
+        if (Read-SpectreConfirm -Message 'Show a startup banner?' -Color $s.Accent -DefaultAnswer $(if ($s.Settings.NoBanner) { 'n' } else { 'y' })) {
+            $s.Settings.NoBanner = $false
             Write-PwshProfilePromptHelp 'The text drawn in the banner. `$env:` variables are expanded, so `$env:COMPUTERNAME` shows the machine name. Press Enter to keep the default shown; clear it to hide the banner entirely.' -Accent $s.Accent -Code $s.Code
             $s.Settings.BannerText = Read-SpectreText -Message 'Banner text (supports $env: variables, e.g. $env:COMPUTERNAME)' -DefaultAnswer $s.Settings.BannerText -AllowEmpty
             if ([string]::IsNullOrWhiteSpace($s.Settings.BannerText)) {
-                # An empty banner text renders no banner at startup (Initialize-PwshProfile guards on
-                # it), so treat a cleared text like a declined banner: restore the default text and
-                # hide via -Skip Banner, rather than leaving a "shown but blank" half-state in the
-                # review summary and generated call. Skip the remaining theming prompts.
+                # BannerText must be non-empty (Initialize-PwshProfile rejects empty), so treat a cleared
+                # text like a declined banner: restore the default text and suppress via -NoBanner, rather
+                # than leaving a "shown but blank" half-state. Skip the remaining theming prompts.
                 $s.Settings.BannerText = $s.Def.BannerText
-                $s.Settings.Skip = @(@($s.Settings.Skip) + 'Banner' | Select-Object -Unique)
+                $s.Settings.NoBanner = $true
                 return
             }
             Write-PwshProfilePromptHelp 'Color of the banner text — a Spectre color name (e.g. `Aqua`) or a hex value (e.g. `#c9aaff`).' -Accent $s.Accent -Code $s.Code
@@ -214,8 +246,8 @@ function Invoke-PwshProfileWizard {
             }
         }
         else {
-            # No banner: disable it via -Skip Banner (deduped), leaving feature skips intact.
-            $s.Settings.Skip = @(@($s.Settings.Skip) + 'Banner' | Select-Object -Unique)
+            # No banner: suppress it via -NoBanner.
+            $s.Settings.NoBanner = $true
         }
     }
 
@@ -256,30 +288,40 @@ function Invoke-PwshProfileWizard {
     $stepFeatures = {
         param($s, $i, $total)
         Write-PwshProfileStepHeader -Title 'Features' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
-            -Body 'Pick which startup features run — everything is checked by default, so uncheck to opt out. **oh-my-posh** always runs and has no checkbox.'
-        $skip = @($s.Settings.Skip)
-        # Current checked state per feature token (everything on unless previously skipped).
-        $enabledMap = @{
-            PSReadLine    = ($skip -notcontains 'PSReadLine')
-            TerminalIcons = ($skip -notcontains 'TerminalIcons')
-            PoshGit       = ($skip -notcontains 'PoshGit')
-            Zoxide        = ($skip -notcontains 'Zoxide')
-            Fzf           = ($skip -notcontains 'Fzf')
-            Fnm           = ($skip -notcontains 'Fnm')
-            Xh            = ($skip -notcontains 'Xh')
-            Completions   = ($skip -notcontains 'Completions')
-        }
-        $selected = @(Read-PwshProfileFeatureTree -Enabled $enabledMap -Color $s.Accent -CodeColor $s.Code)
+            -Body 'Choose which startup tools run (opt-in). **oh-my-posh** always draws the prompt; pick the rest.'
+        $catalog = Get-PwshProfileToolCatalog -Token
 
-        # Anything unchecked becomes an individual -Skip token (Completions included — it runs as a
-        # sub-step under Tools); keep the Banner skip (owned by the banner step). The wizard never
-        # emits -SkipSection: unchecking a whole section in the tree just unchecks its leaves.
-        $newSkip = @(@($skip | Where-Object { $_ -eq 'Banner' }))
-        foreach ($t in 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Completions') {
-            if ($selected -notcontains $t) { $newSkip += $t }
+        # Selection mode: a specific set, or everything (including tools added in future updates). Float
+        # the prior mode to the top so pressing Enter keeps it.
+        $modeSpecific = 'Pick specific tools'
+        $modeAll = 'Enable everything, including tools added in future updates'
+        $modeChoices = if ($s.Settings.EnableAll) { @($modeAll, $modeSpecific) } else { @($modeSpecific, $modeAll) }
+        Write-PwshProfilePromptHelp @(
+            '**Pick specific tools** — choose each tool yourself; nothing else installs, and tools added to the module later stay off until you re-run setup and select them.'
+            '**Enable everything** — install every current tool *and* automatically adopt any tool added in future module updates, with no prompt. Convenient, but opts into future installs.'
+        ) -Accent $s.Accent -Code $s.Code
+        $mode = Read-SpectreSelection -Message 'How should startup tools be selected?' -Color $s.Accent -Choices $modeChoices
+        Write-PwshProfilePromptAnswer $mode -Accent $s.Accent
+
+        if ($mode -eq $modeAll) {
+            # Everything on (and future tools auto-adopted); the tuning prompts below all apply.
+            $s.Settings.EnableAll = $true
+            $s.Settings.Enable = @($catalog)
+            $selected = @($catalog)
         }
-        $s.Settings.Skip = $newSkip
-        $s.Settings.SkipSection = @()
+        else {
+            $s.Settings.EnableAll = $false
+            # Seed the tree: a genuine prior -Enable (re-run) pre-checks that selection; otherwise
+            # (a first run, or a prior -EnableAll switching to specific) pre-check the clean-install
+            # default-on set — Core checked, WinGet unchecked. New tools are tagged (new).
+            $hasPriorEnable = ($PriorSetting -and $PriorSetting.ContainsKey('Enable'))
+            $seed = if ($hasPriorEnable) { @($s.Settings.Enable) } else { @(Get-PwshProfileToolCatalog -DefaultEnabled) }
+            $enabledMap = @{}
+            foreach ($t in $catalog) { $enabledMap[$t] = ($seed -contains $t) }
+            $selected = @(Read-PwshProfileFeatureTree -Enabled $enabledMap -New $NewTool -Color $s.Accent -CodeColor $s.Code)
+            # Store in canonical catalog order.
+            $s.Settings.Enable = @($catalog | Where-Object { $selected -contains $_ })
+        }
 
         if ($selected -contains 'Zoxide') {
             Write-PwshProfilePromptHelp @(
@@ -288,6 +330,30 @@ function Invoke-PwshProfileWizard {
                 'Prefer `z` to leave the built-in cd untouched and add a separate `z` command (the zoxide convention). Press Enter to keep `cd`.'
             ) -Accent $s.Accent -Code $s.Code
             $s.Settings.ZoxideCommand = Read-SpectreText -Message "zoxide's jump command (replaces cd)" -DefaultAnswer $s.Settings.ZoxideCommand
+        }
+
+        if ($selected -contains 'Bat') {
+            Write-PwshProfilePromptHelp @(
+                '**bat** is a `cat` with syntax highlighting, line numbers, and git change marks; its colors are themed to match your prompt.'
+                'Replace the built-in `cat` (an alias for `Get-Content`) with **bat**, so `cat file` renders highlighted? Plain redirection and piping still work.'
+            ) -Accent $s.Accent -Code $s.Code
+            $s.Settings.ReplaceCat = [bool](Read-SpectreConfirm -Message 'Replace the built-in cat (Get-Content) with bat?' -Color $s.Accent -DefaultAnswer 'y')
+        }
+        else {
+            # bat is opted out, so the cat-override setting is moot — keep it off.
+            $s.Settings.ReplaceCat = $false
+        }
+
+        if ($selected -contains 'Less') {
+            Write-PwshProfilePromptHelp @(
+                '**less** is a full-featured pager (color, search, backward scroll) — far beyond the built-in `more.com`; it is also what lets **bat** page with color.'
+                'Make less the default pager? This sets `$env:PAGER` to less (so `help` and color CLIs page through it) and aliases `more` -> less. `more.com` stays available.'
+            ) -Accent $s.Accent -Code $s.Code
+            $s.Settings.ReplaceMore = [bool](Read-SpectreConfirm -Message 'Make less the default pager (replace more)?' -Color $s.Accent -DefaultAnswer 'y')
+        }
+        else {
+            # less is opted out, so the pager-override setting is moot — keep it off.
+            $s.Settings.ReplaceMore = $false
         }
     }
 
@@ -394,18 +460,32 @@ function Invoke-PwshProfileWizard {
             "custom: [$code]$(& $esc $set.CustomTheme)[/]"
         }
         else { "[$accent]$($set.Theme)[/]" }
-        $bannerOff = (@($set.Skip) -contains 'Banner')
+        $bannerOff = [bool]$set.NoBanner
         $bannerLine = if ($bannerOff) {
             '[grey]off[/]'
         }
         else {
             "'$(& $esc $set.BannerText)' [grey]/[/] $(Format-PwshProfileColorValue $set.BannerColor) [grey]/[/] $($set.BannerAlignment) [grey]/[/] [$code]$($set.BannerFont)[/]"
         }
-        $disabled = @(@($set.Skip) | Where-Object { $_ -ne 'Banner' }) + @($set.SkipSection)
-        $featuresLine = if ($disabled.Count) {
-            "all except [$code]$($disabled -join ', ')[/]"
+        # Feature summary: everything (and future), the chosen set, or nothing.
+        $enabledList = @($set.Enable)
+        $featuresLine = if ($set.EnableAll) {
+            '[grey]all tools + future additions[/]'
         }
-        else { '[grey]all enabled[/]' }
+        elseif ($enabledList.Count) {
+            "[$code]$($enabledList -join ', ')[/]"
+        }
+        else { '[grey]none[/]' }
+        $batOn = $set.EnableAll -or ($enabledList -contains 'Bat')
+        $lessOn = $set.EnableAll -or ($enabledList -contains 'Less')
+        # Note the cat -> bat takeover, when opted in and bat is enabled.
+        if ($set.ReplaceCat -and $batOn) {
+            $featuresLine += " [grey]·[/] [$code]cat→bat[/]"
+        }
+        # Note the more -> less takeover, when opted in and less is enabled.
+        if ($set.ReplaceMore -and $lessOn) {
+            $featuresLine += " [grey]·[/] [$code]more→less[/]"
+        }
         $fontsLine = if (@($set.NerdFont).Count) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }

@@ -54,8 +54,8 @@ Describe 'Invoke-Step' {
     }
 
     It 'shows the deep path for multiply nested steps' {
-        Invoke-Step 'Tools' { Invoke-Step 'fnm' { Invoke-Step 'Install' { } } } -Icon '⚡'
-        $script:CapturedContext.History | Should -Contain '⚡ Tools › fnm › Install'
+        Invoke-Step 'WinGet' { Invoke-Step 'fnm' { Invoke-Step 'Install' { } } } -Icon '⚡'
+        $script:CapturedContext.History | Should -Contain '⚡ WinGet › fnm › Install'
     }
 
     It 'uses a custom top-level icon as the breadcrumb prefix' {

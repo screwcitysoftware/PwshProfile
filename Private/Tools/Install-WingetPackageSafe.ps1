@@ -29,8 +29,11 @@ function Install-WingetPackageSafe {
 
     .PARAMETER PathDir
         The directory the package's exe lands in, appended to this session's $env:Path if not
-        already present. winget portables use $env:LOCALAPPDATA\Microsoft\WinGet\Links; installer
-        packages (e.g. oh-my-posh) use their own program dir.
+        already present. Optional: when omitted it defaults to the winget portable Links directory
+        ($env:LOCALAPPDATA\Microsoft\WinGet\Links), which the portable enablers (bat, xh, jq, fzf,
+        fd, zoxide, fnm) all share. Installer packages (e.g. oh-my-posh) pass their own program dir.
+        The default is resolved only after the already-installed short-circuit, so a present tool
+        never builds the path.
 
     .PARAMETER Scope
         Optional install scope: 'user' or 'machine'. Maps to Install-WinGetPackage's -Scope
@@ -41,8 +44,9 @@ function Install-WingetPackageSafe {
         identifiable (e.g. 'Enable-Zoxide').
 
     .EXAMPLE
-        Install-WingetPackageSafe -Id 'ajeetdsouza.zoxide' -Exe 'zoxide.exe' `
-            -PathDir (Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links') -CallerName 'Enable-Zoxide'
+        Install-WingetPackageSafe -Id 'ajeetdsouza.zoxide' -Exe 'zoxide.exe' -CallerName 'Enable-Zoxide'
+
+        A winget portable: -PathDir is omitted, so it defaults to the WinGet\Links directory.
 
     .EXAMPLE
         Install-WingetPackageSafe -Id 'JanDeDobbeleer.OhMyPosh' -Exe 'oh-my-posh.exe' `
@@ -62,8 +66,8 @@ function Install-WingetPackageSafe {
         [Parameter(Mandatory, Position = 1)]
         [string]$Exe,
 
-        [Parameter(Mandatory, Position = 2)]
-        [string]$PathDir,
+        [Parameter(Position = 2)]
+        [string]$PathDir = '',
 
         [Parameter()]
         [ValidateSet('user', 'machine')]
@@ -75,6 +79,12 @@ function Install-WingetPackageSafe {
 
     # Short-circuit BEFORE loading the module: an already-installed tool costs nothing at startup.
     if (Get-Command $Exe -ErrorAction SilentlyContinue) { return }
+
+    # Resolve the default Links dir only after the short-circuit, so a present tool never builds it.
+    # Most enablers install winget portables, which all land in this shared directory.
+    if ([string]::IsNullOrEmpty($PathDir)) {
+        $PathDir = Join-Path $env:LOCALAPPDATA 'Microsoft\WinGet\Links'
+    }
 
     Import-ModuleSafe Microsoft.WinGet.Client
     if (-not (Get-Command Install-WinGetPackage -ErrorAction SilentlyContinue)) {
