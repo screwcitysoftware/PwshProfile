@@ -131,6 +131,14 @@ function Enable-Fzf {
         wiring ($env:FZF_DEFAULT_COMMAND) lives in Enable-Fd. The preview is Ctrl+T-scoped on purpose:
         zoxide's `cdi`/`zi` reads only FZF_DEFAULT_OPTS, so keeping the preview out of it leaves the
         directory picker clean.
+
+        PSFzf double-quotes any completion candidate containing whitespace — including the trailing
+        "this token is complete" space that several completers append (argcomplete-based `az`, Cobra
+        CLIs in MenuComplete mode like `gh`/`tailscale`/`op`, winget) — so those would insert as
+        `"account "` instead of `account `. After importing PSFzf this calls
+        Repair-PsFzfCompletionQuoting, which trims that trailing space inside PSFzf's own quoting
+        helper so fuzzy completions insert unquoted (completers that emit no trailing space, e.g.
+        posh-git's git completer, were already fine and stay unchanged).
     #>
     [CmdletBinding()]
     param(
@@ -225,6 +233,13 @@ function Enable-Fzf {
             $needPsfzf = $psfzf.Count -gt 0 -or -not [string]::IsNullOrWhiteSpace($TabExpansionChord)
             if ($needPsfzf) {
                 Import-ModuleSafe PSFzf
+                # PSFzf double-quotes any completion candidate containing whitespace — including
+                # the trailing "complete" space that argcomplete (az), Cobra MenuComplete
+                # (gh/tailscale/op), and winget append — so they'd insert as `"account "`. Patch
+                # PSFzf's FixCompletionResult to trim that trailing space so fuzzy completions
+                # insert unquoted. No-op when PSFzf didn't load. Benefits Ctrl+T too, not just the
+                # Tab-expansion chord, so it runs whenever PSFzf is imported.
+                Repair-PsFzfCompletionQuoting
                 if ($psfzf.Count -gt 0 -and (Get-Command Set-PsFzfOption -ErrorAction SilentlyContinue)) {
                     Set-PsFzfOption @psfzf
                 }

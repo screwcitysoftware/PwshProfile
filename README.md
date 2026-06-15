@@ -190,7 +190,7 @@ fzf adds interactive fuzzy pickers bound to keys in your shell (via PSFzf):
 - **Ctrl+T** — fuzzy-pick a file or directory and drop its path at the cursor (with a `bat` preview).
 - **Ctrl+R** — fuzzy-search your command history.
 - **Ctrl+G** chords — fuzzy git pickers (files, branches, hashes, …) when you're inside a repo.
-- **Ctrl+Spacebar** — fuzzy completion: opens an fzf picker over what `Tab` would complete (paths, command/parameter names, and every registered completer). `Tab` itself stays the classic `MenuComplete` menu.
+- **Ctrl+Spacebar** — fuzzy completion: opens an fzf picker over what `Tab` would complete (paths, command/parameter names, and every registered completer — `gh`, `az`, `winget`, …, all inserting cleanly). `Tab` itself stays the classic `MenuComplete` menu.
 
 In any picker: type to filter, arrows or Tab to move, Enter to accept, Esc to cancel.
 
@@ -762,7 +762,11 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   git is on PATH). `-TabExpansionChord` binds a chord to PSFzf's `Invoke-FzfTabCompletion` (via
   `Set-PSReadLineKeyHandler`, since `Set-PsFzfOption -TabExpansion` only ever targets `Tab`), opening a
   fuzzy fzf picker over PowerShell's native completions — paths, command/parameter names, and every
-  registered completer — while leaving `Tab` as the classic `MenuComplete`. `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
+  registered completer — while leaving `Tab` as the classic `MenuComplete`. After importing PSFzf it
+  also patches PSFzf's internal `FixCompletionResult` (which otherwise double-quotes any candidate
+  containing whitespace) to trim the trailing "complete" space many completers append, so external-CLI
+  fuzzy completions (`gh`, `az`, `winget`, …) insert as `az account ` rather than `az "account "`.
+  `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
   widget-only opts, read in preference to `$env:FZF_DEFAULT_OPTS`): without it PSFzf forces an inline
   `--height=40%`; `Initialize-PwshProfile` passes `100%` so the pickers fill the shell, while
   `$env:FZF_DEFAULT_OPTS` stays height-free so a bare `fzf` keeps its alternate-screen fullscreen.
