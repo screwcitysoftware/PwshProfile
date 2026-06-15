@@ -61,7 +61,7 @@ function Enable-FastNodeManager {
             # always (re)install the wrapper, so reloading the profile in a live session repairs or
             # updates the hook rather than leaving a stale one frozen behind the guard.
             Invoke-InGlobalScope @'
-if (-not $global:__fnm_loc_hooked) {
+if (-not (Get-Variable -Name __fnm_loc_hooked -Scope Global -ErrorAction SilentlyContinue)) {
     $global:__fnm_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
     $global:__fnm_loc_hooked = $true
 }

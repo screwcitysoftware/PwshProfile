@@ -47,8 +47,14 @@ Describe 'Enable-FastNodeManager' {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $script:savedLoc
         Set-Location $script:savedPwd
         Remove-Item -LiteralPath $script:testRoot -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item Function:global:fnm -ErrorAction SilentlyContinue
-        Remove-Variable -Name FnmUseCalls, __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
+        # Remove any global function shims the tests defined. The Function: provider does NOT honor a
+        # 'global:' scope qualifier in the path (Remove-Item Function:global:X is a silent no-op), so
+        # use the bare name — it resolves to the global function and removes it, unshadowing the cmdlet.
+        # Done here (not inline) so a shim never leaks into later test files even if a test throws —
+        # a leaked Out-Host reading the cleared $global:OutHostHits breaks every later test under
+        # Set-StrictMode -Version Latest (how CI runs the suite).
+        Remove-Item Function:fnm, Function:Out-Host -ErrorAction SilentlyContinue
+        Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan, __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'registers a location hook even when zoxide is absent' {
@@ -78,7 +84,6 @@ Describe 'Enable-FastNodeManager' {
 
         $global:BaseRan     | Should -Be 1
         $global:FnmUseCalls | Should -Be 0
-        Remove-Variable -Name BaseRan -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'is reload-safe: re-running re-installs without stacking fnm calls' {
@@ -101,8 +106,5 @@ Describe 'Enable-FastNodeManager' {
         Set-Location $script:nodeDir
 
         $global:OutHostHits | Should -BeGreaterThan 0
-
-        Remove-Item Function:global:Out-Host -ErrorAction SilentlyContinue
-        Remove-Variable -Name OutHostHits -Scope Global -ErrorAction SilentlyContinue
     }
 }
