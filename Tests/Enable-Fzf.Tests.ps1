@@ -39,9 +39,22 @@ Describe 'Enable-Fzf' {
         $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --color=pointer:#c9aaff'
     }
 
-    It 'folds --style into FZF_DEFAULT_OPTS unconditionally (no version gate)' {
+    It 'folds --style into FZF_DEFAULT_OPTS when fzf is new enough (>=0.54)' {
+        Mock -ModuleName $script:Module Get-FzfVersion { [version]'0.54' }
         Enable-Fzf -Style full
         $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --style=full'
+    }
+
+    It 'skips --style when the installed fzf is older than 0.54 (would reject the option)' {
+        Mock -ModuleName $script:Module Get-FzfVersion { [version]'0.40' }
+        Enable-Fzf -Style full
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi'
+    }
+
+    It 'skips --style when the fzf version cannot be determined' {
+        Mock -ModuleName $script:Module Get-FzfVersion { $null }
+        Enable-Fzf -Style full
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi'
     }
 
     It 'scopes the preview to FZF_CTRL_T_OPTS and never leaks it into the global opts' {

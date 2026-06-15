@@ -48,9 +48,10 @@ function Enable-Fzf {
 
     .PARAMETER Style
         An fzf `--style` UI preset ('default', 'minimal', or 'full'). When non-empty it is folded
-        into $env:FZF_DEFAULT_OPTS as "--style=<preset>". `--style` is an fzf 0.54+ feature; it is
-        applied unconditionally, since the Install substep just installed/confirmed fzf via winget
-        (always a current build). Initialize-PwshProfile passes 'full'.
+        into $env:FZF_DEFAULT_OPTS as "--style=<preset>". `--style` is an fzf 0.54+ feature, so it is
+        applied only when the installed fzf is new enough (checked once via Get-FzfVersion) — a
+        pre-existing older fzf that the install short-circuit didn't upgrade would otherwise fail on
+        the unknown option. Initialize-PwshProfile passes 'full'.
 
     .PARAMETER Height
         An fzf `--height` value for the PSFzf PSReadLine widgets (Ctrl+T/Ctrl+R/git), e.g. '100%'
@@ -153,11 +154,16 @@ function Enable-Fzf {
             # process-global. --ansi renders ANSI-colored source output (e.g. fd --color=always).
             $opts = [System.Collections.Generic.List[string]]::new()
             $opts.Add('--ansi')
-            # --style is folded in unconditionally: the Install substep just installed/confirmed fzf
-            # via winget, which always ships a current (>=0.54, where --style landed) build, so there's
-            # no pre-0.54 case left to guard — and probing `fzf --version` here would cost a subprocess
-            # on every startup.
-            if (-not [string]::IsNullOrWhiteSpace($Style)) { $opts.Add("--style=$Style") }
+            # --style is an fzf 0.54+ feature. The Install substep short-circuits when fzf.exe is
+            # already on PATH, so it can't assume winget just supplied a current build — a pre-existing
+            # older fzf would choke on --style and fail *every* fzf invocation (and zoxide's cdi). So
+            # gate on the installed version (one `fzf --version` probe per session, via Get-FzfVersion,
+            # and only when a -Style was actually requested); an undeterminable version ($null) is
+            # treated as too-old and skips --style.
+            if (-not [string]::IsNullOrWhiteSpace($Style)) {
+                $fzfVersion = Get-FzfVersion
+                if ($fzfVersion -and $fzfVersion -ge [version]'0.54') { $opts.Add("--style=$Style") }
+            }
             if (-not [string]::IsNullOrWhiteSpace($Colors)) { $opts.Add("--color=$Colors") }
 
             # Always assign OPTS so --ansi is a guaranteed baseline: Enable-Fd's `fd --color=always`

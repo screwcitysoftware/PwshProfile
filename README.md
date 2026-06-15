@@ -373,6 +373,7 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Tools/
 │   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers (-PathDir defaults to the WinGet\Links dir)
 │   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
+│   │   ├── Get-FzfVersion.ps1            # parses `fzf --version` so Enable-Fzf only adds --style on fzf 0.54+
 │   │   └── Completions/
 │   │       └── Register-CobraCompletion.ps1 # shared engine for Cobra CLIs (tailscale, op) — wrapped by the Enable-* enablers
 │   ├── Rendering/
@@ -748,8 +749,9 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   [-ProviderChord <chord>] [-HistoryChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
   `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi`) from
-  `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full`); it carries **no**
-  `--preview`, so directory pickers stay clean. `-PreviewCommand` is
+  `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full` — added only when the
+  installed fzf is **0.54+**, since an older pre-existing fzf would reject the unknown option); it
+  carries **no** `--preview`, so directory pickers stay clean. `-PreviewCommand` is
   written to `$env:FZF_CTRL_T_OPTS` instead — scoped to the **Ctrl+T file picker** (so the bat
   preview shows for file searches but never for directory pickers like zoxide's `cdi`). Because fzf
   ships **no** PowerShell key bindings, `-ProviderChord`/`-HistoryChord`/`-UseFd`/`-GitKeyBindings`
@@ -766,11 +768,14 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   lives in `Enable-Fd`. zoxide's interactive picker (`cdi` / `zi`) reuses
   fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
-  strategy) and completions, and registers a `LocationChangedAction` hook so every directory change
-  (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …) runs `fnm use --silent-if-unchanged`,
-  auto-switching the node version. The hook fires with or without zoxide and regardless of zoxide's
-  jump command — it chains any existing `LocationChangedAction` and won't re-register on reload — so
-  there's no ordering requirement relative to `Enable-Zoxide`.
+  strategy) and completions, and registers a `LocationChangedAction` hook that fires on every
+  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). The hook walks up from
+  the new directory for a version file (`.node-version` / `.nvmrc`) and runs
+  `fnm use --silent-if-unchanged` **only inside a Node project** — so moving around a non-Node tree
+  doesn't spawn fnm or print its "can't find version file" error on every change. It fires with or
+  without zoxide and regardless of zoxide's jump command — chaining any existing
+  `LocationChangedAction` and not re-registering on reload — so there's no ordering requirement
+  relative to `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
   `http`/`https` to them globally, and registers tab completion for all four names.
 - **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`

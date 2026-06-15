@@ -85,7 +85,11 @@ function Read-PwshProfileInstalledSetting {
                 return @($node.Elements | ForEach-Object { & $scalar $_ })
             }
             if ($node -is [System.Management.Automation.Language.ArrayExpressionAst]) {
-                # e.g. @() -> no sub-statements; flatten any element constants otherwise.
+                # Handles the @(...) form, e.g. `-Enable @()` (no sub-statements -> empty) or
+                # `-Enable @('Zoxide','Bat')`. This is tuned to the array shape Build-PwshProfile-
+                # InitializeCall emits, where every element is a plain string literal; the recursive
+                # FindAll harvests those constants. It is NOT a general expression evaluator — for an
+                # arbitrary @(...) it would also collect strings nested in sub-expressions.
                 $items = @($node.FindAll({
                             $args[0] -is [System.Management.Automation.Language.StringConstantExpressionAst]
                         }, $true) | ForEach-Object { $_.Value })

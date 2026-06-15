@@ -93,9 +93,10 @@ function Install-PwshProfile {
         [switch]$PassThru
     )
 
-    $def = Get-PwshProfileDefault
-    $accent = $def.BannerColor
-    $code = '#5fd7ff'   # soft cyan for code literals / paths, matching the wizard's highlighting
+    # The wizard's chrome uses fixed colors decoupled from the prompt theme being configured: the
+    # module's signature purple as the accent, soft cyan for code literals / paths.
+    $accent = '#c9aaff'
+    $code = '#5fd7ff'
     $marker = Get-PwshProfileMarker
 
     # Detect an existing managed block so the intro can say "updating" and to drive the wizard.

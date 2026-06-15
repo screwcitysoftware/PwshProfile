@@ -32,14 +32,21 @@ Describe 'Enable-FastNodeManager' {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $null
         Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
 
-        # Two distinct real directories to move between so Set-Location genuinely changes location.
-        $script:dirA = $env:TEMP
-        $script:dirB = Split-Path $env:TEMP -Parent
+        # An isolated temp tree with two real directories to move between: one IS a Node project
+        # (carries a .node-version file), one is not. The hook only runs `fnm use` when a version
+        # file resolves walking up from the new directory, so both paths must be exercisable.
+        $script:testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fnmtest_" + [guid]::NewGuid().ToString('N'))
+        $script:nodeDir  = Join-Path $script:testRoot 'project'
+        $script:plainDir = Join-Path $script:testRoot 'plain'
+        New-Item -ItemType Directory -Path $script:nodeDir  -Force | Out-Null
+        New-Item -ItemType Directory -Path $script:plainDir -Force | Out-Null
+        Set-Content -LiteralPath (Join-Path $script:nodeDir '.node-version') -Value 'v20.0.0'
     }
 
     AfterEach {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $script:savedLoc
         Set-Location $script:savedPwd
+        Remove-Item -LiteralPath $script:testRoot -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item Function:global:fnm -ErrorAction SilentlyContinue
         Remove-Variable -Name FnmUseCalls, __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
     }
@@ -49,29 +56,35 @@ Describe 'Enable-FastNodeManager' {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction | Should -Not -BeNullOrEmpty
     }
 
-    It 'runs fnm use on a real directory change' {
+    It 'runs fnm use when changing into a Node project (version file present)' {
         Enable-FastNodeManager
-        Set-Location $script:dirA
-        Set-Location $script:dirB
-        $global:FnmUseCalls | Should -Be 2
+        Set-Location $script:nodeDir
+        $global:FnmUseCalls | Should -Be 1
     }
 
-    It 'chains a pre-existing LocationChangedAction' {
+    It 'does not run fnm use in a directory with no version file' {
+        Enable-FastNodeManager
+        Set-Location $script:plainDir
+        $global:FnmUseCalls | Should -Be 0
+    }
+
+    It 'chains a pre-existing LocationChangedAction even outside a Node project' {
+        # The base handler runs on every change regardless of the version-file gate; only fnm use is gated.
         $global:BaseRan = 0
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = { $global:BaseRan++ }
 
         Enable-FastNodeManager
-        Set-Location $script:dirA
+        Set-Location $script:plainDir
 
         $global:BaseRan     | Should -Be 1
-        $global:FnmUseCalls | Should -Be 1
+        $global:FnmUseCalls | Should -Be 0
         Remove-Variable -Name BaseRan -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'is reload-safe: re-running re-installs without stacking fnm calls' {
         Enable-FastNodeManager
         Enable-FastNodeManager      # simulates Import-Module -Force; . $PROFILE in a live session
-        Set-Location $script:dirA
+        Set-Location $script:nodeDir
         $global:FnmUseCalls | Should -Be 1
     }
 
@@ -85,7 +98,7 @@ Describe 'Enable-FastNodeManager' {
         function global:fnm { if ($args -contains 'use') { 'Using Node v1.2.3' } else { '# fnm stub' } }
 
         Enable-FastNodeManager
-        Set-Location $script:dirA
+        Set-Location $script:nodeDir
 
         $global:OutHostHits | Should -BeGreaterThan 0
 
