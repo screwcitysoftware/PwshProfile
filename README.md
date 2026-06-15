@@ -967,6 +967,11 @@ if it's missing.
 Invoke-Pester -Path ./Tests
 ```
 
+That's the quick inner loop, but it skips PSScriptAnalyzer and does **not** set
+`Set-StrictMode -Version Latest` — so it can hide failures CI catches (e.g. reads of unset
+variables, lint findings). Before pushing, run the checks the way CI does with
+`./build.ps1 -Task Analyze, Test` (see [Build & release](#build--release)).
+
 ### Build & release
 
 [`build.ps1`](build.ps1) is a dependency-free task runner — each `-Task` maps to a function and
