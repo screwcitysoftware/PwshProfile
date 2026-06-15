@@ -383,8 +383,10 @@ function Initialize-PwshProfile {
                     # -UseFd follows whether fd is enabled (PSFzf uses fd for traversal); -GitKeyBindings
                     # is always requested and Enable-Fzf drops it when git isn't on PATH. -Height '100%'
                     # makes those PSFzf widgets fill the shell instead of PSFzf's inline 40% default.
+                    # -TabExpansionChord puts PSFzf's fuzzy completion picker on Ctrl+Spacebar (a chord
+                    # that otherwise just duplicates Tab's MenuComplete), leaving Tab = MenuComplete.
                     Enable-Fzf -Colors $FzfColors -Style 'full' -Height '100%' -PreviewCommand $fzfPreview `
-                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' `
+                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
                         -UseFd:($enabled -contains 'Fd') -GitKeyBindings
                 }
             }

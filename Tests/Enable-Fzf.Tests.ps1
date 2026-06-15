@@ -86,4 +86,14 @@ Describe 'Enable-Fzf' {
         Enable-Fzf -ProviderChord 'Ctrl+t'
         Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 1 -Exactly
     }
+
+    It 'binds Invoke-FzfTabCompletion to the chord (not Tab) when -TabExpansionChord is given' {
+        Mock -ModuleName $script:Module Set-PSReadLineKeyHandler { }
+        # Pretend PSFzf is loaded so the Invoke-FzfTabCompletion guard passes.
+        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'Invoke-FzfTabCompletion' }
+        Enable-Fzf -TabExpansionChord 'Ctrl+Spacebar'
+        Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 1 -Exactly
+        Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
+            -ParameterFilter { $Key -eq 'Ctrl+Spacebar' }
+    }
 }

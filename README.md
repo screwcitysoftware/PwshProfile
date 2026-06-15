@@ -190,6 +190,7 @@ fzf adds interactive fuzzy pickers bound to keys in your shell (via PSFzf):
 - **Ctrl+T** — fuzzy-pick a file or directory and drop its path at the cursor (with a `bat` preview).
 - **Ctrl+R** — fuzzy-search your command history.
 - **Ctrl+G** chords — fuzzy git pickers (files, branches, hashes, …) when you're inside a repo.
+- **Ctrl+Spacebar** — fuzzy completion: opens an fzf picker over what `Tab` would complete (paths, command/parameter names, and every registered completer). `Tab` itself stays the classic `MenuComplete` menu.
 
 In any picker: type to filter, arrows or Tab to move, Enter to accept, Esc to cancel.
 
@@ -746,7 +747,7 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 - **`Enable-Zoxide [-Command <name>]`** — installs `ajeetdsouza.zoxide` and runs
   `zoxide init powershell --cmd <name>` (default `cd`, replacing the built-in).
 - **`Enable-Fzf [-Colors <spec>] [-Style <preset>] [-Height <value>] [-PreviewCommand <cmd>]
-  [-ProviderChord <chord>] [-HistoryChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
+  [-ProviderChord <chord>] [-HistoryChord <chord>] [-TabExpansionChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
   `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi`) from
   `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full` — added only when the
@@ -758,12 +759,16 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   install/import the **PSFzf** module and call `Set-PsFzfOption` to bind **Ctrl+T** (fd-sourced file
   picker with the bat preview) and **Ctrl+R** (fuzzy history, overriding native reverse-search), make
   PSFzf use fd for traversal (`-EnableFd`), and register the **Ctrl+G** fuzzy-git chords (only when
-  git is on PATH). `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
+  git is on PATH). `-TabExpansionChord` binds a chord to PSFzf's `Invoke-FzfTabCompletion` (via
+  `Set-PSReadLineKeyHandler`, since `Set-PsFzfOption -TabExpansion` only ever targets `Tab`), opening a
+  fuzzy fzf picker over PowerShell's native completions — paths, command/parameter names, and every
+  registered completer — while leaving `Tab` as the classic `MenuComplete`. `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
   widget-only opts, read in preference to `$env:FZF_DEFAULT_OPTS`): without it PSFzf forces an inline
   `--height=40%`; `Initialize-PwshProfile` passes `100%` so the pickers fill the shell, while
   `$env:FZF_DEFAULT_OPTS` stays height-free so a bare `fzf` keeps its alternate-screen fullscreen.
   `Initialize-PwshProfile` passes the theme blend, `full` style, `100%` height, the bat preview
-  (when bat is in play), `Ctrl+t`/`Ctrl+r`, `-UseFd` (when fd is in play), and `-GitKeyBindings`. fzf
+  (when bat is in play), `Ctrl+t`/`Ctrl+r`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd` (when fd
+  is in play), and `-GitKeyBindings`. fzf
   owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND`)
   lives in `Enable-Fd`. zoxide's interactive picker (`cdi` / `zi`) reuses
   fzf and inherits the `--color`/`--style` baseline.

@@ -31,6 +31,11 @@ function Enable-Fzf {
                 and calls Set-PsFzfOption to bind Ctrl+T (file picker) / Ctrl+R (fuzzy history), make
                 PSFzf use fd for traversal (-EnableFd), and register the Ctrl+G fuzzy-git chords.
                 PSReadLine must load before PSFzf — Initialize-PwshProfile's Shell step ensures that.
+              * When -TabExpansionChord is given, binds that PSReadLine chord to PSFzf's
+                Invoke-FzfTabCompletion (via Set-PSReadLineKeyHandler) so the chord opens a fuzzy fzf
+                picker over PowerShell's native completion candidates. Tab is intentionally left as
+                MenuComplete — Set-PsFzfOption -TabExpansion only ever targets Tab, so a non-Tab chord
+                must be bound directly.
 
         If the install doesn't produce fzf.exe on PATH, a warning is emitted (with winget's
         captured output) and Initialize is skipped (guarded by Get-Command) so profile startup
@@ -80,6 +85,17 @@ function Enable-Fzf {
         non-empty, PSFzf is installed/imported and the binding is registered, overriding PSReadLine's
         native reverse-search on that chord. Empty leaves the chord unbound.
 
+    .PARAMETER TabExpansionChord
+        A PSReadLine chord to bind to PSFzf's Invoke-FzfTabCompletion (e.g. 'Ctrl+Spacebar'). When
+        non-empty, PSFzf is installed/imported and the chord opens a fuzzy fzf picker over PowerShell's
+        native completion candidates — paths, cmdlet/parameter names, and every registered argument
+        completer (winget/az/gh/docker/tailscale/op, posh-git, etc.) — inheriting the theme/height from
+        $env:_PSFZF_FZF_DEFAULT_OPTS. A single candidate inserts directly (no picker). Tab is left
+        untouched (it stays PSReadLine's MenuComplete); Set-PsFzfOption -TabExpansion only ever targets
+        Tab, which is why this binds Invoke-FzfTabCompletion directly. Empty leaves the chord unbound.
+        Initialize-PwshProfile passes 'Ctrl+Spacebar' (a chord that otherwise duplicates Tab's
+        MenuComplete, so repurposing it loses nothing).
+
     .PARAMETER UseFd
         When set, calls Set-PsFzfOption -EnableFd so PSFzf uses fd for its file/directory traversal
         (Initialize-PwshProfile passes this when fd is in play). Set-PsFzfOption only records the
@@ -99,11 +115,12 @@ function Enable-Fzf {
     .EXAMPLE
         Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff' -Style full -Height '100%' `
             -PreviewCommand 'bat --color=always --style=numbers {}' `
-            -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
+            -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
+            -UseFd -GitKeyBindings
 
         Themes fzf (Screw City palette, full UI style), gives the Ctrl+T file picker a bat preview,
-        and (via PSFzf) binds Ctrl+T / Ctrl+R fullscreen, uses fd for traversal, and adds the Ctrl+G
-        git chords.
+        and (via PSFzf) binds Ctrl+T / Ctrl+R fullscreen, puts a fuzzy completion picker on
+        Ctrl+Spacebar (Tab stays MenuComplete), uses fd for traversal, and adds the Ctrl+G git chords.
 
     .NOTES
         Standalone fuzzy finder (https://github.com/junegunn/fzf). fzf ships no PowerShell key
@@ -134,6 +151,9 @@ function Enable-Fzf {
 
         [Parameter()]
         [string]$HistoryChord = '',
+
+        [Parameter()]
+        [string]$TabExpansionChord = '',
 
         [Parameter()]
         [switch]$UseFd,
@@ -195,9 +215,26 @@ function Enable-Fzf {
             if (-not [string]::IsNullOrWhiteSpace($HistoryChord))  { $psfzf.PSReadlineChordReverseHistory = $HistoryChord }
             if ($UseFd) { $psfzf.EnableFd = $true }
             if ($GitKeyBindings -and (Get-Command git -ErrorAction SilentlyContinue)) { $psfzf.GitKeyBindings = $true }
-            if ($psfzf.Count -gt 0) {
+            # -TabExpansionChord also needs PSFzf (it binds PSFzf's Invoke-FzfTabCompletion), so fold it
+            # into the "do we need PSFzf?" decision even though it's not a Set-PsFzfOption option.
+            $needPsfzf = $psfzf.Count -gt 0 -or -not [string]::IsNullOrWhiteSpace($TabExpansionChord)
+            if ($needPsfzf) {
                 Import-ModuleSafe PSFzf
-                if (Get-Command Set-PsFzfOption -ErrorAction SilentlyContinue) { Set-PsFzfOption @psfzf }
+                if ($psfzf.Count -gt 0 -and (Get-Command Set-PsFzfOption -ErrorAction SilentlyContinue)) {
+                    Set-PsFzfOption @psfzf
+                }
+                # Fuzzy completion on its own chord, NOT Tab: Set-PsFzfOption -TabExpansion only ever
+                # targets Tab, so we bind Invoke-FzfTabCompletion directly and leave Tab = MenuComplete.
+                # Invoke-FzfTabCompletion feeds PowerShell's native completions (paths, cmdlet/parameter
+                # names, and every registered argument completer) into fzf, and the picker inherits the
+                # theme + height from $env:_PSFZF_FZF_DEFAULT_OPTS. The scriptblock resolves the global
+                # PSFzf Invoke-FzfTabCompletion at key-press time.
+                if (-not [string]::IsNullOrWhiteSpace($TabExpansionChord) -and
+                    (Get-Command Invoke-FzfTabCompletion -ErrorAction SilentlyContinue)) {
+                    Set-PSReadLineKeyHandler -Key $TabExpansionChord -ScriptBlock { Invoke-FzfTabCompletion } `
+                        -BriefDescription 'FzfTabCompletion' `
+                        -Description 'Fuzzy completion picker via fzf (PSFzf)'
+                }
             }
         }
     }
