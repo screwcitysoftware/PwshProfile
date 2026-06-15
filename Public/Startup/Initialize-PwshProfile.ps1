@@ -13,9 +13,10 @@ function Initialize-PwshProfile {
              install nothing). Everything here except the `which` alias and oh-my-posh is opt-in.
           3. Runs "WinGet" (only when ≥1 winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat, fd, and
              less — the CLIs installed via WinGet. fzf sits next to zoxide (zoxide's interactive picker
-             auto-uses fzf when on PATH), fnm follows zoxide since Enable-FastNodeManager wraps zoxide's
-             cd hook, fd follows fzf so it can wire fzf to use fd as its file source, and less is bat's
-             pager (and PowerShell's, via $env:PAGER).
+             auto-uses fzf when on PATH); fnm registers a LocationChangedAction so it auto-switches the
+             node version on any directory change (independent of zoxide and call order); fd follows fzf
+             so it can wire fzf to use fd as its file source; and less is bat's pager (and PowerShell's,
+             via $env:PAGER).
 
         The two groups mirror the install model: WinGet = tools installed via WinGet (opt-in), Core =
         everything else. Each is its own top-level Invoke-Step (its own status spinner + summary line).

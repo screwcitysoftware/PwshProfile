@@ -77,8 +77,9 @@ Install-PwshProfile        # interactive wizard
 ```
 
 To remove the bootstrap later, run `Uninstall-PwshProfile` (it leaves your installed tools and
-fonts in place). Prefer to wire things up by hand? See [Usage](#usage). The Nerd Font and terminal
-steps below are the manual equivalents of what the wizard offers.
+fonts in place). For more on what the wizard writes and how to call the orchestrator yourself, see
+[Usage](#usage). The Nerd Font and terminal steps below are the manual equivalents of what the
+wizard offers.
 
 ### Install a Nerd Font
 
@@ -147,25 +148,14 @@ tools, and non-interactively it enables none — so prefer `-Enable`/`-EnableAll
 writes one of them). `Initialize-PwshProfile` takes a handful of other options — banner text/color/font,
 a custom theme — all covered under [Exported functions](#exported-functions).
 
-### Wiring it into your profile by hand
+Changing the managed block is best done by **re-running `Install-PwshProfile`** rather than editing
+the call by hand — on a re-run the installer reads the call and the tools snapshot to pre-fill your
+prior choices and flag newly-added tools, so it stays the source of truth for your setup.
 
-If you'd rather not use the wizard, a complete `$PROFILE` is just the one call (the module auto-loads)
-and your own personal extras:
+### Assembling startup yourself (advanced)
 
-```powershell
-Initialize-PwshProfile -Enable Zoxide,Fzf,Bat,Fd
-
-# Personal extras stay in the profile:
-& $PSScriptRoot/Initialize-WorkTools.ps1
-. $PSScriptRoot/aliases.ps1
-```
-
-Changing the managed block is best done by **re-running `Install-PwshProfile`** rather than editing the
-call by hand — on a re-run the installer reads the call and the tools snapshot to pre-fill your prior
-choices and flag newly-added tools.
-
-You can also call the individual building blocks directly if you want to assemble a custom
-startup instead of using `Initialize-PwshProfile`:
+Most people never need this — `Initialize-PwshProfile` is the supported entry point. But if you want
+to assemble a custom startup yourself, you can call the individual building blocks directly instead:
 
 ```powershell
 Write-Figlet 'Screw City' -Font ANSIShadow  # figlet banner in a bundled font
@@ -174,6 +164,93 @@ Invoke-Step "Terminal-Icons"  { Import-ModuleSafe Terminal-Icons }
 ```
 
 Full comment-based help is available on each function via `Get-Help <Name> -Full`.
+
+## Using the tools
+
+Enabling a tool changes how some everyday commands behave. Here's a quick orientation for each —
+just enough to get going; every one of them has more under `<tool> --help`.
+
+### zoxide — a smarter `cd`
+
+By default zoxide takes over `cd`. It remembers the directories you visit, so after you've been
+somewhere once you can jump back by any part of its name instead of typing the full path:
+
+```powershell
+cd proj          # jump to the most-used directory matching "proj"
+cd src test      # match a directory whose path contains both fragments
+cdi              # interactive picker (fzf) over your tracked directories
+```
+
+A plain `cd <full-path>` still works exactly as before — zoxide only adds the shortcut jumps.
+
+### fzf — fuzzy finder (key bindings)
+
+fzf adds interactive fuzzy pickers bound to keys in your shell (via PSFzf):
+
+- **Ctrl+T** — fuzzy-pick a file or directory and drop its path at the cursor (with a `bat` preview).
+- **Ctrl+R** — fuzzy-search your command history.
+- **Ctrl+G** chords — fuzzy git pickers (files, branches, hashes, …) when you're inside a repo.
+
+In any picker: type to filter, arrows or Tab to move, Enter to accept, Esc to cancel.
+
+### fd — fast file find
+
+A friendly, fast `find`. It searches by substring/regex, respects `.gitignore`, and skips hidden
+files unless you ask for them:
+
+```powershell
+fd report                 # files matching "report" under the current directory
+fd -e ps1                 # all .ps1 files
+fd -H -e log              # include hidden files
+fd pattern ./src          # search within a specific path
+```
+
+fd is standalone — it never replaces `Get-ChildItem` / `ls`.
+
+### bat — `cat` with highlighting
+
+Prints files with syntax highlighting, line numbers, and git change marks, paging long files through
+`less`. If you turned on `-ReplaceCat`, plain `cat` *is* bat:
+
+```powershell
+bat README.md             # highlighted, paged
+bat -p script.ps1         # plain output, no decorations
+```
+
+### less — the pager
+
+The pager long output scrolls through — and what `bat`, `git`, and PowerShell's `help` page through
+when `-ReplaceMore` is on. While it's open: arrows / `Space` to scroll, `/text` to search, `q` to quit.
+
+### xh — HTTP client
+
+A fast, friendly HTTP client (HTTPie-style). `http` and `https` are aliased to it:
+
+```powershell
+http GET httpbin.org/get                     # GET, pretty-printed JSON
+https POST api.example.com/users name=jo     # POST a JSON body over HTTPS
+```
+
+### jq — JSON processor
+
+Filters and reshapes JSON on the pipeline — pairs naturally with `xh`:
+
+```powershell
+http GET httpbin.org/json | jq '.slideshow.title'
+Get-Content data.json | jq '.items[].name'
+```
+
+### fnm — Node version manager
+
+Manages multiple Node.js versions. `cd`-ing into a folder with an `.nvmrc` or `.node-version`
+automatically runs `fnm use` for you (it hooks every directory change, with or without zoxide).
+Manually:
+
+```powershell
+fnm install 20      # install Node 20
+fnm use 20          # use it in this session
+fnm list            # show installed versions
+```
 
 ## Themes
 
@@ -461,8 +538,8 @@ In order it shows the startup banner, then runs two top-level `Invoke-Step` sect
 model — **Core** (the `which` global alias, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
 installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less — fzf
-next to zoxide, fnm after zoxide since it hooks zoxide's `cd`, fd after fzf so it can wire fzf to use fd
-as its source, less as bat's/PowerShell's pager). oh-my-posh and the `which` alias always run; everything
+next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
+fzf to use fd as its source, less as bat's/PowerShell's pager). oh-my-posh and the `which` alias always run; everything
 else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
 WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -689,8 +766,11 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   lives in `Enable-Fd`. zoxide's interactive picker (`cdi` / `zi`) reuses
   fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
-  strategy) and completions, and — when zoxide is active — wraps `__zoxide_cd` so every
-  directory change runs `fnm use`. Call after `Enable-Zoxide`.
+  strategy) and completions, and registers a `LocationChangedAction` hook so every directory change
+  (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …) runs `fnm use --silent-if-unchanged`,
+  auto-switching the node version. The hook fires with or without zoxide and regardless of zoxide's
+  jump command — it chains any existing `LocationChangedAction` and won't re-register on reload — so
+  there's no ordering requirement relative to `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
   `http`/`https` to them globally, and registers tab completion for all four names.
 - **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
