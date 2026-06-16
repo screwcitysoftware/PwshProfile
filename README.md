@@ -774,9 +774,10 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   fuzzy completions (`gh`, `az`, `winget`, …) insert as `az account ` rather than `az "account "`.
   `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
   widget-only opts, read in preference to `$env:FZF_DEFAULT_OPTS`): without it PSFzf forces an inline
-  `--height=40%`; `Initialize-PwshProfile` passes `100%` so the pickers fill the shell, while
+  `--height=40%`; `Initialize-PwshProfile` passes `~100%` so the pickers adapt — filling the shell for
+  large result sets but shrinking to fit small ones — while
   `$env:FZF_DEFAULT_OPTS` stays height-free so a bare `fzf` keeps its alternate-screen fullscreen.
-  `Initialize-PwshProfile` passes the theme blend, `full` style, `100%` height, the bat preview
+  `Initialize-PwshProfile` passes the theme blend, `full` style, `~100%` height, the bat preview
   (when bat is in play), `Ctrl+t`/`Ctrl+r`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd` (when fd
   is in play), and `-GitKeyBindings`. fzf
   owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND`)
@@ -826,7 +827,7 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
 Enable-Zoxide
-Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
+Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '~100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
 Enable-FastNodeManager
 Enable-Xh
 Enable-Jq

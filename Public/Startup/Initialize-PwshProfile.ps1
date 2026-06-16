@@ -389,11 +389,12 @@ function Initialize-PwshProfile {
                     $fzfPreview = if ($enabled -contains 'Bat') { 'bat --color=always --style=numbers {}' } else { '' }
                     # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell);
                     # -UseFd follows whether fd is enabled (PSFzf uses fd for traversal); -GitKeyBindings
-                    # is always requested and Enable-Fzf drops it when git isn't on PATH. -Height '100%'
-                    # makes those PSFzf widgets fill the shell instead of PSFzf's inline 40% default.
+                    # is always requested and Enable-Fzf drops it when git isn't on PATH. -Height '~100%'
+                    # makes those PSFzf widgets adaptive — they fill the shell for large result sets but
+                    # shrink to fit small ones — instead of PSFzf's inline 40% default.
                     # -TabExpansionChord puts PSFzf's fuzzy completion picker on Ctrl+Spacebar (a chord
                     # that otherwise just duplicates Tab's MenuComplete), leaving Tab = MenuComplete.
-                    Enable-Fzf -Colors $FzfColors -Style 'full' -Height '100%' -PreviewCommand $fzfPreview `
+                    Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' -PreviewCommand $fzfPreview `
                         -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
                         -UseFd:($enabled -contains 'Fd') -GitKeyBindings
                 }

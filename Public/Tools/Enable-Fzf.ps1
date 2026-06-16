@@ -65,8 +65,8 @@ function Enable-Fzf {
         PSFzf reads in preference to $env:FZF_DEFAULT_OPTS. This overrides PSFzf's built-in
         --height=40% default (which opens the widgets inline below the prompt). Empty leaves that 40%
         default in place. Note: --height renders inline, not on the alternate screen, so it never
-        perfectly matches a bare fzf's fullscreen — 100% is the closest. Initialize-PwshProfile passes
-        '100%'.
+        perfectly matches a bare fzf's fullscreen — 100%/~100% is the closest. Initialize-PwshProfile
+        passes '~100%' (adaptive: fills the shell for large result sets, shrinks to fit small ones).
 
     .PARAMETER PreviewCommand
         A command for the Ctrl+T file picker's `--preview` window, with `{}` standing in for the
@@ -113,7 +113,7 @@ function Enable-Fzf {
         source output renders), leaving $env:FZF_CTRL_T_OPTS untouched and PSFzf uninstalled.
 
     .EXAMPLE
-        Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff' -Style full -Height '100%' `
+        Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff' -Style full -Height '~100%' `
             -PreviewCommand 'bat --color=always --style=numbers {}' `
             -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
             -UseFd -GitKeyBindings

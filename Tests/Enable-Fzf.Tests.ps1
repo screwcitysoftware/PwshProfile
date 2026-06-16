@@ -64,10 +64,10 @@ Describe 'Enable-Fzf' {
     }
 
     It 'sizes the PSFzf widgets via _PSFZF_FZF_DEFAULT_OPTS, leaving the global opts height-free' {
-        Enable-Fzf -Colors 'pointer:#c9aaff' -Height '100%'
+        Enable-Fzf -Colors 'pointer:#c9aaff' -Height '~100%'
         # The PSFzf-only opts carry the base plus the height; the global opts stay height-free so a
         # bare fzf keeps its alternate-screen fullscreen.
-        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi --color=pointer:#c9aaff --height=100%'
+        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi --color=pointer:#c9aaff --height=~100%'
         $env:FZF_DEFAULT_OPTS        | Should -Be '--ansi --color=pointer:#c9aaff'
     }
 
