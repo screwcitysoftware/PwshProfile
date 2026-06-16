@@ -33,8 +33,8 @@ Describe 'Enable-FastNodeManager' {
         Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
 
         # An isolated temp tree with two real directories to move between: one IS a Node project
-        # (carries a .node-version file), one is not. The hook only runs `fnm use` when a version
-        # file resolves walking up from the new directory, so both paths must be exercisable.
+        # (carries a .node-version file), one is not. The hook runs `fnm use` on every filesystem
+        # change regardless, but keeping both lets tests exercise project and non-project moves.
         $script:testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fnmtest_" + [guid]::NewGuid().ToString('N'))
         $script:nodeDir  = Join-Path $script:testRoot 'project'
         $script:plainDir = Join-Path $script:testRoot 'plain'
@@ -68,14 +68,16 @@ Describe 'Enable-FastNodeManager' {
         $global:FnmUseCalls | Should -Be 1
     }
 
-    It 'does not run fnm use in a directory with no version file' {
+    It 'runs fnm use on any directory change (auto-reverts outside a Node project)' {
+        # There is no version-file gate: fnm use runs on every filesystem change and fnm itself
+        # resolves the version (reverting to the default outside a Node project, silent if unchanged).
         Enable-FastNodeManager
         Set-Location $script:plainDir
-        $global:FnmUseCalls | Should -Be 0
+        $global:FnmUseCalls | Should -Be 1
     }
 
-    It 'chains a pre-existing LocationChangedAction even outside a Node project' {
-        # The base handler runs on every change regardless of the version-file gate; only fnm use is gated.
+    It 'chains a pre-existing LocationChangedAction' {
+        # The base handler and fnm use both run on every change.
         $global:BaseRan = 0
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = { $global:BaseRan++ }
 
@@ -83,7 +85,7 @@ Describe 'Enable-FastNodeManager' {
         Set-Location $script:plainDir
 
         $global:BaseRan     | Should -Be 1
-        $global:FnmUseCalls | Should -Be 0
+        $global:FnmUseCalls | Should -Be 1
     }
 
     It 'is reload-safe: re-running re-installs without stacking fnm calls' {

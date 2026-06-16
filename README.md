@@ -243,8 +243,9 @@ Get-Content data.json | jq '.items[].name'
 
 ### fnm — Node version manager
 
-Manages multiple Node.js versions. `cd`-ing into a folder with an `.nvmrc` or `.node-version`
-automatically runs `fnm use` for you (it hooks every directory change, with or without zoxide).
+Manages multiple Node.js versions. Every directory change automatically runs `fnm use` for you
+(it hooks every change, with or without zoxide): `cd` into a folder with an `.nvmrc` or
+`.node-version` and it switches to that version, reverting to your default version when you leave.
 Manually:
 
 ```powershell
@@ -783,12 +784,12 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
   strategy) and completions, and registers a `LocationChangedAction` hook that fires on every
-  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). The hook walks up from
-  the new directory for a version file (`.node-version` / `.nvmrc`) and runs
-  `fnm use --silent-if-unchanged` **only inside a Node project** — so moving around a non-Node tree
-  doesn't spawn fnm or print its "can't find version file" error on every change. It fires with or
-  without zoxide and regardless of zoxide's jump command — chaining any existing
-  `LocationChangedAction` (including zoxide's, which is registered the same way) and not
+  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). On each filesystem
+  change it runs `fnm use --silent-if-unchanged` — fnm resolves the version recursively (reverting
+  to the default version outside a Node project) and emits nothing unless the active version
+  actually changes, so moving around a non-Node tree is silent (matching fnm's own `--use-on-cd`
+  integration). It fires with or without zoxide and regardless of zoxide's jump command — chaining
+  any existing `LocationChangedAction` (including zoxide's, which is registered the same way) and not
   re-registering on reload — so there's no ordering requirement relative to `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
   `http`/`https` to them globally, and registers tab completion for all four names.

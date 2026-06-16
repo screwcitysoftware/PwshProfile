@@ -17,11 +17,11 @@ function Enable-FastNodeManager {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction (6.2+), which fires
         after *any* location change — `cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..` —
         so it works whether or not zoxide is enabled and regardless of zoxide's jump command.
-        Because it fires for *every* change (including scripts' Push-Location), the hook first
-        walks up from the new directory for a version file (.node-version / .nvmrc) and only runs
-        `fnm use` when one resolves — so moving around a non-Node tree neither spawns fnm nor
-        prints fnm's "can't find version file" error to stderr on every change. It chains any
-        pre-existing LocationChangedAction and is guarded against re-registering on profile reload.
+        On every filesystem change it runs `fnm use --silent-if-unchanged`: fnm resolves the
+        version recursively (the strategy set by `fnm env`), reverting to the default version
+        outside a Node project, and emits nothing unless the active version actually changes — so
+        moving around a non-Node tree is silent and produces no error. It chains any pre-existing
+        LocationChangedAction and is guarded against re-registering on profile reload.
 
         If the install doesn't produce fnm.exe on PATH, a warning is emitted (with winget's
         captured output) and Initialize is skipped (guarded by Get-Command) so profile startup
@@ -53,7 +53,8 @@ function Enable-FastNodeManager {
             # LocationChangedAction (fires for cd, z/cdi, Set-Location, Push-Location, .., etc.),
             # so it works without zoxide and regardless of zoxide's --cmd. Run in the global scope
             # so the handler and its $global:__fnm_loc_base capture aren't tagged to the module and
-            # resolve when the hook fires later from the prompt.
+            # resolve when the hook fires later from the prompt. This matches fnm's own --use-on-cd
+            # integration: a thin `fnm use --silent-if-unchanged` on each change.
             #
             # Capture any pre-existing handler ONCE (guarded by $global:__fnm_loc_hooked) so a
             # profile reload doesn't re-capture our own wrapper and stack fnm calls. The base is
@@ -70,28 +71,16 @@ $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     param($source, $eventArgs)
     # The captured base is an EventHandler delegate (the property's type), so call .Invoke.
     if ($null -ne $global:__fnm_loc_base) { $global:__fnm_loc_base.Invoke($source, $eventArgs) }
-    # Only act inside a Node project: walk up from the new directory looking for a version file
-    # (.node-version / .nvmrc — fnm's recursive strategy). Because LocationChangedAction fires for
-    # EVERY location change (incl. scripts' Push-Location, not just interactive cd), running `fnm use`
-    # unconditionally would spawn fnm and print its "can't find version file" error to stderr on every
-    # change in a non-Node tree. Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op.
+    # Switch the node version for the new directory. fnm resolves the version recursively (the
+    # FNM_VERSION_FILE_STRATEGY set by `fnm env`); outside a Node project it falls back to the
+    # default version, and with --silent-if-unchanged it emits nothing to stdout/stderr unless the
+    # active version actually changes — so no version-file gate is needed (verified on fnm 1.39).
+    # Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op. Pipe through Out-Host:
+    # PowerShell discards stdout emitted inside a LocationChangedAction, and fnm writes its
+    # "Using Node vX.X.X" confirmation to stdout — so without Out-Host the switch is invisible.
     $new = $eventArgs.NewPath
     if ($new -and $new.Provider.Name -eq 'FileSystem') {
-        $dir = $new.ProviderPath
-        while ($dir) {
-            if ((Test-Path -LiteralPath (Join-Path $dir '.node-version')) -or
-                (Test-Path -LiteralPath (Join-Path $dir '.nvmrc'))) {
-                # Pipe through Out-Host: PowerShell discards stdout emitted inside a
-                # LocationChangedAction, and fnm writes its "Using Node vX.X.X" confirmation to
-                # stdout — so without Out-Host the version switches silently. (Errors go to stderr,
-                # which surfaces regardless. Nothing is emitted when the version is unchanged.)
-                fnm use --silent-if-unchanged | Out-Host
-                break
-            }
-            $parent = [System.IO.Path]::GetDirectoryName($dir)
-            if (-not $parent -or $parent -eq $dir) { break }
-            $dir = $parent
-        }
+        fnm use --silent-if-unchanged | Out-Host
     }
 }
 '@
