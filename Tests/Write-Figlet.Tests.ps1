@@ -56,7 +56,10 @@ Describe 'Write-Figlet' {
 
     Context 'validation' {
         It 'requires -Text' {
-            { Write-Figlet -Color Blue } | Should -Throw
+            # Probe the requirement with an explicit empty string rather than omitting -Text: an
+            # omitted mandatory parameter makes an *interactive* host prompt for it (hanging the run),
+            # whereas an empty string is rejected by the mandatory binding check in any host.
+            { Write-Figlet -Text '' -Color Blue } | Should -Throw
         }
 
         It 'rejects an unknown -Font name' {

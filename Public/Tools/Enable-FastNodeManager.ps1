@@ -56,10 +56,11 @@ function Enable-FastNodeManager {
             # resolve when the hook fires later from the prompt.
             #
             # Capture any pre-existing handler ONCE (guarded by $global:__fnm_loc_hooked) so a
-            # profile reload doesn't re-capture our own wrapper and stack fnm calls — base is
-            # usually $null since zoxide/oh-my-posh hook the prompt, not LocationChangedAction. But
-            # always (re)install the wrapper, so reloading the profile in a live session repairs or
-            # updates the hook rather than leaving a stale one frozen behind the guard.
+            # profile reload doesn't re-capture our own wrapper and stack fnm calls. The base is
+            # Enable-Zoxide's LocationChangedAction (it runs first and also hooks here) or $null;
+            # either way fnm chains onto it so both fire. But always (re)install the wrapper, so
+            # reloading the profile in a live session repairs or updates the hook rather than leaving
+            # a stale one frozen behind the guard.
             Invoke-InGlobalScope @'
 if (-not (Get-Variable -Name __fnm_loc_hooked -Scope Global -ErrorAction SilentlyContinue)) {
     $global:__fnm_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction

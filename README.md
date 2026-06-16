@@ -745,7 +745,12 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   scope) and runs `oh-my-posh init pwsh` with a theme via `--config`. Defaults to the module's
   bundled `Assets/Themes/screwcity.omp.json`; pass `-Configuration` to use a different theme.
 - **`Enable-Zoxide [-Command <name>]`** — installs `ajeetdsouza.zoxide` and runs
-  `zoxide init powershell --cmd <name>` (default `cd`, replacing the built-in).
+  `zoxide init powershell --cmd <name> --hook none` (default `cd`, replacing the built-in). It tracks
+  the directories you visit via a `LocationChangedAction` hook (running `zoxide add` on every change),
+  **not** zoxide's default prompt wrapper — the prompt wrap is silently wiped when oh-my-posh removes
+  and re-adds its prompt module on a profile reload, so directories would stop being recorded. The
+  location hook is immune to that (it chains any existing handler and doesn't re-register on reload,
+  composing with `Enable-FastNodeManager`'s hook).
 - **`Enable-Fzf [-Colors <spec>] [-Style <preset>] [-Height <value>] [-PreviewCommand <cmd>]
   [-ProviderChord <chord>] [-HistoryChord <chord>] [-TabExpansionChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
@@ -783,8 +788,8 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `fnm use --silent-if-unchanged` **only inside a Node project** — so moving around a non-Node tree
   doesn't spawn fnm or print its "can't find version file" error on every change. It fires with or
   without zoxide and regardless of zoxide's jump command — chaining any existing
-  `LocationChangedAction` and not re-registering on reload — so there's no ordering requirement
-  relative to `Enable-Zoxide`.
+  `LocationChangedAction` (including zoxide's, which is registered the same way) and not
+  re-registering on reload — so there's no ordering requirement relative to `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
   `http`/`https` to them globally, and registers tab completion for all four names.
 - **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
@@ -969,17 +974,26 @@ Invoke-Pester -Path ./Tests
 
 That's the quick inner loop, but it skips PSScriptAnalyzer and does **not** set
 `Set-StrictMode -Version Latest` — so it can hide failures CI catches (e.g. reads of unset
-variables, lint findings). Before pushing, run the checks the way CI does with
-`./build.ps1 -Task Analyze, Test` (see [Build & release](#build--release)).
+variables, lint findings). Before pushing, run the checks the way CI does — in a **clean**
+PowerShell session (no profile loaded, so the module's own global state can't mask a failure):
+
+```powershell
+pwsh -NoProfile -NoLogo -Command "& .\build.ps1 -Task Analyze, Test"
+```
+
+See [Build & release](#build--release) for the full task list.
 
 ### Build & release
 
 [`build.ps1`](build.ps1) is a dependency-free task runner — each `-Task` maps to a function and
 they run in order. The default chain lints, tests, and stages a shippable copy of the module:
 
+Run it in a **clean** PowerShell session (`-NoProfile`) so a profile-loaded module / global state
+can't mask or alter results — that's what CI does:
+
 ```powershell
-./build.ps1                       # Bootstrap -> Analyze -> Test -> Build
-./build.ps1 -Task Analyze, Test   # what CI runs on pull requests
+pwsh -NoProfile -NoLogo -Command "& .\build.ps1"                      # Bootstrap -> Analyze -> Test -> Build
+pwsh -NoProfile -NoLogo -Command "& .\build.ps1 -Task Analyze, Test"  # what CI runs on pull requests
 ```
 
 `Build` stages **only** the shippable files (`.psd1`, `.psm1`, `Public/`, `Private/`, `Assets/`,
