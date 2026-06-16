@@ -1,6 +1,6 @@
 @{
     RootModule        = 'ScrewCitySoftware.PwshProfile.psm1'
-    ModuleVersion     = '0.7.1'
+    ModuleVersion     = '0.7.2'
     GUID              = '4382ebfd-1c06-4409-b7ee-89c3c386b6b0'
     Author            = 'Jason Rotello'
     CompanyName       = 'Screw City Software'   # "Screw City" = Rockford, Illinois (screw/fastener heritage)
