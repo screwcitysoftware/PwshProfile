@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Assets/icon.png" alt="ScrewCitySoftware.PwshProfile icon" width="160" />
+</p>
+
 # ScrewCitySoftware.PwshProfile
 
 [![CI](https://github.com/screwcitysoftware/PwshProfile/actions/workflows/ci.yml/badge.svg)](https://github.com/screwcitysoftware/PwshProfile/actions/workflows/ci.yml)
