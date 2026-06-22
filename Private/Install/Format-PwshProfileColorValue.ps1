@@ -48,7 +48,7 @@ function Format-PwshProfileColorValue {
     [OutputType([string])]
     param(
         [Parameter(Position = 0)]
-        [string]$Color = ''
+        [string]$Color
     )
 
     # An empty value has no swatch and nothing to escape (Get-SpectreEscapedText rejects empty input).

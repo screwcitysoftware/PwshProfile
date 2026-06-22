@@ -182,14 +182,14 @@ function Initialize-PwshProfile {
     [CmdletBinding(DefaultParameterSetName = 'Bundled')]
     param(
         # Banner text defaults to the machine name; color/icon default to the selected theme's
-        # branding (color/icon use empty-string sentinels resolved in the body). BannerText takes a
-        # real default and rejects empty — use -NoBanner to suppress the banner, not an empty string.
+        # branding (color/icon are unset by default, resolved in the body via PSBoundParameters). BannerText
+        # takes a real default and rejects empty — use -NoBanner to suppress the banner, not an empty string.
         [Parameter(Position = 0)]
         [ValidateNotNullOrEmpty()]
         [string]$BannerText = $env:COMPUTERNAME,
 
         [Parameter()]
-        [string]$BannerColor = '',
+        [string]$BannerColor,
 
         [Parameter()]
         [ValidateSet('Left', 'Center', 'Right')]
@@ -237,10 +237,10 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$ZoxideCommand = 'cd',
 
-        # Empty-string sentinel resolved in the body from the selected theme's branding (like
+        # Unset sentinel resolved in the body from the selected theme's branding (like
         # BannerColor), so -Theme alone gives bat a matching syntax theme.
         [Parameter()]
-        [string]$BatTheme = '',
+        [string]$BatTheme,
 
         [Parameter()]
         [string]$BatStyle = 'numbers,changes,header',
@@ -251,16 +251,16 @@ function Initialize-PwshProfile {
         [Parameter()]
         [switch]$ReplaceMore,
 
-        # Empty-string sentinels resolved in the body from the selected theme's branding (like
+        # Unset sentinels resolved in the body from the selected theme's branding (like
         # BatTheme), so -Theme alone gives fd and fzf matching color palettes.
         [Parameter()]
-        [string]$FdColors = '',
+        [string]$FdColors,
 
         [Parameter()]
-        [string]$FzfColors = '',
+        [string]$FzfColors,
 
         [Parameter()]
-        [string]$StepIcon = '',
+        [string]$StepIcon,
 
         # Opt-in tool selection. The ValidateSet mirrors Get-PwshProfileToolCatalog -Token; a test
         # (Tests/ToolCatalog.Tests.ps1) keeps the two in sync. No default, so PSBoundParameters tells

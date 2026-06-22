@@ -65,7 +65,7 @@ function Enable-Fd {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [string]$LsColors = '',
+        [string]$LsColors,
 
         [Parameter()]
         [switch]$IntegrateFzf

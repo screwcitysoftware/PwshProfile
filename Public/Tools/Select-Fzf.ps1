@@ -99,10 +99,10 @@ function Select-Fzf {
         [switch]$Multiple,
 
         [Parameter()]
-        [string]$Prompt = '',
+        [string]$Prompt,
 
         [Parameter()]
-        [string]$Header = '',
+        [string]$Header,
 
         [Parameter()]
         [string]$Height = '~100%',

@@ -8,8 +8,10 @@ function Get-BundledThemeBranding {
         Each bundled theme has a matching identity so the startup banner, step marker, and the
         colors of bat, fd, and fzf feel cohesive with the prompt colors:
 
-          screwcity  -> 'Screw City'  / #c9aaff (signature purple) / :nut_and_bolt:   (🔩) / Dracula
-          forestcity -> 'Forest City' / #8fce72 (signature green)  / :deciduous_tree: (🌳) / gruvbox-dark
+          screwcity  -> 'Screw City'  / banner #4c81c8 (signature purple #c9aaff stays in the palettes)
+                                       / :nut_and_bolt:   (🔩) / Dracula
+          forestcity -> 'Forest City' / banner #8fce72 (also the signature green)
+                                       / :deciduous_tree: (🌳) / gruvbox-dark
 
         DisplayName is the theme's friendly label (shown in the install wizard's theme picker); it is
         NOT the banner text — the default banner text is uniformly $env:COMPUTERNAME for every theme
@@ -50,7 +52,7 @@ function Get-BundledThemeBranding {
     $branding = @{
         screwcity  = @{
             DisplayName = 'Screw City'
-            BannerColor = '#c9aaff'
+            BannerColor = '#4c81c8'
             StepIcon    = ':nut_and_bolt:'
             BatTheme    = 'Dracula'
             # Purple dirs / cyan symlinks / green executables / amber archives / magenta images.

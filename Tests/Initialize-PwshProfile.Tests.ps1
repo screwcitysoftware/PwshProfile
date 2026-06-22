@@ -298,7 +298,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly `
                 -ParameterFilter { $Configuration -like '*screwcity.omp.json' }
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
-                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#c9aaff' }
+                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#4c81c8' }
             Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
                 -ParameterFilter { $Description -eq 'Core' -and $Icon -eq ':nut_and_bolt:' }
         }
@@ -322,7 +322,7 @@ Describe 'Initialize-PwshProfile' {
         It 'keeps the neutral screwcity branding for a -CustomTheme' {
             Initialize-PwshProfile -CustomTheme $script:ThemePath -EnableAll
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
-                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#c9aaff' }
+                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#4c81c8' }
         }
     }
 

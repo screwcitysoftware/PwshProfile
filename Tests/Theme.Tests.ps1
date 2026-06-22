@@ -61,7 +61,7 @@ Describe 'Get-BundledThemeBranding' {
         InModuleScope $script:Module {
             $b = Get-BundledThemeBranding -Name screwcity
             $b.DisplayName | Should -Be 'Screw City'
-            $b.BannerColor | Should -Be '#c9aaff'
+            $b.BannerColor | Should -Be '#4c81c8'
             $b.StepIcon    | Should -Be ':nut_and_bolt:'
             $b.BatTheme    | Should -Be 'Dracula'
             # fd (LS_COLORS) and fzf color specs blend with the purple/cyan palette.

@@ -67,7 +67,7 @@ function Install-WingetPackageSafe {
         [string]$Exe,
 
         [Parameter(Position = 2)]
-        [string]$PathDir = '',
+        [string]$PathDir,
 
         [Parameter()]
         [ValidateSet('user', 'machine')]

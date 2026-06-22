@@ -32,7 +32,7 @@ function Get-PwshProfileDefault {
         Get-PwshProfileDefault
 
         Returns the default settings hashtable for the screwcity theme (BannerText = '$env:COMPUTERNAME',
-        BannerColor = '#c9aaff', etc.).
+        BannerColor = '#4c81c8', etc.).
 
     .EXAMPLE
         Get-PwshProfileDefault -Theme forestcity

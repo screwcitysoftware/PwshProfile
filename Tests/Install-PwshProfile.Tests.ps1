@@ -514,7 +514,7 @@ Describe 'Invoke-PwshProfileWizard' {
         InModuleScope $script:Module {
             $s = Invoke-PwshProfileWizard
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
-            $s.BannerColor | Should -Be '#c9aaff'
+            $s.BannerColor | Should -Be '#4c81c8'
             $s.StepIcon | Should -Be ':nut_and_bolt:'
             @($s.Enable) | Should -Be @(Get-PwshProfileToolCatalog -Token)
             $s.EnableAll | Should -BeFalse

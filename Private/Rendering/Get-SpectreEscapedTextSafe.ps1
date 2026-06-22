@@ -12,7 +12,7 @@ function Get-SpectreEscapedTextSafe {
         drifting (one wizard site previously skipped the doubling).
 
     .PARAMETER Text
-        The text to escape. Defaults to an empty string.
+        The text to escape. Defaults to unset (treated as empty).
 
     .EXAMPLE
         Get-SpectreEscapedTextSafe -Text 'value [with] brackets'
@@ -27,7 +27,7 @@ function Get-SpectreEscapedTextSafe {
     [CmdletBinding()]
     param(
         [Parameter(Position = 0)]
-        [string]$Text = ''
+        [string]$Text
     )
 
     if (Get-Command Get-SpectreEscapedText -ErrorAction SilentlyContinue) {

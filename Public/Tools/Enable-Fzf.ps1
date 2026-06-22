@@ -143,25 +143,25 @@ function Enable-Fzf {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [string]$Colors = '',
+        [string]$Colors,
 
         [Parameter()]
-        [string]$Style = '',
+        [string]$Style,
 
         [Parameter()]
-        [string]$Height = '',
+        [string]$Height,
 
         [Parameter()]
-        [string]$PreviewCommand = '',
+        [string]$PreviewCommand,
 
         [Parameter()]
-        [string]$ProviderChord = '',
+        [string]$ProviderChord,
 
         [Parameter()]
-        [string]$HistoryChord = '',
+        [string]$HistoryChord,
 
         [Parameter()]
-        [string]$TabExpansionChord = '',
+        [string]$TabExpansionChord,
 
         [Parameter()]
         [switch]$UseFd,

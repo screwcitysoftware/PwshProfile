@@ -67,7 +67,7 @@ function Enable-Bat {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [string]$Theme = '',
+        [string]$Theme,
 
         [Parameter()]
         [string]$Style = 'numbers,changes,header',
