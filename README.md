@@ -349,6 +349,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Fd.ps1
 │   │   ├── Enable-Less.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
+│   │   ├── Select-Fzf.ps1                 # pipe objects through fzf; returns the selected object(s) (bundles its private Invoke-FzfRaw seam in-file)
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
 │   │       ├── Enable-AzureCliCompletion.ps1   # Azure CLI (az) native (argcomplete) tab completion
@@ -926,6 +927,43 @@ Supports `-WhatIf` / `-Confirm`.
 ```powershell
 Set-WingetSetting -Scope user -ProgressBar rainbow -AnonymizePath $true -DisableInstallNote $false
 Set-WingetSetting -Scope machine -WhatIf        # preview only the scope change
+```
+
+### `Select-Fzf`
+
+A general-purpose [fzf](https://github.com/junegunn/fzf) wrapper for interactive fuzzy selection over
+**objects** from the pipeline. It replaces hand-rolled one-off pipelines — e.g.
+`Get-AzSubscription | % { "{0}`t{1}" -f $_.Name, $_.Id } | fzf --with-nth 1 --nth 1 --accept-nth 2 --delimiter "`t"`
+— with a single command that hands back the **live selected object(s)**, not text you have to
+re-parse. Pipe in any objects, say what to display and (optionally) what to return.
+
+Internally each item is tagged with a hidden integer index and rendered as an `<index><US><display>`
+line, joined by ASCII Unit Separator (`0x1f`) — a non-printable control char that can't collide with
+human-readable display text, so the display keeps its tabs/colons (only newlines are collapsed). fzf
+runs with `--delimiter` / `--with-nth=2..` so the index column is hidden and `--with-nth` scopes both
+the display **and the fuzzy search** to the text column (no `--nth` — it would re-index the
+post-`--with-nth` view and break matching), then the selected line's leading index maps back to the
+original object. It's invoked with `--ansi` and
+inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-less) has themed fzf the
+picker matches your prompt palette automatically. Requires `fzf` on PATH (it warns and returns nothing
+otherwise); an empty pipeline or an Esc cancel also returns nothing — it never throws.
+
+- **`-Display`** — what to show per item: a property **name** (string) or a **scriptblock** (`$_` is
+  the item), e.g. `{ "{0} ({1})" -f $_.Name, $_.Id }`. Omit it to use the item's string form. This is
+  the only text shown and the only text fzf searches.
+- **`-Value`** — what to return: a property name or scriptblock. Omit it to return the **whole
+  object** (the default — `.Property` still works on the result).
+- **`-Multiple`** — enable multi-select (`--multi`, Tab to mark rows); returns an array.
+- **`-Prompt` / `-Header`** — fzf's `--prompt` / `--header`. (There's no `-Preview` parameter: a
+  preview would only see the rendered row text, not the live object — pass `-FzfArgument '--preview=…'`
+  if you want raw-text preview anyway.)
+- **`-Height`** — fzf's `--height`, default `~100%` (adaptive). Set `''` for fzf's own default.
+- **`-FzfArgument`** — escape hatch: extra raw fzf args appended verbatim (e.g. `--cycle`, `--border`).
+
+```powershell
+Get-ChildItem | Select-Fzf -Display Name                      # returns the selected FileInfo/DirectoryInfo
+Get-AzSubscription | Select-Fzf -Display Name -Value Id        # show names, return the chosen Id
+Get-Process | Select-Fzf -Display { "{0} ({1})" -f $_.Name, $_.Id } -Multiple -Prompt 'kill> '
 ```
 
 ### `Show-PwshProfileReadme`

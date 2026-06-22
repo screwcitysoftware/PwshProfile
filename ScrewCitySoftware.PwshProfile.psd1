@@ -38,6 +38,7 @@
         'Enable-1PasswordCompletion'
         'Enable-GithubCliCompletion'
         'Set-WingetSetting'
+        'Select-Fzf'
         'Show-PwshProfileReadme'
     )
     CmdletsToExport   = @()
