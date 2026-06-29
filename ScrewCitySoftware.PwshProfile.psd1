@@ -20,6 +20,8 @@
         'Initialize-PSReadline'
         'Write-Figlet'
         'Show-FigletFont'
+        'Install-WindowsTerminalScheme'
+        'Uninstall-WindowsTerminalScheme'
         'Enable-OhMyPosh'
         'Get-OhMyPoshTheme'
         'Export-OhMyPoshTheme'

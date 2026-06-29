@@ -268,6 +268,10 @@ structure so they differ only in color:
 | `screwcity`  | Screw City    | `#c9aaff` purple | 🔩 `:nut_and_bolt:`   | purples, blues, ambers   |
 | `forestcity` | Forest City   | `#8fce72` green  | 🌳 `:deciduous_tree:` | greens, browns, grays    |
 
+Each theme's identity extends past the prompt: a matching **bat** syntax theme, **fd**/**fzf**
+color palettes, and a **Windows Terminal color scheme** (install it with
+`Install-WindowsTerminalScheme` so the terminal's own colors match the prompt).
+
 **The installer's first step is the theme choice.** `Install-PwshProfile` opens with a theme prompt —
 pick a bundled theme or supply a path to a theme of your own — and the rest of the wizard pre-fills
 its color/icon prompts from the chosen theme's branding. For a **custom theme** those prompts start
@@ -360,7 +364,9 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Rendering/
 │   │   ├── Invoke-Step.ps1                # Invoke-Step dispatcher (+ the module-scoped step state)
 │   │   ├── Write-Figlet.ps1               # figlet banner writer
-│   │   └── Show-FigletFont.ps1            # list / preview the bundled FIGlet fonts
+│   │   ├── Show-FigletFont.ps1            # list / preview the bundled FIGlet fonts
+│   │   ├── Install-WindowsTerminalScheme.ps1    # add a theme's matching scheme to WT settings.json
+│   │   └── Uninstall-WindowsTerminalScheme.ps1  # remove a theme's scheme from WT settings.json
 │   ├── Docs/
 │   │   ├── Show-PwshProfileReadme.ps1       # renders this README (Show-Markdown) or opens it (-Open)
 │   │   └── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
@@ -376,7 +382,7 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
-│   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors paired with each bundled theme
+│   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors + WT color scheme paired with each bundled theme
 │   ├── Tools/
 │   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers (-PathDir defaults to the WinGet\Links dir)
 │   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
@@ -386,7 +392,9 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Rendering/
 │   │   ├── Invoke-StepInternal.ps1      # spinner-breadcrumb worker (+ Format-StepStatus)
 │   │   ├── Get-BundledFontPath.ps1      # resolves Assets/Fonts/<name>.flf
-│   │   └── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
+│   │   ├── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
+│   │   ├── Get-WindowsTerminalSettingsPath.ps1 # locates WT settings.json (stable/preview/unpackaged)
+│   │   └── Edit-WindowsTerminalSettings.ps1    # shared read/backup/write engine for the scheme install/uninstall
 │   └── Core/
 │       └── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
 ├── Assets/                              # bundled assets
@@ -738,6 +746,42 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > Note: not every `.flf` in the wild loads under Spectre's FIGlet parser. The bundled fonts are
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
+
+### `Install-WindowsTerminalScheme`, `Uninstall-WindowsTerminalScheme`
+
+Add (or remove) a **Windows Terminal color scheme** that matches a bundled prompt theme, so the
+terminal's own 16-color ANSI palette, background, and cursor line up with the oh-my-posh prompt.
+The scheme colors come from the same source of truth as the bat/fd/fzf colors
+(`Get-BundledThemeBranding`), and the scheme is named after the theme's display name — **Screw
+City** / **Forest City** — so it shows up under that name in Windows Terminal's
+*Settings → Color schemes*.
+
+`Install-WindowsTerminalScheme` writes the scheme into the user's `settings.json` `schemes` array
+(idempotent — a re-run replaces the same-named scheme rather than duplicating it). By default it
+only *registers* the scheme; pass `-SetDefault` to also set it as `profiles.defaults.colorScheme`
+so it applies immediately. `Uninstall-WindowsTerminalScheme` removes the matching scheme.
+
+- **`-Theme`** — the bundled theme whose scheme to install/remove (default `screwcity`;
+  tab-completes; custom/unknown themes fall back to the Screw City scheme).
+- **`-SettingsPath`** — override the `settings.json` location (default: the first existing of the
+  stable, preview, and unpackaged Windows Terminal install paths).
+- **`-SetDefault`** (install only) — also set the scheme as the default color scheme for all
+  profiles.
+
+Both back the original `settings.json` up to `settings.json.bak` before rewriting, and support
+`-WhatIf` / `-Confirm`. If Windows Terminal isn't installed (no `settings.json` found), they warn
+and change nothing.
+
+> Note: `settings.json` is JSONC — the parse → rewrite round-trip does **not** preserve `//`
+> comments or hand-formatting (the `.bak` backup is the safety net). Removing a scheme that's still
+> referenced as an active `colorScheme` warns you to pick a replacement.
+
+```powershell
+Install-WindowsTerminalScheme                          # add the "Screw City" scheme to pick in WT
+Install-WindowsTerminalScheme -Theme forestcity -SetDefault   # add "Forest City" and apply it now
+Install-WindowsTerminalScheme -WhatIf                  # preview the change, write nothing
+Uninstall-WindowsTerminalScheme -Theme forestcity      # remove the "Forest City" scheme
+```
 
 ### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`
 
