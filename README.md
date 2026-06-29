@@ -164,7 +164,7 @@ to assemble a custom startup yourself, you can call the individual building bloc
 ```powershell
 Write-Figlet 'Screw City' -Font ANSIShadow  # figlet banner in a bundled font
 Invoke-Step "PSReadLine"      { Initialize-PSReadline }
-Invoke-Step "Terminal-Icons"  { Import-ModuleSafe Terminal-Icons }
+Invoke-Step "Terminal-Icons"  { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } }
 ```
 
 Full comment-based help is available on each function via `Get-Help <Name> -Full`.
@@ -648,7 +648,7 @@ the whole startup in one outer step (`Invoke-Step "Profile" { ... }`) for a sing
 spinner and exactly one summary line.
 
 ```powershell
-Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons }
+Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } }
 
 Invoke-Step "Completions" {
     Invoke-Step "Tailscale" { Enable-TailscaleCompletion }
@@ -660,10 +660,13 @@ Invoke-Step "Completions" {
 Imports a module, installing it first (`Install-PSResource`, CurrentUser scope, PSGallery by
 default) if it isn't already available. Install/import failures are reported as warnings and
 swallowed so profile startup continues. An optional `-Initialize` script block runs once the
-module has imported successfully.
+module has imported successfully. An optional `-Repair` script block runs when the import fails;
+the import is then retried once, and a warning is only reported if that retry also fails — used to
+clean up state that wedges a module's import (e.g. `Repair-TerminalIconsCache`, which purges a
+corrupted Terminal-Icons theme cache so the re-import can regenerate it).
 
 ```powershell
-Import-ModuleSafe Terminal-Icons
+Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache }
 Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true }
 ```
 

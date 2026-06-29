@@ -219,7 +219,7 @@ function Initialize-PwshProfile {
                 # is not visible — resolve the bundled themes from the loaded module's base path.
                 $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
                 if ($base) {
-                    Get-ChildItem -Path (Join-Path $base 'Assets' 'Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
+                    Get-ChildItem -Path (Join-Path -Path $base -ChildPath 'Assets\Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
                         ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
                         Where-Object { $_ -like "$wordToComplete*" } |
                         ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
@@ -361,7 +361,7 @@ function Initialize-PwshProfile {
         }
         if ($enabled -contains 'PSReadLine') { Invoke-Step "PSReadLine" { Initialize-PSReadline } }
         Invoke-Step "Oh-My-Posh" { Enable-OhMyPosh -Configuration $resolvedTheme }
-        if ($enabled -contains 'TerminalIcons') { Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons } }
+        if ($enabled -contains 'TerminalIcons') { Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } } }
         if ($enabled -contains 'PoshGit') { Invoke-Step "Posh-Git" { Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true } } }
         if ($enabled -contains 'Completions') {
             Invoke-Step "Completions" {
