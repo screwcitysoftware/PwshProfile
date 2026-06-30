@@ -22,6 +22,7 @@
         'Show-FigletFont'
         'Install-WindowsTerminalScheme'
         'Uninstall-WindowsTerminalScheme'
+        'Set-WindowsTerminalFont'
         'Enable-OhMyPosh'
         'Get-OhMyPoshTheme'
         'Export-OhMyPoshTheme'

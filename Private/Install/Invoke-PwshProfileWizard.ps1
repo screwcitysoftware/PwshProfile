@@ -7,10 +7,12 @@ function Invoke-PwshProfileWizard {
     .DESCRIPTION
         Drives the PwshSpectreConsole prompts that collect the user's profile configuration and
         returns a settings hashtable (the keys of Get-PwshProfileDefault, plus a NerdFont key
-        holding the chosen Nerd Font name(s) as an array, or $null when none were selected, plus the
-        WingetScope / WingetProgressBar / WingetAnonymizePath / WingetDisableInstallNote keys carrying
-        the chosen winget client settings). If the user cancels at the review screen, it returns $null
-        and Install-PwshProfile writes nothing.
+        holding the chosen Nerd Font name(s) as an array, or $null when none were selected, a
+        SetTerminalFont boolean for whether to set the Windows Terminal default font, the
+        InstallTerminalScheme / SetSchemeDefault booleans for whether to install the matching Windows
+        Terminal color scheme and set it as the default, plus the WingetScope / WingetProgressBar /
+        WingetAnonymizePath / WingetDisableInstallNote keys carrying the chosen winget client settings).
+        If the user cancels at the review screen, it returns $null and Install-PwshProfile writes nothing.
 
         Each step opens with a rounded header panel (Write-PwshProfileStepHeader) carrying the step
         title, a "N of M" progress counter, and a primary description; secondary prompts get inline
@@ -26,7 +28,10 @@ function Invoke-PwshProfileWizard {
         step can be re-edited before submitting, or the whole thing cancelled:
 
           1. Nerd Fonts: optional, a single yes/no; on yes, ensures the NerdFonts module and installs
-             the recommended Meslo + CascadiaCode pair; on no, nothing is installed.
+             the recommended Meslo + CascadiaCode pair; on no, nothing is installed. Then a second
+             yes/no (default Yes) offers to set 'MesloLGM Nerd Font' as the Windows Terminal default
+             font, applied to settings.json at install time by Install-PwshProfile via
+             Set-WindowsTerminalFont.
           2. Winget: a curated set of winget client settings (default install scope, progress-bar
              style, anonymize-displayed-paths, suppress-install-notes). It first shows the current
              values (pre-filled from the live settings.json via Get-WingetSettingDefault, flagging any
@@ -39,7 +44,10 @@ function Invoke-PwshProfileWizard {
              pre-filled with; a custom path seeds neutral color/icon (a neutral color, a generic icon)
              so you define those fresh. The banner text defaults to the machine name regardless of
              theme. Re-picking a theme later preserves any color/icon you already customized (only
-             still-default fields are re-seeded).
+             still-default fields are re-seeded). It then offers two yes/no prompts (default Yes) to
+             install the matching Windows Terminal color scheme and to set it as the default color
+             scheme — applied to settings.json at install time by Install-PwshProfile via
+             Install-WindowsTerminalScheme (a custom theme falls back to the neutral Screw City scheme).
           4. Banner: shows the current banner config (shown/hidden plus text/color/alignment/font,
              flagging anything off the theme default) and asks whether to change it — defaulting to No,
              via Read-PwshProfileSettingChange. On Yes it asks a show/hide yes-no (no suppresses the
@@ -115,6 +123,13 @@ function Invoke-PwshProfileWizard {
         }
     }
     $settings.NerdFont = $null
+    # Set the Windows Terminal default font (a one-time install-time action like NerdFont, not part of
+    # the bootstrap), so it isn't re-seeded from PriorSetting — the prompt re-defaults to Yes each run.
+    $settings.SetTerminalFont = $false
+    # Install the matching Windows Terminal color scheme (and optionally set it as the default) — also a
+    # one-time install-time action, likewise not re-seeded so its Theme-step prompts re-default to Yes.
+    $settings.InstallTerminalScheme = $false
+    $settings.SetSchemeDefault = $false
     # winget client settings (applied to winget's settings.json at install time, like NerdFont — not
     # part of the Initialize-PwshProfile bootstrap, so Build-PwshProfileInitializeCall ignores them).
     # Seed from the live settings file: an explicitly-set value becomes the pre-fill, otherwise the
@@ -189,6 +204,26 @@ function Invoke-PwshProfileWizard {
         # Update the branding baseline (pre-fills + preserve-edits check) but leave the installer's
         # UI accent fixed — it doesn't follow the selected prompt theme.
         $s.Def = $newDef
+
+        # Offer to install the matching Windows Terminal color scheme so the terminal's palette lines up
+        # with the prompt — asked every run. A custom theme has no matching scheme, so it falls back to
+        # the neutral Screw City scheme ($s.Settings.Theme is 'screwcity' for a custom pick).
+        $schemeName = (Get-BundledThemeBranding -Name $s.Settings.Theme).DisplayName
+        $schemeHelp = if ($s.Settings.CustomTheme) {
+            "A custom theme has no matching scheme, so this installs the neutral **$schemeName** Windows Terminal color scheme (it won''t match your custom prompt). Edits ``settings.json`` (backed up first); a no-op if Windows Terminal isn''t installed."
+        }
+        else {
+            "Install the **$schemeName** Windows Terminal color scheme so the terminal's own palette matches your **oh-my-posh** prompt. Edits ``settings.json`` (backed up first); a no-op if Windows Terminal isn''t installed."
+        }
+        Write-PwshProfilePromptHelp $schemeHelp -Accent $s.Accent -Code $s.Code
+        $s.Settings.SetSchemeDefault = $false
+        if (Read-SpectreConfirm -Message 'Install the matching Windows Terminal color scheme?' -Color $s.Accent -DefaultAnswer 'y') {
+            $s.Settings.InstallTerminalScheme = $true
+            $s.Settings.SetSchemeDefault = [bool](Read-SpectreConfirm -Message 'Set it as the Windows Terminal default color scheme?' -Color $s.Accent -DefaultAnswer 'y')
+        }
+        else {
+            $s.Settings.InstallTerminalScheme = $false
+        }
     }
 
     # --- Step: Banner -----------------------------------------------------------------------
@@ -383,6 +418,11 @@ function Invoke-PwshProfileWizard {
                 Write-Warning 'Invoke-PwshProfileWizard: the NerdFonts module is unavailable; skipping font installation.'
             }
         }
+
+        # Offer to point Windows Terminal at the Meslo Nerd Font as its default profile font — asked
+        # every run (even if the install above was declined; the font may already be present).
+        Write-PwshProfilePromptHelp 'Point **Windows Terminal** at `MesloLGM Nerd Font` as its default profile font so the prompt glyphs render right away. Edits its `settings.json` (backed up first); a no-op if Windows Terminal isn''t installed.' -Accent $s.Accent -Code $s.Code
+        $s.Settings.SetTerminalFont = [bool](Read-SpectreConfirm -Message 'Set MesloLGM Nerd Font as the Windows Terminal default font?' -Color $s.Accent -DefaultAnswer 'y')
     }
 
     # --- Step: Winget settings --------------------------------------------------------------
@@ -490,6 +530,12 @@ function Invoke-PwshProfileWizard {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }
         else { '[grey]none[/]' }
+        $wtFontLine = if ($set.SetTerminalFont) { "[$accent]MesloLGM Nerd Font[/]" } else { '[grey]unchanged[/]' }
+        $wtSchemeLine = if ($set.InstallTerminalScheme) {
+            $schemeNm = (Get-BundledThemeBranding -Name $set.Theme).DisplayName
+            if ($set.SetSchemeDefault) { "[$accent]$schemeNm[/] [grey](default)[/]" } else { "[$accent]$schemeNm[/]" }
+        }
+        else { '[grey]none[/]' }
         $anon = if ($set.WingetAnonymizePath) { 'on' } else { 'off' }
         $notes = if ($set.WingetDisableInstallNote) { 'off' } else { 'on' }
         $wingetLine = "scope [$accent]$($set.WingetScope)[/] [grey]·[/] bar [$accent]$($set.WingetProgressBar)[/] [grey]·[/] anon paths $anon [grey]·[/] install notes $notes"
@@ -500,6 +546,8 @@ function Invoke-PwshProfileWizard {
             "[bold]Step icon:[/]  [$code]$(& $esc $set.StepIcon)[/]"
             "[bold]Features:[/]   $featuresLine"
             "[bold]Nerd Fonts:[/] $fontsLine"
+            "[bold]WT font:[/]    $wtFontLine"
+            "[bold]WT scheme:[/]  $wtSchemeLine"
             "[bold]Winget:[/]     $wingetLine"
         ) -join "`n"
         $summary | Format-SpectrePanel -Header '◆ Review your setup' -Border Rounded -Color $accent -Expand | Out-Host

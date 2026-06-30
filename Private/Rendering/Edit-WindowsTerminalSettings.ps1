@@ -1,18 +1,20 @@
 function Edit-WindowsTerminalSettings {
     <#
     .SYNOPSIS
-        Adds, replaces, or removes a color scheme in a Windows Terminal settings.json file.
+        Adds or removes a color scheme, or sets the default profile font, in a Windows Terminal
+        settings.json file.
 
     .DESCRIPTION
-        The shared read-modify-write engine behind Install-WindowsTerminalScheme and
-        Uninstall-WindowsTerminalScheme, factored out so the backup + (de)serialize logic lives in
-        one place and stays unit-testable.
+        The shared read-modify-write engine behind Install-WindowsTerminalScheme,
+        Uninstall-WindowsTerminalScheme, and Set-WindowsTerminalFont, factored out so the backup +
+        (de)serialize logic lives in one place and stays unit-testable.
 
-        It reads the file, parses it (ConvertFrom-Json), edits the `schemes` array by scheme `name`
-        (idempotent — an add replaces any same-named scheme rather than duplicating it; a remove drops
-        the match), backs the original up to "<path>.bak", then writes the result back as UTF-8
-        (no BOM) via ConvertTo-Json. The caller is expected to have gated the call behind its own
-        ShouldProcess, so this engine performs the write unconditionally.
+        It reads the file, parses it (ConvertFrom-Json), then either edits the `schemes` array by
+        scheme `name` (idempotent — an add replaces any same-named scheme rather than duplicating it;
+        a remove drops the match) or sets profiles.defaults.font.face. It backs the original up to
+        "<path>.bak", then writes the result back as UTF-8 (no BOM) via ConvertTo-Json. The caller is
+        expected to have gated the call behind its own ShouldProcess, so this engine performs the
+        write unconditionally.
 
         JSONC caveat: settings.json may contain // comments and trailing commas. ConvertFrom-Json
         tolerates them on read, but the parse -> reserialize round-trip does not reproduce comments
@@ -32,16 +34,25 @@ function Edit-WindowsTerminalSettings {
     .PARAMETER RemoveName
         (Remove set) The `name` of the scheme to remove.
 
+    .PARAMETER FontFace
+        (Font set) The font family name to set as profiles.defaults.font.face (e.g.
+        'MesloLGM Nerd Font'). Skipped with a warning if the file's `profiles` isn't an editable
+        object.
+
     .EXAMPLE
         Edit-WindowsTerminalSettings -Path $p -Scheme $scheme -SetDefault
 
     .EXAMPLE
         Edit-WindowsTerminalSettings -Path $p -RemoveName 'Screw City'
 
+    .EXAMPLE
+        Edit-WindowsTerminalSettings -Path $p -FontFace 'MesloLGM Nerd Font'
+
     .NOTES
         Returns a result object describing what happened:
           Add    -> @{ Action = 'Added' | 'Replaced' }
           Remove -> @{ Action = 'Removed' | 'NotFound'; StillReferenced = <bool> }
+          Font   -> @{ Action = 'SetFont'; FontFace = <string> }
     #>
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseSingularNouns', '',
         Justification = '"Settings" names Windows Terminal''s settings.json file, a proper-noun plural; a singular "Setting" would misname the whole-file target this helper edits.')]
@@ -57,7 +68,10 @@ function Edit-WindowsTerminalSettings {
         [switch]$SetDefault,
 
         [Parameter(Mandatory, ParameterSetName = 'Remove')]
-        [string]$RemoveName
+        [string]$RemoveName,
+
+        [Parameter(Mandatory, ParameterSetName = 'Font')]
+        [string]$FontFace
     )
 
     $raw = Get-Content -LiteralPath $Path -Raw -ErrorAction Stop
@@ -73,9 +87,8 @@ function Edit-WindowsTerminalSettings {
         }
     }
 
-    $existing = if ($settings.PSObject.Properties['schemes']) { @($settings.schemes) } else { @() }
-
     if ($PSCmdlet.ParameterSetName -eq 'Add') {
+        $existing = if ($settings.PSObject.Properties['schemes']) { @($settings.schemes) } else { @() }
         $name = $Scheme['name']
         $replaced = [bool]($existing | Where-Object { $_.name -eq $name })
         $kept = @($existing | Where-Object { $_.name -ne $name })
@@ -83,7 +96,8 @@ function Edit-WindowsTerminalSettings {
         $action = if ($replaced) { 'Replaced' } else { 'Added' }
         $result = @{ Action = $action }
     }
-    else {
+    elseif ($PSCmdlet.ParameterSetName -eq 'Remove') {
+        $existing = if ($settings.PSObject.Properties['schemes']) { @($settings.schemes) } else { @() }
         $name = $RemoveName
         $found = [bool]($existing | Where-Object { $_.name -eq $name })
         $newSchemes = @($existing | Where-Object { $_.name -ne $name })
@@ -104,16 +118,22 @@ function Edit-WindowsTerminalSettings {
         $action = if ($found) { 'Removed' } else { 'NotFound' }
         $result = @{ Action = $action; StillReferenced = $stillReferenced }
     }
-
-    # Write back the (possibly empty) schemes array.
-    if ($settings.PSObject.Properties['schemes']) {
-        $settings.schemes = $newSchemes
-    }
     else {
-        $settings | Add-Member -NotePropertyName 'schemes' -NotePropertyValue $newSchemes
+        # Font set — sets profiles.defaults.font.face only; the schemes array is left untouched.
+        $result = @{ Action = 'SetFont'; FontFace = $FontFace }
     }
 
-    if ($PSCmdlet.ParameterSetName -eq 'Add' -and $SetDefault) {
+    # Write back the (possibly empty) schemes array — Add/Remove only; the Font set touches no schemes.
+    if ($PSCmdlet.ParameterSetName -ne 'Font') {
+        if ($settings.PSObject.Properties['schemes']) {
+            $settings.schemes = $newSchemes
+        }
+        else {
+            $settings | Add-Member -NotePropertyName 'schemes' -NotePropertyValue $newSchemes
+        }
+    }
+
+    if (($PSCmdlet.ParameterSetName -eq 'Add' -and $SetDefault) -or $PSCmdlet.ParameterSetName -eq 'Font') {
         if (-not $settings.PSObject.Properties['profiles']) {
             $settings | Add-Member -NotePropertyName 'profiles' -NotePropertyValue ([pscustomobject]@{})
         }
@@ -123,7 +143,25 @@ function Edit-WindowsTerminalSettings {
                 $profiles | Add-Member -NotePropertyName 'defaults' -NotePropertyValue ([pscustomobject]@{})
             }
             $defaults = $profiles.defaults
-            if ($defaults.PSObject.Properties['colorScheme']) {
+            if ($PSCmdlet.ParameterSetName -eq 'Font') {
+                # Ensure profiles.defaults.font is an object, then set/add its `face`.
+                if (-not $defaults.PSObject.Properties['font']) {
+                    $defaults | Add-Member -NotePropertyName 'font' -NotePropertyValue ([pscustomobject]@{})
+                }
+                if ($defaults.font -is [System.Management.Automation.PSCustomObject]) {
+                    $font = $defaults.font
+                    if ($font.PSObject.Properties['face']) {
+                        $font.face = $FontFace
+                    }
+                    else {
+                        $font | Add-Member -NotePropertyName 'face' -NotePropertyValue $FontFace
+                    }
+                }
+                else {
+                    Write-Warning "Edit-WindowsTerminalSettings: 'profiles.defaults.font' in '$Path' isn't an object; left profiles.defaults.font.face unchanged."
+                }
+            }
+            elseif ($defaults.PSObject.Properties['colorScheme']) {
                 $defaults.colorScheme = $name
             }
             else {
@@ -131,7 +169,8 @@ function Edit-WindowsTerminalSettings {
             }
         }
         else {
-            Write-Warning "Edit-WindowsTerminalSettings: 'profiles' in '$Path' isn't an object; left profiles.defaults.colorScheme unchanged."
+            $field = if ($PSCmdlet.ParameterSetName -eq 'Font') { 'font.face' } else { 'colorScheme' }
+            Write-Warning "Edit-WindowsTerminalSettings: 'profiles' in '$Path' isn't an object; left profiles.defaults.$field unchanged."
         }
     }
 

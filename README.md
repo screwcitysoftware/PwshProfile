@@ -112,6 +112,10 @@ terminal.
 "font": { "face": "MesloLGM Nerd Font" }
 ```
 
+Or let the module make that `settings.json` edit for you (the wizard offers this too):
+[`Set-WindowsTerminalFont`](#set-windowsterminalfont) sets `profiles.defaults.font.face` (default
+`MesloLGM Nerd Font`), backing the file up first.
+
 **VS Code** — add to `settings.json` (set the integrated terminal font; optionally the editor too):
 
 ```jsonc
@@ -366,7 +370,8 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Write-Figlet.ps1               # figlet banner writer
 │   │   ├── Show-FigletFont.ps1            # list / preview the bundled FIGlet fonts
 │   │   ├── Install-WindowsTerminalScheme.ps1    # add a theme's matching scheme to WT settings.json
-│   │   └── Uninstall-WindowsTerminalScheme.ps1  # remove a theme's scheme from WT settings.json
+│   │   ├── Uninstall-WindowsTerminalScheme.ps1  # remove a theme's scheme from WT settings.json
+│   │   └── Set-WindowsTerminalFont.ps1          # set WT's default profile font (face) in settings.json
 │   ├── Docs/
 │   │   ├── Show-PwshProfileReadme.ps1       # renders this README (Show-Markdown) or opens it (-Open)
 │   │   └── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
@@ -437,7 +442,10 @@ The wizard walks one forward pass, then lets you revise anything before committi
 
 1. **Nerd Fonts** — a single yes/no: say yes to install the recommended Meslo + CascadiaCode pair for
    the prompt glyphs via the [NerdFonts](https://www.powershellgallery.com/packages/NerdFonts) module
-   (CurrentUser scope, no admin required); say no and nothing is installed.
+   (CurrentUser scope, no admin required); say no and nothing is installed. Then a second yes/no
+   (**defaulting to Yes**) offers to set **`MesloLGM Nerd Font`** as your Windows Terminal default font
+   via [`Set-WindowsTerminalFont`](#set-windowsterminalfont) — applied to `settings.json` when you
+   submit (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
 2. **Winget** — a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
    settings: default install **scope** (`user` / `machine`), **progress-bar** style, whether to
    **anonymize displayed paths**, and whether to **suppress install notes**. It shows your current
@@ -448,7 +456,12 @@ The wizard walks one forward pass, then lets you revise anything before committi
 3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
    your own (see [Themes](#themes)). The choice seeds the banner color and step icon the later prompts
    are pre-filled with; a custom path seeds neutral color/icon so you brand those fresh. The banner
-   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme.
+   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme. It then offers two
+   yes/no prompts (**defaulting to Yes**): install the matching **Windows Terminal color scheme** via
+   [`Install-WindowsTerminalScheme`](#install-windowsterminalscheme-uninstall-windowsterminalscheme),
+   and set it as the default color scheme — applied to `settings.json` when you submit (a one-time
+   machine change, not part of the bootstrap; skipped under `-WhatIf`). A custom theme has no matching
+   scheme, so it installs the neutral **Screw City** scheme.
 4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
    noting anything off the theme default) and asks whether to change it — **defaulting to No**. On
    yes, a show/hide question gates the rest: say no and the banner is suppressed (`-NoBanner`) and
@@ -759,7 +772,9 @@ City** / **Forest City** — so it shows up under that name in Windows Terminal'
 `Install-WindowsTerminalScheme` writes the scheme into the user's `settings.json` `schemes` array
 (idempotent — a re-run replaces the same-named scheme rather than duplicating it). By default it
 only *registers* the scheme; pass `-SetDefault` to also set it as `profiles.defaults.colorScheme`
-so it applies immediately. `Uninstall-WindowsTerminalScheme` removes the matching scheme.
+so it applies immediately. `Uninstall-WindowsTerminalScheme` removes the matching scheme. The
+`Install-PwshProfile` wizard offers to run `Install-WindowsTerminalScheme` for you (with an optional
+`-SetDefault`) in its **Theme** step.
 
 - **`-Theme`** — the bundled theme whose scheme to install/remove (default `screwcity`;
   tab-completes; custom/unknown themes fall back to the Screw City scheme).
@@ -781,6 +796,30 @@ Install-WindowsTerminalScheme                          # add the "Screw City" sc
 Install-WindowsTerminalScheme -Theme forestcity -SetDefault   # add "Forest City" and apply it now
 Install-WindowsTerminalScheme -WhatIf                  # preview the change, write nothing
 Uninstall-WindowsTerminalScheme -Theme forestcity      # remove the "Forest City" scheme
+```
+
+### `Set-WindowsTerminalFont`
+
+Set **Windows Terminal's default profile font** by pointing `profiles.defaults.font.face` at a font
+family — handy right after installing a Nerd Font so the oh-my-posh prompt glyphs (folder, git, OS
+icons) render instead of boxes. The default font face is **`MesloLGM Nerd Font`**, the installed
+family name of the Meslo Nerd Font the install wizard offers (note: that's *not* `Menlo` or `Meslo`).
+The install wizard offers to run this for you in its **Nerd Font** step (default *Yes*).
+
+- **`-FontFace`** — the font family name to set (default `MesloLGM Nerd Font`). Use the exact name as
+  it appears installed (e.g. `CaskaydiaCove Nerd Font` for Cascadia Code).
+- **`-SettingsPath`** — override the `settings.json` location (default: the first existing of the
+  stable, preview, and unpackaged Windows Terminal install paths).
+
+It's idempotent (a re-run just overwrites the face), backs the original `settings.json` up to
+`settings.json.bak` before rewriting, and supports `-WhatIf` / `-Confirm`. If Windows Terminal isn't
+installed (no `settings.json` found), it warns and changes nothing. The same JSONC caveat as the
+scheme functions applies (the round-trip drops `//` comments; the `.bak` is the safety net).
+
+```powershell
+Set-WindowsTerminalFont                                 # set "MesloLGM Nerd Font" as the WT default
+Set-WindowsTerminalFont -FontFace 'CaskaydiaCove Nerd Font'   # use Cascadia Code instead
+Set-WindowsTerminalFont -WhatIf                         # preview the change, write nothing
 ```
 
 ### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`

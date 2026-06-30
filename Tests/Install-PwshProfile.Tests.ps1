@@ -704,6 +704,52 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
+    It 'records SetTerminalFont = $false when the WT-font prompt is declined' {
+        InModuleScope $script:Module {
+            # The BeforeEach catch-all Read-SpectreConfirm { $false } declines the WT-font prompt.
+            $s = Invoke-PwshProfileWizard
+            $s.SetTerminalFont | Should -BeFalse
+        }
+    }
+
+    It 'records SetTerminalFont = $true when the WT-font prompt is accepted' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Set MesloLGM Nerd Font as the Windows Terminal default font?' }
+            $s = Invoke-PwshProfileWizard
+            $s.SetTerminalFont | Should -BeTrue
+        }
+    }
+
+    It 'records InstallTerminalScheme/SetSchemeDefault = $false when the scheme prompt is declined' {
+        InModuleScope $script:Module {
+            # The BeforeEach catch-all Read-SpectreConfirm { $false } declines the install prompt, so the
+            # set-default follow-up is never asked.
+            $s = Invoke-PwshProfileWizard
+            $s.InstallTerminalScheme | Should -BeFalse
+            $s.SetSchemeDefault | Should -BeFalse
+        }
+    }
+
+    It 'records InstallTerminalScheme/SetSchemeDefault = $true when both scheme prompts are accepted' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Install the matching Windows Terminal color scheme?' }
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Set it as the Windows Terminal default color scheme?' }
+            $s = Invoke-PwshProfileWizard
+            $s.InstallTerminalScheme | Should -BeTrue
+            $s.SetSchemeDefault | Should -BeTrue
+        }
+    }
+
+    It 'installs the scheme but leaves it non-default when the set-default follow-up is declined' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Install the matching Windows Terminal color scheme?' }
+            # The set-default follow-up falls through to the catch-all $false.
+            $s = Invoke-PwshProfileWizard
+            $s.InstallTerminalScheme | Should -BeTrue
+            $s.SetSchemeDefault | Should -BeFalse
+        }
+    }
+
     It 'seeds the winget settings from Get-WingetSettingDefault and keeps the floated current values' {
         InModuleScope $script:Module {
             $s = Invoke-PwshProfileWizard
@@ -933,5 +979,130 @@ Describe 'Install-PwshProfile' {
 
         Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
         Should -Invoke -ModuleName $script:Module Set-WingetSetting -Times 0 -Exactly
+    }
+
+    It 'sets the Windows Terminal font via Set-WindowsTerminalFont when opted in' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                SetTerminalFont = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Set-WindowsTerminalFont { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Set-WindowsTerminalFont -Times 1 -Exactly `
+            -ParameterFilter { $FontFace -eq 'MesloLGM Nerd Font' }
+        # The install-time step is marked with a gear, independent of the chosen runtime step icon.
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+            -ParameterFilter { $Description -eq 'Windows Terminal font' -and $Icon -eq ':gear:' }
+    }
+
+    It 'does not set the Windows Terminal font when the wizard declined it' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                SetTerminalFont = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Set-WindowsTerminalFont { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Set-WindowsTerminalFont -Times 0 -Exactly
+    }
+
+    It 'does not set the Windows Terminal font under -WhatIf' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                SetTerminalFont = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Set-WindowsTerminalFont { }
+
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Set-WindowsTerminalFont -Times 0 -Exactly
+    }
+
+    It 'installs the matching Windows Terminal scheme (with -SetDefault) when opted in' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'forestcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $true; SetSchemeDefault = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 1 -Exactly `
+            -ParameterFilter { $Theme -eq 'forestcity' -and $SetDefault }
+        # The install-time step is marked with a gear, independent of the chosen runtime step icon.
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+            -ParameterFilter { $Description -eq 'Windows Terminal scheme' -and $Icon -eq ':gear:' }
+    }
+
+    It 'installs the scheme without -SetDefault when the set-default follow-up was declined' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'screwcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $true; SetSchemeDefault = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 1 -Exactly `
+            -ParameterFilter { $Theme -eq 'screwcity' -and -not $SetDefault }
+    }
+
+    It 'does not install the scheme when the wizard declined it' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'screwcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $false; SetSchemeDefault = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 0 -Exactly
+    }
+
+    It 'does not install the scheme under -WhatIf' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'screwcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $true; SetSchemeDefault = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 0 -Exactly
     }
 }
