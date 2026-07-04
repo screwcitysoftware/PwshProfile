@@ -11,12 +11,12 @@ function Initialize-PwshProfile {
              always on), Terminal-Icons, posh-git, and the shell completions (winget, Azure CLI,
              Tailscale, Docker, 1Password, GitHub CLI — registration only; they detect external CLIs and
              install nothing). Everything here except the `which` alias and oh-my-posh is opt-in.
-          3. Runs "WinGet" (only when ≥1 winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat, fd, and
-             less — the CLIs installed via WinGet. fzf sits next to zoxide (zoxide's interactive picker
-             auto-uses fzf when on PATH); fnm registers a LocationChangedAction so it auto-switches the
-             node version on any directory change (independent of zoxide and call order); fd follows fzf
-             so it can wire fzf to use fd as its file source; and less is bat's pager (and PowerShell's,
-             via $env:PAGER).
+          3. Runs "WinGet" (only when ≥1 winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat, fd,
+             less, and lazygit — the CLIs installed via WinGet. fzf sits next to zoxide (zoxide's
+             interactive picker auto-uses fzf when on PATH); fnm registers a LocationChangedAction so
+             it auto-switches the node version on any directory change (independent of zoxide and call
+             order); fd follows fzf so it can wire fzf to use fd as its file source; less is bat's
+             pager (and PowerShell's, via $env:PAGER); and lazygit is a standalone git TUI.
 
         The two groups mirror the install model: WinGet = tools installed via WinGet (opt-in), Core =
         everything else. Each is its own top-level Invoke-Step (its own status spinner + summary line).
@@ -128,7 +128,7 @@ function Initialize-PwshProfile {
 
     .PARAMETER Enable
         The tools to enable (opt-in): any of 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf',
-        'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions'. Only the listed tools run (and the
+        'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit', 'Completions'. Only the listed tools run (and the
         auto-installing ones install); everything else is skipped, so a tool added in a later module
         version never installs unless you add it here. Pass -Enable @() to enable nothing. The set mirrors
         Get-PwshProfileToolCatalog. oh-my-posh and the `which` alias always run and are not tokens.
@@ -266,7 +266,7 @@ function Initialize-PwshProfile {
         # (Tests/ToolCatalog.Tests.ps1) keeps the two in sync. No default, so PSBoundParameters tells
         # "passed empty (= nothing)" apart from "not passed (= bare-call confirm)".
         [Parameter()]
-        [ValidateSet('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less')]
+        [ValidateSet('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit')]
         [string[]]$Enable,
 
         [Parameter()]
@@ -409,6 +409,9 @@ function Initialize-PwshProfile {
             # less is bat's pager (and PowerShell's via $env:PAGER); it has no init-time dependency
             # on the other tools, so its position is free. -ReplaceMore is opt-in (set by the wizard).
             if ($enabled -contains 'Less')   { Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore } }
+            # lazygit is a standalone git TUI with no shell-init/completion and no dependency on the
+            # other tools, so its position is free (kept last in the WinGet run order).
+            if ($enabled -contains 'Lazygit') { Invoke-Step "lazygit" { Enable-Lazygit } }
         }
     }
 }

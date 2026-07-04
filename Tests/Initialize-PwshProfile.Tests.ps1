@@ -36,6 +36,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Bat { }
         Mock -ModuleName $script:Module Enable-Fd { }
         Mock -ModuleName $script:Module Enable-Less { }
+        Mock -ModuleName $script:Module Enable-Lazygit { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
         Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
@@ -70,6 +71,8 @@ Describe 'Initialize-PwshProfile' {
             # less enables with the pager-override left off.
             Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
                 -ParameterFilter { -not $ReplaceMore }
+            # lazygit enables (install-only, no arguments).
+            Should -Invoke -ModuleName $script:Module Enable-Lazygit -Times 1 -Exactly
             # Completions register (under Core).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly

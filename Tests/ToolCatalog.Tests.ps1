@@ -14,7 +14,7 @@ Describe 'Get-PwshProfileToolCatalog' {
     It 'the WinGet group is exactly the winget-install entries' {
         $sections = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog }
         @($sections['WinGet'] | Where-Object { $_.Install -ne 'winget' }) | Should -BeNullOrEmpty
-        @($sections['WinGet'].Token) | Should -Be @('Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less')
+        @($sections['WinGet'].Token) | Should -Be @('Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit')
     }
 
     It 'the Core group is exactly the non-winget entries' {
@@ -37,6 +37,11 @@ Describe 'Get-PwshProfileToolCatalog' {
     It 'includes jq among the WinGet tokens' {
         $tokens = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog -Token }
         $tokens | Should -Contain 'Jq'
+    }
+
+    It 'includes lazygit among the WinGet tokens' {
+        $tokens = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog -Token }
+        $tokens | Should -Contain 'Lazygit'
     }
 
     It '-DefaultEnabled returns the non-winget tokens (clean-install default-on set)' {

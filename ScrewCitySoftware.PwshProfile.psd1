@@ -34,6 +34,7 @@
         'Enable-Bat'
         'Enable-Fd'
         'Enable-Less'
+        'Enable-Lazygit'
         'Enable-WingetCompletion'
         'Enable-AzureCliCompletion'
         'Enable-TailscaleCompletion'

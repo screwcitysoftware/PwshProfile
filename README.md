@@ -47,7 +47,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, and less through the
+  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, and lazygit through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -262,6 +262,15 @@ fnm use 20          # use it in this session
 fnm list            # show installed versions
 ```
 
+### lazygit — git TUI
+
+A full-screen terminal UI for git — stage hunks, craft commits, browse branches, rebase, and resolve
+conflicts without leaving the keyboard. Launch it in any repo:
+
+```powershell
+lazygit             # open the TUI in the current repo (press ? for keybindings, q to quit)
+```
+
 ## Themes
 
 The module bundles two oh-my-posh themes under `Assets/Themes`, both built on the same palette-keyed
@@ -356,6 +365,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Bat.ps1
 │   │   ├── Enable-Fd.ps1
 │   │   ├── Enable-Less.ps1
+│   │   ├── Enable-Lazygit.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   ├── Select-Fzf.ps1                 # pipe objects through fzf; returns the selected object(s) (bundles its private Invoke-FzfRaw seam in-file)
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
@@ -471,7 +481,7 @@ The wizard walks one forward pass, then lets you revise anything before committi
 6. **Features** (opt-in) — first a **mode** choice: *pick specific tools*, or *enable everything
    including tools added in future updates* (emits `-EnableAll`). "Specific" shows a grouped tree under
    two sections — **Core** (PSReadLine, Terminal-Icons, posh-git, shell completions) and **WinGet** (the
-   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less). On a re-run it **pre-checks your prior
+   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit). On a re-run it **pre-checks your prior
    selection**; on a clean first run **Core is pre-checked and WinGet is left unchecked** (so the
    light-install Core stuff is on by default, but each winget install is an explicit opt-in). Tools added
    to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
@@ -566,9 +576,9 @@ call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-En
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
 model — **Core** (the `which` global alias, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
-installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less — fzf
+installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager). oh-my-posh and the `which` alias always run; everything
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). oh-my-posh and the `which` alias always run; everything
 else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
 WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -614,7 +624,7 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Enable`** — the tools to enable (opt-in): any of `PSReadLine`, `TerminalIcons`, `PoshGit`,
-  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Completions`. Only the listed tools run
+  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Lazygit`, `Completions`. Only the listed tools run
   (and the auto-installing ones install), so a tool added in a later module version never installs
   unless you add it here. `-Enable @()` enables nothing. oh-my-posh and the `which` alias always run
   and are not tokens.
@@ -822,7 +832,7 @@ Set-WindowsTerminalFont -FontFace 'CaskaydiaCove Nerd Font'   # use Cascadia Cod
 Set-WindowsTerminalFont -WhatIf                         # preview the change, write nothing
 ```
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`, `Enable-Lazygit`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -914,6 +924,10 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `Enable-Bat` color paging: bat's default pager is less, so without it on PATH bat can't page colored
   output. Unlike bat/fd, less ships no PowerShell completer and has no palette, so it registers no
   completion and isn't themed — `$env:LESS` carries functional defaults only.
+- **`Enable-Lazygit`** — installs `JesseDuffield.lazygit` (a full-screen terminal UI for git) and
+  puts `lazygit.exe` on PATH. lazygit is a self-contained TUI you launch by typing `lazygit`, with
+  no built-in shell completion, so this is install-only — there's no Initialize work and no
+  completion to register (like `Enable-Jq`).
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
@@ -925,6 +939,7 @@ Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
 Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 Enable-Less -ReplaceMore
+Enable-Lazygit
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -1030,7 +1045,7 @@ runs with `--delimiter` / `--with-nth=2..` so the index column is hidden and `--
 the display **and the fuzzy search** to the text column (no `--nth` — it would re-index the
 post-`--with-nth` view and break matching), then the selected line's leading index maps back to the
 original object. It's invoked with `--ansi` and
-inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-less) has themed fzf the
+inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-less-enable-lazygit) has themed fzf the
 picker matches your prompt palette automatically. Requires `fzf` on PATH (it warns and returns nothing
 otherwise); an empty pipeline or an Esc cancel also returns nothing — it never throws.
 
@@ -1156,7 +1171,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less,
+- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never
