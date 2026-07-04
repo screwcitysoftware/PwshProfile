@@ -14,8 +14,9 @@ function Read-PwshProfileInstalledSetting {
             ([System.Management.Automation.Language.Parser]::ParseInput) and maps the bound parameters
             to a settings hashtable (only the keys that were present): Theme, CustomTheme, BannerText,
             BannerColor, BannerAlignment, BannerFont, BannerFontPath, StepIcon, ZoxideCommand,
-            BatTheme, BatStyle (strings); Enable (string[]); EnableAll, NoBanner, ReplaceCat,
-            ReplaceMore (switches -> $true when present).
+            BatTheme, BatStyle, FzfTabChord (strings); Enable (string[]); EnableAll, NoBanner,
+            ReplaceCat, ReplaceMore, FzfGitKeyBindings (switches -> $true when present; the last is a
+            bare opt-in flag, an explicit -FzfGitKeyBindings:$false is also honored).
           - It reads the `# Tools available: a,b,c` snapshot comment (the full catalog at write time)
             into ToolSnapshot.
 
@@ -99,8 +100,11 @@ function Read-PwshProfileInstalledSetting {
         }
 
         $stringParams = @('Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment',
-            'BannerFont', 'BannerFontPath', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle')
-        $switchParams = @('EnableAll', 'NoBanner', 'ReplaceCat', 'ReplaceMore')
+            'BannerFont', 'BannerFontPath', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle',
+            'FzfTabChord')
+        # FzfGitKeyBindings is a switch emitted as a bare -FzfGitKeyBindings (opt-in) -> parsed $true;
+        # the switch branch also handles an explicit -FzfGitKeyBindings:$false if ever hand-written.
+        $switchParams = @('EnableAll', 'NoBanner', 'ReplaceCat', 'ReplaceMore', 'FzfGitKeyBindings')
 
         # Canonical-case lookup so '-bannertext' etc. still map to the proper key.
         $canon = @{}
@@ -124,8 +128,13 @@ function Read-PwshProfileInstalledSetting {
             }
 
             if ($switchParams -contains $name) {
-                # Present switch -> $true unless explicitly -Foo:$false.
-                if ($argNode) { $settings[$name] = [bool](& $value $argNode) }
+                # Present switch -> $true unless explicitly -Foo:$false (e.g. -FzfGitKeyBindings:$false).
+                # Read the boolean literal straight off the AST: the generic $value stringifies, and
+                # [bool]'False' is $true, which would flip an explicit :$false.
+                if ($argNode) {
+                    try { $settings[$name] = [bool]$argNode.SafeGetValue() }
+                    catch { $settings[$name] = [bool](& $value $argNode) }
+                }
                 else { $settings[$name] = $true }
             }
             elseif ($name -eq 'Enable') {

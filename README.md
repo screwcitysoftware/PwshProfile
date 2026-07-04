@@ -47,7 +47,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, and lazygit through the
+  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, and lazygit through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -262,6 +262,14 @@ fnm use 20          # use it in this session
 fnm list            # show installed versions
 ```
 
+### git — version control
+
+git is **always installed** (like oh-my-posh — it isn't a `-Enable` token). Several profile
+features lean on it — posh-git's status prompt, PSFzf's `Ctrl+G` git pickers, lazygit, and the
+GitHub CLI — so the profile installs `Git.Git` via winget if `git` isn't already on PATH (the
+common case short-circuits, and a failed/elevation-blocked install just warns and startup
+continues).
+
 ### lazygit — git TUI
 
 A full-screen terminal UI for git — stage hunks, craft commits, browse branches, rebase, and resolve
@@ -357,6 +365,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-OhMyPoshTheme.ps1          # emit the bundled oh-my-posh theme JSON
 │   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
 │   ├── Tools/
+│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (not a -Enable token)
 │   │   ├── Enable-Zoxide.ps1
 │   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
@@ -453,7 +462,7 @@ The wizard walks one forward pass, then lets you revise anything before committi
 1. **Nerd Fonts** — a single yes/no: say yes to install the recommended Meslo + CascadiaCode pair for
    the prompt glyphs via the [NerdFonts](https://www.powershellgallery.com/packages/NerdFonts) module
    (CurrentUser scope, no admin required); say no and nothing is installed. Then a second yes/no
-   (**defaulting to Yes**) offers to set **`MesloLGM Nerd Font`** as your Windows Terminal default font
+   (**defaulting to No**) offers to set **`MesloLGM Nerd Font`** as your Windows Terminal default font
    via [`Set-WindowsTerminalFont`](#set-windowsterminalfont) — applied to `settings.json` when you
    submit (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
 2. **Winget** — a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
@@ -466,10 +475,11 @@ The wizard walks one forward pass, then lets you revise anything before committi
 3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
    your own (see [Themes](#themes)). The choice seeds the banner color and step icon the later prompts
    are pre-filled with; a custom path seeds neutral color/icon so you brand those fresh. The banner
-   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme. It then offers two
-   yes/no prompts (**defaulting to Yes**): install the matching **Windows Terminal color scheme** via
-   [`Install-WindowsTerminalScheme`](#install-windowsterminalscheme-uninstall-windowsterminalscheme),
-   and set it as the default color scheme — applied to `settings.json` when you submit (a one-time
+   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to
+   install the matching **Windows Terminal color scheme** via
+   [`Install-WindowsTerminalScheme`](#install-windowsterminalscheme-uninstall-windowsterminalscheme)
+   (**defaulting to No**) and, only if accepted, whether to set it as the default color scheme
+   (**defaulting to Yes**) — applied to `settings.json` when you submit (a one-time
    machine change, not part of the bootstrap; skipped under `-WhatIf`). A custom theme has no matching
    scheme, so it installs the neutral **Screw City** scheme.
 4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
@@ -488,8 +498,10 @@ The wizard walks one forward pass, then lets you revise anything before committi
    oh-my-posh is always on and isn't listed. If `zoxide` ends up enabled you're prompted for its jump
    command; if `bat` is enabled, whether to replace the built-in `cat` (**defaulting to Yes**, emitting
    `-ReplaceCat`); if `less` is enabled, whether to make it the default pager (**defaulting to Yes**,
-   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). When `fzf` is enabled it
-   also gains the PSFzf Ctrl+T/Ctrl+R key bindings.
+   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). If `fzf` is enabled you're
+   asked whether to bind the PSFzf `Ctrl+G` git keybindings (**defaulting to No**; lazygit already
+   covers git) and which chord drives the fuzzy tab-completion picker (**default `Ctrl+Spacebar`**);
+   `Ctrl+T`/`Ctrl+R` are bound regardless.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -574,11 +586,11 @@ Show-NerdFontSetup -Font Meslo, CascadiaCode
 The headline entry point: one call that runs the profile startup, so `$PROFILE` shrinks to just this
 call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-EnableAll` (see below).
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
-model — **Core** (the `which` global alias, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
+model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
 installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). oh-my-posh and the `which` alias always run; everything
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias always run; everything
 else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
 WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -620,6 +632,14 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-FzfColors`** — fzf's picker palette, forwarded to `Enable-Fzf -Colors` (folded into
   `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for screwcity,
   green/gold for forestcity).
+- **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G` git chords (branch/commit/file
+  pickers), forwarded to `Enable-Fzf -GitKeyBindings`. **Off by default** (opt-in) — pass
+  `-FzfGitKeyBindings` to enable them; they're off because lazygit already covers git workflows.
+  Only applies when `Fzf` is enabled (warned-and-ignored otherwise); `Enable-Fzf` drops the chords
+  anyway if git isn't on PATH.
+- **`-FzfTabChord`** — the PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (`Tab`
+  stays `MenuComplete`), forwarded to `Enable-Fzf -TabExpansionChord`. Default `Ctrl+Spacebar`
+  (which also binds `Ctrl+@`). Only applies when `Fzf` is enabled.
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
@@ -830,6 +850,22 @@ scheme functions applies (the round-trip drops `//` comments; the `.bak` is the 
 Set-WindowsTerminalFont                                 # set "MesloLGM Nerd Font" as the WT default
 Set-WindowsTerminalFont -FontFace 'CaskaydiaCove Nerd Font'   # use Cascadia Code instead
 Set-WindowsTerminalFont -WhatIf                         # preview the change, write nothing
+```
+
+### `Enable-Git`
+
+Installs git (`Git.Git`) with winget if `git.exe` isn't already on PATH, patching the current
+session's PATH so it's usable immediately. Unlike the opt-in tool enablers below, `Enable-Git` is
+**always-on** (it isn't an `-Enable` token) and runs first in the **Core** section — posh-git's
+status prompt, PSFzf's `Ctrl+G` git chords, lazygit, and the GitHub CLI all want git on PATH. It's
+install-only (git ships no PowerShell shell-init or completion, so Initialize is a
+`Get-Command`-guarded no-op). `Git.Git` is a full installer (not a winget portable), so it targets
+`%ProgramFiles%\Git\cmd`; a machine install may need elevation, but the already-installed
+short-circuit means the common case does nothing, and a blocked/failed install just warns and
+startup continues.
+
+```powershell
+Enable-Git
 ```
 
 ### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`, `Enable-Lazygit`
@@ -1173,7 +1209,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit,
+- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never

@@ -39,6 +39,22 @@ Describe 'Read-PwshProfileInstalledSetting' {
         @($parsed.ToolSnapshot) | Should -Be @($script:CatalogTokens)
     }
 
+    It 'round-trips fzf keybinding tuning (a bare -FzfGitKeyBindings and a custom -FzfTabChord)' {
+        $parsed = script:ParseBuilt {
+            param($s)
+            $s.Enable = @('Fzf'); $s.FzfGitKeyBindings = $true; $s.FzfTabChord = 'Ctrl+j'
+        }
+        # The bare opt-in flag must parse back to $true.
+        $parsed.Settings.FzfGitKeyBindings | Should -BeTrue
+        $parsed.Settings.FzfTabChord | Should -Be 'Ctrl+j'
+    }
+
+    It 'omits the fzf keybinding keys when left at defaults (git chords off)' {
+        $parsed = script:ParseBuilt { param($s) $s.Enable = @('Fzf') }
+        $parsed.Settings.ContainsKey('FzfGitKeyBindings') | Should -BeFalse
+        $parsed.Settings.ContainsKey('FzfTabChord') | Should -BeFalse
+    }
+
     It 'round-trips an -EnableAll block (no Enable key, EnableAll set)' {
         $parsed = script:ParseBuilt { param($s) $s.EnableAll = $true }
         $parsed.Settings.EnableAll | Should -BeTrue

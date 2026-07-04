@@ -120,8 +120,8 @@ function Build-PwshProfileInitializeCall {
     # double-quoted (interpolation); the rest are single-quoted (verbatim). Banner params are skipped
     # under -NoBanner, and tool-specific params (zoxide/bat) only emit when that tool is enabled.
     $bannerKeys = @('BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont')
-    $keyTool = @{ ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat' }
-    foreach ($key in @($bannerKeys + @('StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle'))) {
+    $keyTool = @{ ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat'; FzfTabChord = 'Fzf' }
+    foreach ($key in @($bannerKeys + @('StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'FzfTabChord'))) {
         if ($noBanner -and $bannerKeys -contains $key) { continue }
         if ($keyTool.ContainsKey($key) -and $enabledSet -notcontains $keyTool[$key]) { continue }
         $v = & $value $key
@@ -140,6 +140,12 @@ function Build-PwshProfileInitializeCall {
     $replaceMore = & $value 'ReplaceMore'
     if ([bool]$replaceMore -ne [bool]$Default['ReplaceMore'] -and $replaceMore -and $enabledSet -contains 'Less') {
         $parts.Add('-ReplaceMore')
+    }
+    # FzfGitKeyBindings is off by default (opt-in), so it's emitted as a bare flag only when turned ON
+    # and fzf is enabled — same shape as -ReplaceCat / -ReplaceMore above.
+    $fzfGit = & $value 'FzfGitKeyBindings'
+    if ([bool]$fzfGit -ne [bool]$Default['FzfGitKeyBindings'] -and $fzfGit -and $enabledSet -contains 'Fzf') {
+        $parts.Add('-FzfGitKeyBindings')
     }
 
     # Tool selection is always emitted explicitly — that's what pins the set against future-tool drift.

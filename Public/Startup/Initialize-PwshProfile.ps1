@@ -126,6 +126,18 @@ function Initialize-PwshProfile {
         -Icon. Defaults to ':nut_and_bolt:' (a Spectre emoji shortcode, rendered as 🔩). No trailing
         space is needed — the separator between the icon and the step text is added at render time.
 
+    .PARAMETER FzfGitKeyBindings
+        Bind PSFzf's Ctrl+G git chords (fzf-powered pickers for branches, commits, files). Off by
+        default (opt-in) — pass -FzfGitKeyBindings to enable them; they're off by default because
+        lazygit already covers git workflows. Only applies when Fzf is enabled (a warning notes it
+        otherwise); Enable-Fzf drops the chords regardless if git isn't on PATH.
+
+    .PARAMETER FzfTabChord
+        The PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (Tab itself stays
+        MenuComplete). Defaults to 'Ctrl+Spacebar' — Enable-Fzf also binds 'Ctrl+@' to the same picker
+        (many terminals emit the same byte for both and report it under either name). Only applies when
+        Fzf is enabled (a warning notes it otherwise).
+
     .PARAMETER Enable
         The tools to enable (opt-in): any of 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf',
         'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit', 'Completions'. Only the listed tools run (and the
@@ -262,6 +274,18 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$StepIcon,
 
+        # PSFzf git keybindings (the Ctrl+G git chords). Off by default (opt-in) — pass
+        # -FzfGitKeyBindings to bind them; lazygit already covers git workflows, so they're not on by
+        # default. Only applies when Fzf is enabled; Enable-Fzf drops the chords anyway if git isn't on PATH.
+        [Parameter()]
+        [switch]$FzfGitKeyBindings,
+
+        # The PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (Tab stays
+        # MenuComplete). Defaults to 'Ctrl+Spacebar' (Enable-Fzf also binds 'Ctrl+@', which many
+        # terminals emit identically). Only applies when Fzf is enabled.
+        [Parameter()]
+        [string]$FzfTabChord = 'Ctrl+Spacebar',
+
         # Opt-in tool selection. The ValidateSet mirrors Get-PwshProfileToolCatalog -Token; a test
         # (Tests/ToolCatalog.Tests.ps1) keeps the two in sync. No default, so PSBoundParameters tells
         # "passed empty (= nothing)" apart from "not passed (= bare-call confirm)".
@@ -314,6 +338,7 @@ function Initialize-PwshProfile {
     $paramTool = [ordered]@{
         ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat'; ReplaceCat = 'Bat'
         ReplaceMore = 'Less'; FdColors = 'Fd'; FzfColors = 'Fzf'
+        FzfGitKeyBindings = 'Fzf'; FzfTabChord = 'Fzf'
     }
     foreach ($p in $paramTool.Keys) {
         if ($PSBoundParameters.ContainsKey($p) -and $enabled -notcontains $paramTool[$p]) {
@@ -359,6 +384,9 @@ function Initialize-PwshProfile {
         Invoke-Step "Global Aliases" {
             Set-Alias -Name which -Value where.exe -Scope Global
         }
+        # git is always-on (not a token): posh-git, PSFzf's git chords, lazygit, and gh all want it.
+        # Installed first in Core so git is on PATH for posh-git (below) and the WinGet-section tools.
+        Invoke-Step "Git" { Enable-Git }
         if ($enabled -contains 'PSReadLine') { Invoke-Step "PSReadLine" { Initialize-PSReadline } }
         Invoke-Step "Oh-My-Posh" { Enable-OhMyPosh -Configuration $resolvedTheme }
         if ($enabled -contains 'TerminalIcons') { Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } } }
@@ -388,17 +416,19 @@ function Initialize-PwshProfile {
                     # inherits $env:BAT_THEME so the preview colors match the prompt.
                     $fzfPreview = if ($enabled -contains 'Bat') { 'bat --color=always --style=numbers {}' } else { '' }
                     # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell);
-                    # -UseFd follows whether fd is enabled (PSFzf uses fd for traversal); -GitKeyBindings
-                    # is always requested and Enable-Fzf drops it when git isn't on PATH. -Height '~100%'
-                    # makes those PSFzf widgets adaptive — they fill the shell for large result sets but
-                    # shrink to fit small ones — instead of PSFzf's inline 40% default.
-                    # -TabExpansionChord puts PSFzf's fuzzy completion picker on Ctrl+Spacebar (a chord
-                    # that otherwise just duplicates Tab's MenuComplete), leaving Tab = MenuComplete.
-                    # Enable-Fzf also binds Ctrl+@ to the same picker (many terminals emit the same byte
-                    # for Ctrl+Spacebar and Ctrl+@ and report it under either name).
+                    # -UseFd follows whether fd is enabled (PSFzf uses fd for traversal). -GitKeyBindings
+                    # (the Ctrl+G git chords) is wizard-configurable via -FzfGitKeyBindings (off by
+                    # default, opt-in; lazygit covers git) — Enable-Fzf drops it anyway when git isn't
+                    # on PATH. -Height '~100%' makes those PSFzf widgets adaptive —
+                    # they fill the shell for large result sets but shrink to fit small ones — instead of
+                    # PSFzf's inline 40% default. -TabExpansionChord puts PSFzf's fuzzy completion picker
+                    # on the wizard-configurable $FzfTabChord (default Ctrl+Spacebar, a chord that
+                    # otherwise just duplicates Tab's MenuComplete), leaving Tab = MenuComplete. When that
+                    # chord is Ctrl+Spacebar Enable-Fzf also binds Ctrl+@ to the same picker (many
+                    # terminals emit the same byte for both and report it under either name).
                     Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' -PreviewCommand $fzfPreview `
-                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
-                        -UseFd:($enabled -contains 'Fd') -GitKeyBindings
+                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord $FzfTabChord `
+                        -UseFd:($enabled -contains 'Fd') -GitKeyBindings:$FzfGitKeyBindings
                 }
             }
             if ($enabled -contains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }

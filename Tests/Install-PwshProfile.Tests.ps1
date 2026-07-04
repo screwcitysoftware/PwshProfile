@@ -199,6 +199,55 @@ Describe 'Build-PwshProfileInitializeCall' {
                 Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain' -Enable Bat"
         }
     }
+
+    It 'emits a bare -FzfGitKeyBindings only when turned on and fzf is enabled' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.FzfGitKeyBindings = $true
+            $s.Enable = @('Fzf')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -FzfGitKeyBindings -Enable Fzf'
+        }
+    }
+
+    It 'omits -FzfGitKeyBindings when fzf is not enabled (gated)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.FzfGitKeyBindings = $true
+            $s.Enable = @('Zoxide')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Zoxide'
+        }
+    }
+
+    It 'omits -FzfGitKeyBindings at its default (off)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.Enable = @('Fzf')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Fzf'
+        }
+    }
+
+    It 'emits a non-default -FzfTabChord when fzf is enabled, single-quoted' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.FzfTabChord = 'Ctrl+j'
+            $s.Enable = @('Fzf')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be "Initialize-PwshProfile -FzfTabChord 'Ctrl+j' -Enable Fzf"
+        }
+    }
+
+    It 'omits -FzfTabChord at its default (Ctrl+Spacebar)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.Enable = @('Fzf')
+            $s.FzfTabChord = 'Ctrl+Spacebar'
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Fzf'
+        }
+    }
 }
 
 Describe 'Get-SpectreColorValue' {
@@ -488,6 +537,8 @@ Describe 'Invoke-PwshProfileWizard' {
             # Banner: shown by default; Nerd Fonts: declined by default.
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color'
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }
+            # fzf git keybindings default to No — the BeforeEach catch-all Read-SpectreConfirm { $false }
+            # answers the git-chords prompt, matching the default-off behavior.
             # Open both "make changes?" gates by default so the per-setting prompts below run; the
             # gate-closed paths get their own tests.
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Change these banner settings?' }
@@ -615,6 +666,47 @@ Describe 'Invoke-PwshProfileWizard' {
             $s.Enable | Should -Not -Contain 'Less'
             $s.ReplaceMore | Should -BeFalse
             Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
+        }
+    }
+
+    It 'leaves fzf git chords off by default (prompt declined) with the default tab chord' {
+        InModuleScope $script:Module {
+            # BeforeEach: catch-all $false declines the git-chords prompt; Read-SpectreText returns the default.
+            $s = Invoke-PwshProfileWizard
+            $s.Enable | Should -Contain 'Fzf'
+            $s.FzfGitKeyBindings | Should -BeFalse
+            $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
+        }
+    }
+
+    It 'sets FzfGitKeyBindings true when the git-chords prompt is accepted' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Enable PSFzf git keybindings (Ctrl+G)?' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.FzfGitKeyBindings | Should -BeTrue
+        }
+    }
+
+    It 'captures a custom fzf tab chord' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreText { 'Ctrl+j' } -ParameterFilter { $Message -eq 'PSFzf tab-completion picker chord' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.FzfTabChord | Should -Be 'Ctrl+j'
+        }
+    }
+
+    It 'leaves fzf keybinding settings at defaults (and skips the prompts) when fzf is unchecked' {
+        InModuleScope $script:Module {
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+
+            $s = Invoke-PwshProfileWizard
+            $s.Enable | Should -Not -Contain 'Fzf'
+            $s.FzfGitKeyBindings | Should -BeFalse
+            $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
+            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Enable PSFzf git keybindings (Ctrl+G)?' }
+            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'PSFzf tab-completion picker chord' }
         }
     }
 
