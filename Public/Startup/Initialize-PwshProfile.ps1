@@ -394,6 +394,8 @@ function Initialize-PwshProfile {
                     # shrink to fit small ones — instead of PSFzf's inline 40% default.
                     # -TabExpansionChord puts PSFzf's fuzzy completion picker on Ctrl+Spacebar (a chord
                     # that otherwise just duplicates Tab's MenuComplete), leaving Tab = MenuComplete.
+                    # Enable-Fzf also binds Ctrl+@ to the same picker (many terminals emit the same byte
+                    # for Ctrl+Spacebar and Ctrl+@ and report it under either name).
                     Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' -PreviewCommand $fzfPreview `
                         -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
                         -UseFd:($enabled -contains 'Fd') -GitKeyBindings

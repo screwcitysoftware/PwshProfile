@@ -35,7 +35,9 @@ function Enable-Fzf {
                 Invoke-FzfTabCompletion (via Set-PSReadLineKeyHandler) so the chord opens a fuzzy fzf
                 picker over PowerShell's native completion candidates. Tab is intentionally left as
                 MenuComplete — Set-PsFzfOption -TabExpansion only ever targets Tab, so a non-Tab chord
-                must be bound directly.
+                must be bound directly. If that chord is Ctrl+Spacebar or Ctrl+@, BOTH are bound (many
+                terminals emit the same byte for the two and report it under either name), so the
+                picker fires regardless of which name the terminal surfaces.
 
         If the install doesn't produce fzf.exe on PATH, a warning is emitted (with winget's
         captured output) and Initialize is skipped (guarded by Get-Command) so profile startup
@@ -94,7 +96,9 @@ function Enable-Fzf {
         untouched (it stays PSReadLine's MenuComplete); Set-PsFzfOption -TabExpansion only ever targets
         Tab, which is why this binds Invoke-FzfTabCompletion directly. Empty leaves the chord unbound.
         Initialize-PwshProfile passes 'Ctrl+Spacebar' (a chord that otherwise duplicates Tab's
-        MenuComplete, so repurposing it loses nothing).
+        MenuComplete, so repurposing it loses nothing). Passing 'Ctrl+Spacebar' (or 'Ctrl+@') binds
+        BOTH chords to the picker — many terminal emulators emit the same byte (NUL, 0x00) for the two
+        and PSReadLine may report the keypress under either name.
 
     .PARAMETER UseFd
         When set, calls Set-PsFzfOption -EnableFd so PSFzf uses fd for its file/directory traversal
@@ -251,7 +255,17 @@ function Enable-Fzf {
                 # PSFzf Invoke-FzfTabCompletion at key-press time.
                 if (-not [string]::IsNullOrWhiteSpace($TabExpansionChord) -and
                     (Get-Command Invoke-FzfTabCompletion -ErrorAction SilentlyContinue)) {
-                    Set-PSReadLineKeyHandler -Key $TabExpansionChord -ScriptBlock { Invoke-FzfTabCompletion } `
+                    # Many terminal emulators emit the same byte (NUL, 0x00) for Ctrl+Spacebar and
+                    # Ctrl+@, and PSReadLine may report the keypress under either name — so when the
+                    # tab-expansion chord is one of that pair, bind BOTH so the picker fires regardless
+                    # of which name the terminal surfaces. -Key takes a string[]; separate array
+                    # elements are independent bindings to the same handler (a comma inside one string
+                    # would instead be a chord sequence). Any other chord binds as-is.
+                    $tabKeys = if ($TabExpansionChord -in 'Ctrl+Spacebar', 'Ctrl+@') {
+                        'Ctrl+Spacebar', 'Ctrl+@'
+                    }
+                    else { $TabExpansionChord }
+                    Set-PSReadLineKeyHandler -Key $tabKeys -ScriptBlock { Invoke-FzfTabCompletion } `
                         -BriefDescription 'FzfTabCompletion' `
                         -Description 'Fuzzy completion picker via fzf (PSFzf)'
                 }

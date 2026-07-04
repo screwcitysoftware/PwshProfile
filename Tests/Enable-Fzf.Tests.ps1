@@ -105,7 +105,16 @@ Describe 'Enable-Fzf' {
         Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'Invoke-FzfTabCompletion' }
         Enable-Fzf -TabExpansionChord 'Ctrl+Spacebar'
         Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 1 -Exactly
+        # Ctrl+Spacebar and Ctrl+@ are the same byte in many terminals, so both are bound.
         Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
-            -ParameterFilter { $Key -eq 'Ctrl+Spacebar' }
+            -ParameterFilter { $Key -contains 'Ctrl+Spacebar' -and $Key -contains 'Ctrl+@' }
+    }
+
+    It 'binds only the given chord when -TabExpansionChord is not the Ctrl+Spacebar/Ctrl+@ pair' {
+        Mock -ModuleName $script:Module Set-PSReadLineKeyHandler { }
+        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'Invoke-FzfTabCompletion' }
+        Enable-Fzf -TabExpansionChord 'Ctrl+j'
+        Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
+            -ParameterFilter { $Key -eq 'Ctrl+j' }
     }
 }

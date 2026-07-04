@@ -869,7 +869,9 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   git is on PATH). `-TabExpansionChord` binds a chord to PSFzf's `Invoke-FzfTabCompletion` (via
   `Set-PSReadLineKeyHandler`, since `Set-PsFzfOption -TabExpansion` only ever targets `Tab`), opening a
   fuzzy fzf picker over PowerShell's native completions — paths, command/parameter names, and every
-  registered completer — while leaving `Tab` as the classic `MenuComplete`. After importing PSFzf it
+  registered completer — while leaving `Tab` as the classic `MenuComplete`. Passing `Ctrl+Spacebar`
+  (or `Ctrl+@`) binds **both** chords to the picker, since many terminals emit the same byte for the
+  two and report the keypress under either name. After importing PSFzf it
   also patches PSFzf's internal `FixCompletionResult` (which otherwise double-quotes any candidate
   containing whitespace) to trim the trailing "complete" space many completers append, so external-CLI
   fuzzy completions (`gh`, `az`, `winget`, …) insert as `az account ` rather than `az "account "`.
