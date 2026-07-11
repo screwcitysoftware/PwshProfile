@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Assets/icon.png" alt="ScrewCitySoftware.PwshProfile icon" width="160" />
+</p>
+
 # ScrewCitySoftware.PwshProfile
 
 [![CI](https://github.com/screwcitysoftware/PwshProfile/actions/workflows/ci.yml/badge.svg)](https://github.com/screwcitysoftware/PwshProfile/actions/workflows/ci.yml)
@@ -43,7 +47,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, and less through the
+  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, and lazygit through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -108,6 +112,10 @@ terminal.
 "font": { "face": "MesloLGM Nerd Font" }
 ```
 
+Or let the module make that `settings.json` edit for you (the wizard offers this too):
+[`Set-WindowsTerminalFont`](#set-windowsterminalfont) sets `profiles.defaults.font.face` (default
+`MesloLGM Nerd Font`), backing the file up first.
+
 **VS Code** — add to `settings.json` (set the integrated terminal font; optionally the editor too):
 
 ```jsonc
@@ -160,7 +168,7 @@ to assemble a custom startup yourself, you can call the individual building bloc
 ```powershell
 Write-Figlet 'Screw City' -Font ANSIShadow  # figlet banner in a bundled font
 Invoke-Step "PSReadLine"      { Initialize-PSReadline }
-Invoke-Step "Terminal-Icons"  { Import-ModuleSafe Terminal-Icons }
+Invoke-Step "Terminal-Icons"  { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } }
 ```
 
 Full comment-based help is available on each function via `Get-Help <Name> -Full`.
@@ -254,6 +262,23 @@ fnm use 20          # use it in this session
 fnm list            # show installed versions
 ```
 
+### git — version control
+
+git is **always installed** (like oh-my-posh — it isn't a `-Enable` token). Several profile
+features lean on it — posh-git's status prompt, PSFzf's `Ctrl+G` git pickers, lazygit, and the
+GitHub CLI — so the profile installs `Git.Git` via winget if `git` isn't already on PATH (the
+common case short-circuits, and a failed/elevation-blocked install just warns and startup
+continues).
+
+### lazygit — git TUI
+
+A full-screen terminal UI for git — stage hunks, craft commits, browse branches, rebase, and resolve
+conflicts without leaving the keyboard. Launch it in any repo:
+
+```powershell
+lazygit             # open the TUI in the current repo (press ? for keybindings, q to quit)
+```
+
 ## Themes
 
 The module bundles two oh-my-posh themes under `Assets/Themes`, both built on the same palette-keyed
@@ -263,6 +288,10 @@ structure so they differ only in color:
 |--------------|---------------|-----------------|----------------------|--------------------------|
 | `screwcity`  | Screw City    | `#c9aaff` purple | 🔩 `:nut_and_bolt:`   | purples, blues, ambers   |
 | `forestcity` | Forest City   | `#8fce72` green  | 🌳 `:deciduous_tree:` | greens, browns, grays    |
+
+Each theme's identity extends past the prompt: a matching **bat** syntax theme, **fd**/**fzf**
+color palettes, and a **Windows Terminal color scheme** (install it with
+`Install-WindowsTerminalScheme` so the terminal's own colors match the prompt).
 
 **The installer's first step is the theme choice.** `Install-PwshProfile` opens with a theme prompt —
 pick a bundled theme or supply a path to a theme of your own — and the rest of the wizard pre-fills
@@ -336,6 +365,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-OhMyPoshTheme.ps1          # emit the bundled oh-my-posh theme JSON
 │   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
 │   ├── Tools/
+│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (not a -Enable token)
 │   │   ├── Enable-Zoxide.ps1
 │   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
@@ -344,7 +374,9 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Bat.ps1
 │   │   ├── Enable-Fd.ps1
 │   │   ├── Enable-Less.ps1
+│   │   ├── Enable-Lazygit.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
+│   │   ├── Select-Fzf.ps1                 # pipe objects through fzf; returns the selected object(s) (bundles its private Invoke-FzfRaw seam in-file)
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
 │   │       ├── Enable-WingetCompletion.ps1     # winget native tab completion
 │   │       ├── Enable-AzureCliCompletion.ps1   # Azure CLI (az) native (argcomplete) tab completion
@@ -355,7 +387,10 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Rendering/
 │   │   ├── Invoke-Step.ps1                # Invoke-Step dispatcher (+ the module-scoped step state)
 │   │   ├── Write-Figlet.ps1               # figlet banner writer
-│   │   └── Show-FigletFont.ps1            # list / preview the bundled FIGlet fonts
+│   │   ├── Show-FigletFont.ps1            # list / preview the bundled FIGlet fonts
+│   │   ├── Install-WindowsTerminalScheme.ps1    # add a theme's matching scheme to WT settings.json
+│   │   ├── Uninstall-WindowsTerminalScheme.ps1  # remove a theme's scheme from WT settings.json
+│   │   └── Set-WindowsTerminalFont.ps1          # set WT's default profile font (face) in settings.json
 │   ├── Docs/
 │   │   ├── Show-PwshProfileReadme.ps1       # renders this README (Show-Markdown) or opens it (-Open)
 │   │   └── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
@@ -371,7 +406,7 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
-│   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors paired with each bundled theme
+│   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors + WT color scheme paired with each bundled theme
 │   ├── Tools/
 │   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers (-PathDir defaults to the WinGet\Links dir)
 │   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
@@ -381,7 +416,9 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Rendering/
 │   │   ├── Invoke-StepInternal.ps1      # spinner-breadcrumb worker (+ Format-StepStatus)
 │   │   ├── Get-BundledFontPath.ps1      # resolves Assets/Fonts/<name>.flf
-│   │   └── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
+│   │   ├── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
+│   │   ├── Get-WindowsTerminalSettingsPath.ps1 # locates WT settings.json (stable/preview/unpackaged)
+│   │   └── Edit-WindowsTerminalSettings.ps1    # shared read/backup/write engine for the scheme install/uninstall
 │   └── Core/
 │       └── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
 ├── Assets/                              # bundled assets
@@ -424,7 +461,10 @@ The wizard walks one forward pass, then lets you revise anything before committi
 
 1. **Nerd Fonts** — a single yes/no: say yes to install the recommended Meslo + CascadiaCode pair for
    the prompt glyphs via the [NerdFonts](https://www.powershellgallery.com/packages/NerdFonts) module
-   (CurrentUser scope, no admin required); say no and nothing is installed.
+   (CurrentUser scope, no admin required); say no and nothing is installed. Then a second yes/no
+   (**defaulting to No**) offers to set **`MesloLGM Nerd Font`** as your Windows Terminal default font
+   via [`Set-WindowsTerminalFont`](#set-windowsterminalfont) — applied to `settings.json` when you
+   submit (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
 2. **Winget** — a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
    settings: default install **scope** (`user` / `machine`), **progress-bar** style, whether to
    **anonymize displayed paths**, and whether to **suppress install notes**. It shows your current
@@ -435,7 +475,13 @@ The wizard walks one forward pass, then lets you revise anything before committi
 3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
    your own (see [Themes](#themes)). The choice seeds the banner color and step icon the later prompts
    are pre-filled with; a custom path seeds neutral color/icon so you brand those fresh. The banner
-   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme.
+   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to
+   install the matching **Windows Terminal color scheme** via
+   [`Install-WindowsTerminalScheme`](#install-windowsterminalscheme-uninstall-windowsterminalscheme)
+   (**defaulting to No**) and, only if accepted, whether to set it as the default color scheme
+   (**defaulting to Yes**) — applied to `settings.json` when you submit (a one-time
+   machine change, not part of the bootstrap; skipped under `-WhatIf`). A custom theme has no matching
+   scheme, so it installs the neutral **Screw City** scheme.
 4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
    noting anything off the theme default) and asks whether to change it — **defaulting to No**. On
    yes, a show/hide question gates the rest: say no and the banner is suppressed (`-NoBanner`) and
@@ -445,15 +491,17 @@ The wizard walks one forward pass, then lets you revise anything before committi
 6. **Features** (opt-in) — first a **mode** choice: *pick specific tools*, or *enable everything
    including tools added in future updates* (emits `-EnableAll`). "Specific" shows a grouped tree under
    two sections — **Core** (PSReadLine, Terminal-Icons, posh-git, shell completions) and **WinGet** (the
-   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less). On a re-run it **pre-checks your prior
+   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit). On a re-run it **pre-checks your prior
    selection**; on a clean first run **Core is pre-checked and WinGet is left unchecked** (so the
    light-install Core stuff is on by default, but each winget install is an explicit opt-in). Tools added
    to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
    oh-my-posh is always on and isn't listed. If `zoxide` ends up enabled you're prompted for its jump
    command; if `bat` is enabled, whether to replace the built-in `cat` (**defaulting to Yes**, emitting
    `-ReplaceCat`); if `less` is enabled, whether to make it the default pager (**defaulting to Yes**,
-   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). When `fzf` is enabled it
-   also gains the PSFzf Ctrl+T/Ctrl+R key bindings.
+   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). If `fzf` is enabled you're
+   asked whether to bind the PSFzf `Ctrl+G` git keybindings (**defaulting to No**; lazygit already
+   covers git) and which chord drives the fuzzy tab-completion picker (**default `Ctrl+Spacebar`**);
+   `Ctrl+T`/`Ctrl+R` are bound regardless.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -538,11 +586,11 @@ Show-NerdFontSetup -Font Meslo, CascadiaCode
 The headline entry point: one call that runs the profile startup, so `$PROFILE` shrinks to just this
 call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-EnableAll` (see below).
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
-model — **Core** (the `which` global alias, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
+model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
-installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less — fzf
+installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager). oh-my-posh and the `which` alias always run; everything
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias always run; everything
 else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
 WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -584,11 +632,19 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-FzfColors`** — fzf's picker palette, forwarded to `Enable-Fzf -Colors` (folded into
   `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for screwcity,
   green/gold for forestcity).
+- **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G` git chords (branch/commit/file
+  pickers), forwarded to `Enable-Fzf -GitKeyBindings`. **Off by default** (opt-in) — pass
+  `-FzfGitKeyBindings` to enable them; they're off because lazygit already covers git workflows.
+  Only applies when `Fzf` is enabled (warned-and-ignored otherwise); `Enable-Fzf` drops the chords
+  anyway if git isn't on PATH.
+- **`-FzfTabChord`** — the PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (`Tab`
+  stays `MenuComplete`), forwarded to `Enable-Fzf -TabExpansionChord`. Default `Ctrl+Spacebar`
+  (which also binds `Ctrl+@`). Only applies when `Fzf` is enabled.
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Enable`** — the tools to enable (opt-in): any of `PSReadLine`, `TerminalIcons`, `PoshGit`,
-  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Completions`. Only the listed tools run
+  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Lazygit`, `Completions`. Only the listed tools run
   (and the auto-installing ones install), so a tool added in a later module version never installs
   unless you add it here. `-Enable @()` enables nothing. oh-my-posh and the `which` alias always run
   and are not tokens.
@@ -643,7 +699,7 @@ the whole startup in one outer step (`Invoke-Step "Profile" { ... }`) for a sing
 spinner and exactly one summary line.
 
 ```powershell
-Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons }
+Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } }
 
 Invoke-Step "Completions" {
     Invoke-Step "Tailscale" { Enable-TailscaleCompletion }
@@ -655,10 +711,13 @@ Invoke-Step "Completions" {
 Imports a module, installing it first (`Install-PSResource`, CurrentUser scope, PSGallery by
 default) if it isn't already available. Install/import failures are reported as warnings and
 swallowed so profile startup continues. An optional `-Initialize` script block runs once the
-module has imported successfully.
+module has imported successfully. An optional `-Repair` script block runs when the import fails;
+the import is then retried once, and a warning is only reported if that retry also fails — used to
+clean up state that wedges a module's import (e.g. `Repair-TerminalIconsCache`, which purges a
+corrupted Terminal-Icons theme cache so the re-import can regenerate it).
 
 ```powershell
-Import-ModuleSafe Terminal-Icons
+Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache }
 Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true }
 ```
 
@@ -731,7 +790,85 @@ Show-FigletFont ANSIShadow, Colossal -Preview -Text 'Deploy'   # preview a subse
 > verified to render; if a custom `-FontPath` fails to load, try a different file. (See
 > `Assets/Fonts/README.md` for sources and license.)
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`
+### `Install-WindowsTerminalScheme`, `Uninstall-WindowsTerminalScheme`
+
+Add (or remove) a **Windows Terminal color scheme** that matches a bundled prompt theme, so the
+terminal's own 16-color ANSI palette, background, and cursor line up with the oh-my-posh prompt.
+The scheme colors come from the same source of truth as the bat/fd/fzf colors
+(`Get-BundledThemeBranding`), and the scheme is named after the theme's display name — **Screw
+City** / **Forest City** — so it shows up under that name in Windows Terminal's
+*Settings → Color schemes*.
+
+`Install-WindowsTerminalScheme` writes the scheme into the user's `settings.json` `schemes` array
+(idempotent — a re-run replaces the same-named scheme rather than duplicating it). By default it
+only *registers* the scheme; pass `-SetDefault` to also set it as `profiles.defaults.colorScheme`
+so it applies immediately. `Uninstall-WindowsTerminalScheme` removes the matching scheme. The
+`Install-PwshProfile` wizard offers to run `Install-WindowsTerminalScheme` for you (with an optional
+`-SetDefault`) in its **Theme** step.
+
+- **`-Theme`** — the bundled theme whose scheme to install/remove (default `screwcity`;
+  tab-completes; custom/unknown themes fall back to the Screw City scheme).
+- **`-SettingsPath`** — override the `settings.json` location (default: the first existing of the
+  stable, preview, and unpackaged Windows Terminal install paths).
+- **`-SetDefault`** (install only) — also set the scheme as the default color scheme for all
+  profiles.
+
+Both back the original `settings.json` up to `settings.json.bak` before rewriting, and support
+`-WhatIf` / `-Confirm`. If Windows Terminal isn't installed (no `settings.json` found), they warn
+and change nothing.
+
+> Note: `settings.json` is JSONC — the parse → rewrite round-trip does **not** preserve `//`
+> comments or hand-formatting (the `.bak` backup is the safety net). Removing a scheme that's still
+> referenced as an active `colorScheme` warns you to pick a replacement.
+
+```powershell
+Install-WindowsTerminalScheme                          # add the "Screw City" scheme to pick in WT
+Install-WindowsTerminalScheme -Theme forestcity -SetDefault   # add "Forest City" and apply it now
+Install-WindowsTerminalScheme -WhatIf                  # preview the change, write nothing
+Uninstall-WindowsTerminalScheme -Theme forestcity      # remove the "Forest City" scheme
+```
+
+### `Set-WindowsTerminalFont`
+
+Set **Windows Terminal's default profile font** by pointing `profiles.defaults.font.face` at a font
+family — handy right after installing a Nerd Font so the oh-my-posh prompt glyphs (folder, git, OS
+icons) render instead of boxes. The default font face is **`MesloLGM Nerd Font`**, the installed
+family name of the Meslo Nerd Font the install wizard offers (note: that's *not* `Menlo` or `Meslo`).
+The install wizard offers to run this for you in its **Nerd Font** step (default *Yes*).
+
+- **`-FontFace`** — the font family name to set (default `MesloLGM Nerd Font`). Use the exact name as
+  it appears installed (e.g. `CaskaydiaCove Nerd Font` for Cascadia Code).
+- **`-SettingsPath`** — override the `settings.json` location (default: the first existing of the
+  stable, preview, and unpackaged Windows Terminal install paths).
+
+It's idempotent (a re-run just overwrites the face), backs the original `settings.json` up to
+`settings.json.bak` before rewriting, and supports `-WhatIf` / `-Confirm`. If Windows Terminal isn't
+installed (no `settings.json` found), it warns and changes nothing. The same JSONC caveat as the
+scheme functions applies (the round-trip drops `//` comments; the `.bak` is the safety net).
+
+```powershell
+Set-WindowsTerminalFont                                 # set "MesloLGM Nerd Font" as the WT default
+Set-WindowsTerminalFont -FontFace 'CaskaydiaCove Nerd Font'   # use Cascadia Code instead
+Set-WindowsTerminalFont -WhatIf                         # preview the change, write nothing
+```
+
+### `Enable-Git`
+
+Installs git (`Git.Git`) with winget if `git.exe` isn't already on PATH, patching the current
+session's PATH so it's usable immediately. Unlike the opt-in tool enablers below, `Enable-Git` is
+**always-on** (it isn't an `-Enable` token) and runs first in the **Core** section — posh-git's
+status prompt, PSFzf's `Ctrl+G` git chords, lazygit, and the GitHub CLI all want git on PATH. It's
+install-only (git ships no PowerShell shell-init or completion, so Initialize is a
+`Get-Command`-guarded no-op). `Git.Git` is a full installer (not a winget portable), so it targets
+`%ProgramFiles%\Git\cmd`; a machine install may need elevation, but the already-installed
+short-circuit means the common case does nothing, and a blocked/failed install just warns and
+startup continues.
+
+```powershell
+Enable-Git
+```
+
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`, `Enable-Lazygit`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -755,7 +892,9 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 - **`Enable-Fzf [-Colors <spec>] [-Style <preset>] [-Height <value>] [-PreviewCommand <cmd>]
   [-ProviderChord <chord>] [-HistoryChord <chord>] [-TabExpansionChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
-  `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi`) from
+  `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi --ignore-case`
+  — the latter forces case-insensitive matching regardless of query case, since PowerShell/Windows is
+  case-insensitive) from
   `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full` — added only when the
   installed fzf is **0.54+**, since an older pre-existing fzf would reject the unknown option); it
   carries **no** `--preview`, so directory pickers stay clean. `-PreviewCommand` is
@@ -768,15 +907,18 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   git is on PATH). `-TabExpansionChord` binds a chord to PSFzf's `Invoke-FzfTabCompletion` (via
   `Set-PSReadLineKeyHandler`, since `Set-PsFzfOption -TabExpansion` only ever targets `Tab`), opening a
   fuzzy fzf picker over PowerShell's native completions — paths, command/parameter names, and every
-  registered completer — while leaving `Tab` as the classic `MenuComplete`. After importing PSFzf it
+  registered completer — while leaving `Tab` as the classic `MenuComplete`. Passing `Ctrl+Spacebar`
+  (or `Ctrl+@`) binds **both** chords to the picker, since many terminals emit the same byte for the
+  two and report the keypress under either name. After importing PSFzf it
   also patches PSFzf's internal `FixCompletionResult` (which otherwise double-quotes any candidate
   containing whitespace) to trim the trailing "complete" space many completers append, so external-CLI
   fuzzy completions (`gh`, `az`, `winget`, …) insert as `az account ` rather than `az "account "`.
   `-Height` sizes those PSFzf pickers via `$env:_PSFZF_FZF_DEFAULT_OPTS` (PSFzf's
   widget-only opts, read in preference to `$env:FZF_DEFAULT_OPTS`): without it PSFzf forces an inline
-  `--height=40%`; `Initialize-PwshProfile` passes `100%` so the pickers fill the shell, while
+  `--height=40%`; `Initialize-PwshProfile` passes `~100%` so the pickers adapt — filling the shell for
+  large result sets but shrinking to fit small ones — while
   `$env:FZF_DEFAULT_OPTS` stays height-free so a bare `fzf` keeps its alternate-screen fullscreen.
-  `Initialize-PwshProfile` passes the theme blend, `full` style, `100%` height, the bat preview
+  `Initialize-PwshProfile` passes the theme blend, `full` style, `~100%` height, the bat preview
   (when bat is in play), `Ctrl+t`/`Ctrl+r`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd` (when fd
   is in play), and `-GitKeyBindings`. fzf
   owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND`)
@@ -809,7 +951,8 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `-LsColors` (so fd's output matches the prompt — `Initialize-PwshProfile` passes the active
   theme's truecolor blend), registers fd's PowerShell completer (`fd --gen-completions powershell`),
   and — with `-IntegrateFzf`, when `fzf.exe` is present — points a bare `fzf` at fd as its file
-  source via `$env:FZF_DEFAULT_COMMAND` (the Ctrl+T picker uses PSFzf's own fd provider). **fd is
+  source via `$env:FZF_DEFAULT_COMMAND` (`fd --ignore-case …`, case-insensitive; the Ctrl+T picker
+  uses PSFzf's own fd provider). **fd is
   standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
   `ls`/`eza`.) Enabled after `Enable-Fzf`
   so `fzf.exe` is on PATH when integration is evaluated.
@@ -822,17 +965,22 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `Enable-Bat` color paging: bat's default pager is less, so without it on PATH bat can't page colored
   output. Unlike bat/fd, less ships no PowerShell completer and has no palette, so it registers no
   completion and isn't themed — `$env:LESS` carries functional defaults only.
+- **`Enable-Lazygit`** — installs `JesseDuffield.lazygit` (a full-screen terminal UI for git) and
+  puts `lazygit.exe` on PATH. lazygit is a self-contained TUI you launch by typing `lazygit`, with
+  no built-in shell completion, so this is install-only — there's no Initialize work and no
+  completion to register (like `Enable-Jq`).
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
 Enable-Zoxide
-Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
+Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '~100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
 Enable-FastNodeManager
 Enable-Xh
 Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
 Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 Enable-Less -ReplaceMore
+Enable-Lazygit
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -921,6 +1069,43 @@ Supports `-WhatIf` / `-Confirm`.
 ```powershell
 Set-WingetSetting -Scope user -ProgressBar rainbow -AnonymizePath $true -DisableInstallNote $false
 Set-WingetSetting -Scope machine -WhatIf        # preview only the scope change
+```
+
+### `Select-Fzf`
+
+A general-purpose [fzf](https://github.com/junegunn/fzf) wrapper for interactive fuzzy selection over
+**objects** from the pipeline. It replaces hand-rolled one-off pipelines — e.g.
+`Get-AzSubscription | % { "{0}`t{1}" -f $_.Name, $_.Id } | fzf --with-nth 1 --nth 1 --accept-nth 2 --delimiter "`t"`
+— with a single command that hands back the **live selected object(s)**, not text you have to
+re-parse. Pipe in any objects, say what to display and (optionally) what to return.
+
+Internally each item is tagged with a hidden integer index and rendered as an `<index><US><display>`
+line, joined by ASCII Unit Separator (`0x1f`) — a non-printable control char that can't collide with
+human-readable display text, so the display keeps its tabs/colons (only newlines are collapsed). fzf
+runs with `--delimiter` / `--with-nth=2..` so the index column is hidden and `--with-nth` scopes both
+the display **and the fuzzy search** to the text column (no `--nth` — it would re-index the
+post-`--with-nth` view and break matching), then the selected line's leading index maps back to the
+original object. It's invoked with `--ansi` and
+inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-less-enable-lazygit) has themed fzf the
+picker matches your prompt palette automatically. Requires `fzf` on PATH (it warns and returns nothing
+otherwise); an empty pipeline or an Esc cancel also returns nothing — it never throws.
+
+- **`-Display`** — what to show per item: a property **name** (string) or a **scriptblock** (`$_` is
+  the item), e.g. `{ "{0} ({1})" -f $_.Name, $_.Id }`. Omit it to use the item's string form. This is
+  the only text shown and the only text fzf searches.
+- **`-Value`** — what to return: a property name or scriptblock. Omit it to return the **whole
+  object** (the default — `.Property` still works on the result).
+- **`-Multiple`** — enable multi-select (`--multi`, Tab to mark rows); returns an array.
+- **`-Prompt` / `-Header`** — fzf's `--prompt` / `--header`. (There's no `-Preview` parameter: a
+  preview would only see the rendered row text, not the live object — pass `-FzfArgument '--preview=…'`
+  if you want raw-text preview anyway.)
+- **`-Height`** — fzf's `--height`, default `~100%` (adaptive). Set `''` for fzf's own default.
+- **`-FzfArgument`** — escape hatch: extra raw fzf args appended verbatim (e.g. `--cycle`, `--border`).
+
+```powershell
+Get-ChildItem | Select-Fzf -Display Name                      # returns the selected FileInfo/DirectoryInfo
+Get-AzSubscription | Select-Fzf -Display Name -Value Id        # show names, return the chosen Id
+Get-Process | Select-Fzf -Display { "{0} ({1})" -f $_.Name, $_.Id } -Multiple -Prompt 'kill> '
 ```
 
 ### `Show-PwshProfileReadme`
@@ -1027,7 +1212,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less,
+- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never

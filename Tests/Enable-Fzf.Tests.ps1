@@ -29,53 +29,53 @@ Describe 'Enable-Fzf' {
         $env:_PSFZF_FZF_DEFAULT_OPTS = $script:savedPsfzf
     }
 
-    It 'sets FZF_DEFAULT_OPTS to the --ansi baseline on a bare call' {
+    It 'sets FZF_DEFAULT_OPTS to the --ansi --ignore-case baseline on a bare call' {
         Enable-Fzf
-        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi'
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case'
     }
 
-    It 'folds --color into FZF_DEFAULT_OPTS alongside --ansi' {
+    It 'folds --color into FZF_DEFAULT_OPTS alongside the baseline' {
         Enable-Fzf -Colors 'pointer:#c9aaff'
-        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --color=pointer:#c9aaff'
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case --color=pointer:#c9aaff'
     }
 
     It 'folds --style into FZF_DEFAULT_OPTS when fzf is new enough (>=0.54)' {
         Mock -ModuleName $script:Module Get-FzfVersion { [version]'0.54' }
         Enable-Fzf -Style full
-        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --style=full'
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case --style=full'
     }
 
     It 'skips --style when the installed fzf is older than 0.54 (would reject the option)' {
         Mock -ModuleName $script:Module Get-FzfVersion { [version]'0.40' }
         Enable-Fzf -Style full
-        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi'
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case'
     }
 
     It 'skips --style when the fzf version cannot be determined' {
         Mock -ModuleName $script:Module Get-FzfVersion { $null }
         Enable-Fzf -Style full
-        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi'
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case'
     }
 
     It 'scopes the preview to FZF_CTRL_T_OPTS and never leaks it into the global opts' {
         Enable-Fzf -PreviewCommand 'bat {}'
         $env:FZF_CTRL_T_OPTS  | Should -Be "--preview 'bat {}'"
-        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi'
+        $env:FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case'
     }
 
     It 'sizes the PSFzf widgets via _PSFZF_FZF_DEFAULT_OPTS, leaving the global opts height-free' {
-        Enable-Fzf -Colors 'pointer:#c9aaff' -Height '100%'
+        Enable-Fzf -Colors 'pointer:#c9aaff' -Height '~100%'
         # The PSFzf-only opts carry the base plus the height; the global opts stay height-free so a
         # bare fzf keeps its alternate-screen fullscreen.
-        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi --color=pointer:#c9aaff --height=100%'
-        $env:FZF_DEFAULT_OPTS        | Should -Be '--ansi --color=pointer:#c9aaff'
+        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case --color=pointer:#c9aaff --height=~100%'
+        $env:FZF_DEFAULT_OPTS        | Should -Be '--ansi --ignore-case --color=pointer:#c9aaff'
     }
 
     It 'mirrors the height-free global opts into _PSFZF_FZF_DEFAULT_OPTS when no -Height is given' {
         Enable-Fzf
         # Without a --height the var simply mirrors the global opts (PSFzf still applies its own
         # default height); it must not carry a --height it was never asked for.
-        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi'
+        $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Be '--ansi --ignore-case'
         $env:_PSFZF_FZF_DEFAULT_OPTS | Should -Not -Match '--height'
     }
 
@@ -105,7 +105,16 @@ Describe 'Enable-Fzf' {
         Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'Invoke-FzfTabCompletion' }
         Enable-Fzf -TabExpansionChord 'Ctrl+Spacebar'
         Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 1 -Exactly
+        # Ctrl+Spacebar and Ctrl+@ are the same byte in many terminals, so both are bound.
         Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
-            -ParameterFilter { $Key -eq 'Ctrl+Spacebar' }
+            -ParameterFilter { $Key -contains 'Ctrl+Spacebar' -and $Key -contains 'Ctrl+@' }
+    }
+
+    It 'binds only the given chord when -TabExpansionChord is not the Ctrl+Spacebar/Ctrl+@ pair' {
+        Mock -ModuleName $script:Module Set-PSReadLineKeyHandler { }
+        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'Invoke-FzfTabCompletion' }
+        Enable-Fzf -TabExpansionChord 'Ctrl+j'
+        Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
+            -ParameterFilter { $Key -eq 'Ctrl+j' }
     }
 }

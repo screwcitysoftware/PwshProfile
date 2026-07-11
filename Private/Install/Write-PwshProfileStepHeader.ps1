@@ -56,7 +56,7 @@ function Write-PwshProfileStepHeader {
         [int]$Total,
 
         [Parameter()]
-        [string]$Body = '',
+        [string]$Body,
 
         [Parameter()]
         [string]$Accent = '#c9aaff',

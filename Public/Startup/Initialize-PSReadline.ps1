@@ -39,8 +39,7 @@ function Initialize-PSReadline {
     # Predictions require a real interactive console — PSReadLine errors out when output
     # is redirected (e.g. scripted `pwsh -Command` runs), so skip them in that case.
     if (-not [Console]::IsOutputRedirected) {
-        # Set-PSReadLineOption -PredictionSource History
-        Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+        Set-PSReadLineOption -PredictionSource History
         Set-PSReadLineOption -PredictionViewStyle ListView
     }
     Set-PSReadLineOption -EditMode Windows

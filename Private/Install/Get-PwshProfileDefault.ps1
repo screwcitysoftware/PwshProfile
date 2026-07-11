@@ -10,8 +10,8 @@ function Get-PwshProfileDefault {
         can set:
 
           Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, NoBanner, Enable (string[]),
-          EnableAll.
+          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, FzfGitKeyBindings (bool),
+          FzfTabChord, NoBanner, Enable (string[]), EnableAll.
 
         BannerText defaults to the literal '$env:COMPUTERNAME' for every theme (it interpolates to the
         machine name at startup) — matching Initialize-PwshProfile's runtime default, so a kept default
@@ -32,7 +32,7 @@ function Get-PwshProfileDefault {
         Get-PwshProfileDefault
 
         Returns the default settings hashtable for the screwcity theme (BannerText = '$env:COMPUTERNAME',
-        BannerColor = '#c9aaff', etc.).
+        BannerColor = '#4c81c8', etc.).
 
     .EXAMPLE
         Get-PwshProfileDefault -Theme forestcity
@@ -62,6 +62,11 @@ function Get-PwshProfileDefault {
         BatStyle        = 'numbers,changes,header'
         ReplaceCat      = $false
         ReplaceMore     = $false
+        # PSFzf keybinding tuning (only meaningful when Fzf is enabled). Git chords off by default
+        # (opt-in; lazygit covers git); the tab-completion picker chord defaults to Ctrl+Spacebar.
+        # Match Initialize-PwshProfile's defaults.
+        FzfGitKeyBindings = $false
+        FzfTabChord     = 'Ctrl+Spacebar'
         NoBanner        = $false
         # Opt-in: nothing selected by default (first-run wizard starts all-unchecked).
         Enable          = @()

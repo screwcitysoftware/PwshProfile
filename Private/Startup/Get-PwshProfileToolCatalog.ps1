@@ -50,7 +50,7 @@ function Get-PwshProfileToolCatalog {
     .EXAMPLE
         Get-PwshProfileToolCatalog -Token
 
-        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Less').
+        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Less','Lazygit').
 
     .EXAMPLE
         Get-PwshProfileToolCatalog -DefaultEnabled
@@ -68,7 +68,7 @@ function Get-PwshProfileToolCatalog {
     )
 
     # Flat feature list in display/run order: the Core features first, then the WinGet tools (their
-    # order mirrors the orchestrator's run order: zoxide, fzf, fnm, xh, jq, bat, fd, less). The group a
+    # order mirrors the orchestrator's run order: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit). The group a
     # feature belongs to is DERIVED from its Install kind, so the "WinGet = winget installs" rule can't
     # drift. oh-my-posh and the `which` alias are intentionally absent (always-on, not tokens).
     $entries = @(
@@ -84,6 +84,7 @@ function Get-PwshProfileToolCatalog {
         [pscustomobject]@{ Label = 'bat (cat replacement)'; Token = 'Bat'; Install = 'winget' }
         [pscustomobject]@{ Label = 'fd (file finder)'; Token = 'Fd'; Install = 'winget' }
         [pscustomobject]@{ Label = 'less (pager)'; Token = 'Less'; Install = 'winget' }
+        [pscustomobject]@{ Label = 'lazygit (git TUI)'; Token = 'Lazygit'; Install = 'winget' }
     )
 
     if ($Token) {

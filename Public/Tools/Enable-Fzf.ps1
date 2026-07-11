@@ -11,11 +11,13 @@ function Enable-Fzf {
             immediately.
           - Initialize (guarded by Get-Command fzf.exe):
               * Composes $env:FZF_DEFAULT_OPTS — the baseline for every fzf invocation (plain fzf,
-                zoxide's `cdi`/`zi`, and PSFzf's widgets) — from "--ansi" plus "--style=<preset>"
-                (when -Style is given) and "--color=<spec>" (when -Colors is given). It deliberately
-                carries NO --preview, so directory pickers like zoxide's `cdi` stay clean. "--ansi"
-                is always set as the baseline (it renders colored source output, e.g. Enable-Fd's
-                `fd --color=always`, and is a no-op otherwise).
+                zoxide's `cdi`/`zi`, and PSFzf's widgets) — from "--ansi --ignore-case" plus
+                "--style=<preset>" (when -Style is given) and "--color=<spec>" (when -Colors is
+                given). It deliberately carries NO --preview, so directory pickers like zoxide's
+                `cdi` stay clean. "--ansi" is always set as the baseline (it renders colored source
+                output, e.g. Enable-Fd's `fd --color=always`, and is a no-op otherwise), and
+                "--ignore-case" is always set so fzf matches case-insensitively regardless of query
+                case (overriding fzf's default smart-case) — PowerShell/Windows is case-insensitive.
               * When -PreviewCommand is given, sets $env:FZF_CTRL_T_OPTS to "--preview '<command>'".
                 PSFzf layers this on top of FZF_DEFAULT_OPTS for the Ctrl+T file picker only — so the
                 bat preview shows for file searches but never for directory pickers. (Initialize-
@@ -35,7 +37,9 @@ function Enable-Fzf {
                 Invoke-FzfTabCompletion (via Set-PSReadLineKeyHandler) so the chord opens a fuzzy fzf
                 picker over PowerShell's native completion candidates. Tab is intentionally left as
                 MenuComplete — Set-PsFzfOption -TabExpansion only ever targets Tab, so a non-Tab chord
-                must be bound directly.
+                must be bound directly. If that chord is Ctrl+Spacebar or Ctrl+@, BOTH are bound (many
+                terminals emit the same byte for the two and report it under either name), so the
+                picker fires regardless of which name the terminal surfaces.
 
         If the install doesn't produce fzf.exe on PATH, a warning is emitted (with winget's
         captured output) and Initialize is skipped (guarded by Get-Command) so profile startup
@@ -65,8 +69,8 @@ function Enable-Fzf {
         PSFzf reads in preference to $env:FZF_DEFAULT_OPTS. This overrides PSFzf's built-in
         --height=40% default (which opens the widgets inline below the prompt). Empty leaves that 40%
         default in place. Note: --height renders inline, not on the alternate screen, so it never
-        perfectly matches a bare fzf's fullscreen — 100% is the closest. Initialize-PwshProfile passes
-        '100%'.
+        perfectly matches a bare fzf's fullscreen — 100%/~100% is the closest. Initialize-PwshProfile
+        passes '~100%' (adaptive: fills the shell for large result sets, shrinks to fit small ones).
 
     .PARAMETER PreviewCommand
         A command for the Ctrl+T file picker's `--preview` window, with `{}` standing in for the
@@ -94,7 +98,9 @@ function Enable-Fzf {
         untouched (it stays PSReadLine's MenuComplete); Set-PsFzfOption -TabExpansion only ever targets
         Tab, which is why this binds Invoke-FzfTabCompletion directly. Empty leaves the chord unbound.
         Initialize-PwshProfile passes 'Ctrl+Spacebar' (a chord that otherwise duplicates Tab's
-        MenuComplete, so repurposing it loses nothing).
+        MenuComplete, so repurposing it loses nothing). Passing 'Ctrl+Spacebar' (or 'Ctrl+@') binds
+        BOTH chords to the picker — many terminal emulators emit the same byte (NUL, 0x00) for the two
+        and PSReadLine may report the keypress under either name.
 
     .PARAMETER UseFd
         When set, calls Set-PsFzfOption -EnableFd so PSFzf uses fd for its file/directory traversal
@@ -113,7 +119,7 @@ function Enable-Fzf {
         source output renders), leaving $env:FZF_CTRL_T_OPTS untouched and PSFzf uninstalled.
 
     .EXAMPLE
-        Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff' -Style full -Height '100%' `
+        Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff' -Style full -Height '~100%' `
             -PreviewCommand 'bat --color=always --style=numbers {}' `
             -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
             -UseFd -GitKeyBindings
@@ -143,25 +149,25 @@ function Enable-Fzf {
     [CmdletBinding()]
     param(
         [Parameter()]
-        [string]$Colors = '',
+        [string]$Colors,
 
         [Parameter()]
-        [string]$Style = '',
+        [string]$Style,
 
         [Parameter()]
-        [string]$Height = '',
+        [string]$Height,
 
         [Parameter()]
-        [string]$PreviewCommand = '',
+        [string]$PreviewCommand,
 
         [Parameter()]
-        [string]$ProviderChord = '',
+        [string]$ProviderChord,
 
         [Parameter()]
-        [string]$HistoryChord = '',
+        [string]$HistoryChord,
 
         [Parameter()]
-        [string]$TabExpansionChord = '',
+        [string]$TabExpansionChord,
 
         [Parameter()]
         [switch]$UseFd,
@@ -182,6 +188,11 @@ function Enable-Fzf {
             # process-global. --ansi renders ANSI-colored source output (e.g. fd --color=always).
             $opts = [System.Collections.Generic.List[string]]::new()
             $opts.Add('--ansi')
+            # Always case-insensitive: fzf defaults to smart-case (case-sensitive once the query
+            # carries an uppercase char), but PowerShell/Windows is case-insensitive, so force
+            # --ignore-case as a fixed baseline. This governs every fzf surface (bare fzf, PSFzf's
+            # Ctrl+T/Ctrl+R widgets, zoxide's cdi, the git chords) — fzf, not fd, does the matching.
+            $opts.Add('--ignore-case')
             # --style is an fzf 0.54+ feature. The Install substep short-circuits when fzf.exe is
             # already on PATH, so it can't assume winget just supplied a current build — a pre-existing
             # older fzf would choke on --style and fail *every* fzf invocation (and zoxide's cdi). So
@@ -251,7 +262,17 @@ function Enable-Fzf {
                 # PSFzf Invoke-FzfTabCompletion at key-press time.
                 if (-not [string]::IsNullOrWhiteSpace($TabExpansionChord) -and
                     (Get-Command Invoke-FzfTabCompletion -ErrorAction SilentlyContinue)) {
-                    Set-PSReadLineKeyHandler -Key $TabExpansionChord -ScriptBlock { Invoke-FzfTabCompletion } `
+                    # Many terminal emulators emit the same byte (NUL, 0x00) for Ctrl+Spacebar and
+                    # Ctrl+@, and PSReadLine may report the keypress under either name — so when the
+                    # tab-expansion chord is one of that pair, bind BOTH so the picker fires regardless
+                    # of which name the terminal surfaces. -Key takes a string[]; separate array
+                    # elements are independent bindings to the same handler (a comma inside one string
+                    # would instead be a chord sequence). Any other chord binds as-is.
+                    $tabKeys = if ($TabExpansionChord -in 'Ctrl+Spacebar', 'Ctrl+@') {
+                        'Ctrl+Spacebar', 'Ctrl+@'
+                    }
+                    else { $TabExpansionChord }
+                    Set-PSReadLineKeyHandler -Key $tabKeys -ScriptBlock { Invoke-FzfTabCompletion } `
                         -BriefDescription 'FzfTabCompletion' `
                         -Description 'Fuzzy completion picker via fzf (PSFzf)'
                 }

@@ -187,6 +187,34 @@ function Install-PwshProfile {
         }
     }
 
+    # Point Windows Terminal at the Meslo Nerd Font as its default profile font — a one-time machine
+    # action like the font install, not part of the profile bootstrap. Skipped under -WhatIf (a preview
+    # must make no changes), and only when the wizard opted in. Set-WindowsTerminalFont no-ops with a
+    # warning if Windows Terminal's settings.json can't be found.
+    if ($settings.ContainsKey('SetTerminalFont') -and $settings.SetTerminalFont -and -not $WhatIfPreference) {
+        Invoke-Step 'Windows Terminal font' -Icon ':gear:' {
+            # Suppress the host feedback (stream 6) so it doesn't tear the live spinner; a settings.json
+            # not-found warning (stream 3) still flows through Invoke-Step's warning replay.
+            Set-WindowsTerminalFont -FontFace 'MesloLGM Nerd Font' 6> $null
+        }
+    }
+
+    # Install the matching Windows Terminal color scheme (optionally as the default) — a one-time machine
+    # action like the font set, not part of the profile bootstrap. Skipped under -WhatIf, and only when
+    # the wizard opted in. Resolve the theme defensively (as Build-PwshProfileInitializeCall does) since a
+    # custom theme leaves Theme as 'screwcity'. Install-WindowsTerminalScheme no-ops with a warning if
+    # Windows Terminal's settings.json can't be found.
+    if ($settings.ContainsKey('InstallTerminalScheme') -and $settings.InstallTerminalScheme -and -not $WhatIfPreference) {
+        Invoke-Step 'Windows Terminal scheme' -Icon ':gear:' {
+            $schemeTheme = if ($settings.ContainsKey('Theme') -and $settings.Theme) { $settings.Theme } else { 'screwcity' }
+            $schemeArgs = @{ Theme = $schemeTheme }
+            if ($settings.ContainsKey('SetSchemeDefault') -and $settings.SetSchemeDefault) { $schemeArgs['SetDefault'] = $true }
+            # Suppress host feedback (stream 6) so it doesn't tear the spinner; a not-found warning
+            # (stream 3) still flows through Invoke-Step's warning replay.
+            Install-WindowsTerminalScheme @schemeArgs 6> $null
+        }
+    }
+
     # Terminal-font guidance — display-only (runs under -WhatIf), shown every run so users know to
     # point their terminal at a Nerd Font even if they declined the install. Pass -Font only when
     # fonts were chosen so it names the installed families; otherwise it shows the recommended pairing.

@@ -199,6 +199,55 @@ Describe 'Build-PwshProfileInitializeCall' {
                 Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain' -Enable Bat"
         }
     }
+
+    It 'emits a bare -FzfGitKeyBindings only when turned on and fzf is enabled' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.FzfGitKeyBindings = $true
+            $s.Enable = @('Fzf')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -FzfGitKeyBindings -Enable Fzf'
+        }
+    }
+
+    It 'omits -FzfGitKeyBindings when fzf is not enabled (gated)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.FzfGitKeyBindings = $true
+            $s.Enable = @('Zoxide')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Zoxide'
+        }
+    }
+
+    It 'omits -FzfGitKeyBindings at its default (off)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.Enable = @('Fzf')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Fzf'
+        }
+    }
+
+    It 'emits a non-default -FzfTabChord when fzf is enabled, single-quoted' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.FzfTabChord = 'Ctrl+j'
+            $s.Enable = @('Fzf')
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be "Initialize-PwshProfile -FzfTabChord 'Ctrl+j' -Enable Fzf"
+        }
+    }
+
+    It 'omits -FzfTabChord at its default (Ctrl+Spacebar)' {
+        InModuleScope $script:Module {
+            $s = Get-PwshProfileDefault
+            $s.Enable = @('Fzf')
+            $s.FzfTabChord = 'Ctrl+Spacebar'
+            Build-PwshProfileInitializeCall -Setting $s |
+                Should -Be 'Initialize-PwshProfile -Enable Fzf'
+        }
+    }
 }
 
 Describe 'Get-SpectreColorValue' {
@@ -488,6 +537,8 @@ Describe 'Invoke-PwshProfileWizard' {
             # Banner: shown by default; Nerd Fonts: declined by default.
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color'
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }
+            # fzf git keybindings default to No — the BeforeEach catch-all Read-SpectreConfirm { $false }
+            # answers the git-chords prompt, matching the default-off behavior.
             # Open both "make changes?" gates by default so the per-setting prompts below run; the
             # gate-closed paths get their own tests.
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Change these banner settings?' }
@@ -504,7 +555,7 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Winget progress bar style' }
             # Features: pick-specific mode by default, with the tree returning everything enabled.
             Mock Read-SpectreSelection { 'Pick specific tools' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'How should startup tools be selected?' }
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit', 'Completions') } -RemoveParameterType 'Color'
             # Hub: submit (the first choice).
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'What would you like to do?' }
         }
@@ -514,7 +565,7 @@ Describe 'Invoke-PwshProfileWizard' {
         InModuleScope $script:Module {
             $s = Invoke-PwshProfileWizard
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
-            $s.BannerColor | Should -Be '#c9aaff'
+            $s.BannerColor | Should -Be '#4c81c8'
             $s.StepIcon | Should -Be ':nut_and_bolt:'
             @($s.Enable) | Should -Be @(Get-PwshProfileToolCatalog -Token)
             $s.EnableAll | Should -BeFalse
@@ -618,6 +669,47 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
+    It 'leaves fzf git chords off by default (prompt declined) with the default tab chord' {
+        InModuleScope $script:Module {
+            # BeforeEach: catch-all $false declines the git-chords prompt; Read-SpectreText returns the default.
+            $s = Invoke-PwshProfileWizard
+            $s.Enable | Should -Contain 'Fzf'
+            $s.FzfGitKeyBindings | Should -BeFalse
+            $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
+        }
+    }
+
+    It 'sets FzfGitKeyBindings true when the git-chords prompt is accepted' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Enable PSFzf git keybindings (Ctrl+G)?' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.FzfGitKeyBindings | Should -BeTrue
+        }
+    }
+
+    It 'captures a custom fzf tab chord' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreText { 'Ctrl+j' } -ParameterFilter { $Message -eq 'PSFzf tab-completion picker chord' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.FzfTabChord | Should -Be 'Ctrl+j'
+        }
+    }
+
+    It 'leaves fzf keybinding settings at defaults (and skips the prompts) when fzf is unchecked' {
+        InModuleScope $script:Module {
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+
+            $s = Invoke-PwshProfileWizard
+            $s.Enable | Should -Not -Contain 'Fzf'
+            $s.FzfGitKeyBindings | Should -BeFalse
+            $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
+            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Enable PSFzf git keybindings (Ctrl+G)?' }
+            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'PSFzf tab-completion picker chord' }
+        }
+    }
+
     It 'sets NoBanner and skips the theming sub-steps when the banner is declined' {
         InModuleScope $script:Module {
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }
@@ -701,6 +793,52 @@ Describe 'Invoke-PwshProfileWizard' {
             @($s.NerdFont).Count | Should -Be 2
             $s.NerdFont | Should -Contain 'Meslo'
             $s.NerdFont | Should -Contain 'CascadiaCode'
+        }
+    }
+
+    It 'records SetTerminalFont = $false when the WT-font prompt is declined' {
+        InModuleScope $script:Module {
+            # The BeforeEach catch-all Read-SpectreConfirm { $false } declines the WT-font prompt.
+            $s = Invoke-PwshProfileWizard
+            $s.SetTerminalFont | Should -BeFalse
+        }
+    }
+
+    It 'records SetTerminalFont = $true when the WT-font prompt is accepted' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Set MesloLGM Nerd Font as the Windows Terminal default font?' }
+            $s = Invoke-PwshProfileWizard
+            $s.SetTerminalFont | Should -BeTrue
+        }
+    }
+
+    It 'records InstallTerminalScheme/SetSchemeDefault = $false when the scheme prompt is declined' {
+        InModuleScope $script:Module {
+            # The BeforeEach catch-all Read-SpectreConfirm { $false } declines the install prompt, so the
+            # set-default follow-up is never asked.
+            $s = Invoke-PwshProfileWizard
+            $s.InstallTerminalScheme | Should -BeFalse
+            $s.SetSchemeDefault | Should -BeFalse
+        }
+    }
+
+    It 'records InstallTerminalScheme/SetSchemeDefault = $true when both scheme prompts are accepted' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Install the matching Windows Terminal color scheme?' }
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Set it as the Windows Terminal default color scheme?' }
+            $s = Invoke-PwshProfileWizard
+            $s.InstallTerminalScheme | Should -BeTrue
+            $s.SetSchemeDefault | Should -BeTrue
+        }
+    }
+
+    It 'installs the scheme but leaves it non-default when the set-default follow-up is declined' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Install the matching Windows Terminal color scheme?' }
+            # The set-default follow-up falls through to the catch-all $false.
+            $s = Invoke-PwshProfileWizard
+            $s.InstallTerminalScheme | Should -BeTrue
+            $s.SetSchemeDefault | Should -BeFalse
         }
     }
 
@@ -933,5 +1071,130 @@ Describe 'Install-PwshProfile' {
 
         Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
         Should -Invoke -ModuleName $script:Module Set-WingetSetting -Times 0 -Exactly
+    }
+
+    It 'sets the Windows Terminal font via Set-WindowsTerminalFont when opted in' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                SetTerminalFont = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Set-WindowsTerminalFont { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Set-WindowsTerminalFont -Times 1 -Exactly `
+            -ParameterFilter { $FontFace -eq 'MesloLGM Nerd Font' }
+        # The install-time step is marked with a gear, independent of the chosen runtime step icon.
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+            -ParameterFilter { $Description -eq 'Windows Terminal font' -and $Icon -eq ':gear:' }
+    }
+
+    It 'does not set the Windows Terminal font when the wizard declined it' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                SetTerminalFont = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Set-WindowsTerminalFont { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Set-WindowsTerminalFont -Times 0 -Exactly
+    }
+
+    It 'does not set the Windows Terminal font under -WhatIf' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                SetTerminalFont = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Set-WindowsTerminalFont { }
+
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Set-WindowsTerminalFont -Times 0 -Exactly
+    }
+
+    It 'installs the matching Windows Terminal scheme (with -SetDefault) when opted in' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'forestcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $true; SetSchemeDefault = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 1 -Exactly `
+            -ParameterFilter { $Theme -eq 'forestcity' -and $SetDefault }
+        # The install-time step is marked with a gear, independent of the chosen runtime step icon.
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+            -ParameterFilter { $Description -eq 'Windows Terminal scheme' -and $Icon -eq ':gear:' }
+    }
+
+    It 'installs the scheme without -SetDefault when the set-default follow-up was declined' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'screwcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $true; SetSchemeDefault = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 1 -Exactly `
+            -ParameterFilter { $Theme -eq 'screwcity' -and -not $SetDefault }
+    }
+
+    It 'does not install the scheme when the wizard declined it' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'screwcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $false; SetSchemeDefault = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 0 -Exactly
+    }
+
+    It 'does not install the scheme under -WhatIf' {
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                Theme = 'screwcity'; CustomTheme = ''
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                InstallTerminalScheme = $true; SetSchemeDefault = $true
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Install-WindowsTerminalScheme { }
+
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WindowsTerminalScheme -Times 0 -Exactly
     }
 }

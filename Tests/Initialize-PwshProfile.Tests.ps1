@@ -27,6 +27,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Write-SpectreHost { }
         Mock -ModuleName $script:Module Initialize-PSReadline { }
         Mock -ModuleName $script:Module Import-ModuleSafe { }
+        Mock -ModuleName $script:Module Enable-Git { }
         Mock -ModuleName $script:Module Enable-OhMyPosh { }
         Mock -ModuleName $script:Module Enable-Zoxide { }
         Mock -ModuleName $script:Module Enable-Fzf { }
@@ -36,6 +37,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Bat { }
         Mock -ModuleName $script:Module Enable-Fd { }
         Mock -ModuleName $script:Module Enable-Less { }
+        Mock -ModuleName $script:Module Enable-Lazygit { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
         Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
@@ -51,13 +53,15 @@ Describe 'Initialize-PwshProfile' {
         It 'shows the banner and enables every tool with default arguments' {
             Initialize-PwshProfile -EnableAll
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly
+            # git is always-on (installed in Core, not a token).
+            Should -Invoke -ModuleName $script:Module Enable-Git -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly -ParameterFilter { $Command -eq 'cd' }
             # fzf enables with the screwcity blend, full style, bat preview, PSFzf Ctrl+T/Ctrl+R
-            # bindings, fd traversal, and git chords.
+            # bindings, fd traversal, and git chords off (opt-in, off by default).
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
-                -ParameterFilter { $Colors -like '*pointer:#c9aaff*' -and $Style -eq 'full' -and $Height -eq '100%' -and $PreviewCommand -like 'bat *' -and `
-                    $ProviderChord -eq 'Ctrl+t' -and $HistoryChord -eq 'Ctrl+r' -and $TabExpansionChord -eq 'Ctrl+Spacebar' -and $UseFd -and $GitKeyBindings }
+                -ParameterFilter { $Colors -like '*pointer:#c9aaff*' -and $Style -eq 'full' -and $Height -eq '~100%' -and $PreviewCommand -like 'bat *' -and `
+                    $ProviderChord -eq 'Ctrl+t' -and $HistoryChord -eq 'Ctrl+r' -and $TabExpansionChord -eq 'Ctrl+Spacebar' -and $UseFd -and -not $GitKeyBindings }
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
@@ -70,6 +74,8 @@ Describe 'Initialize-PwshProfile' {
             # less enables with the pager-override left off.
             Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
                 -ParameterFilter { -not $ReplaceMore }
+            # lazygit enables (install-only, no arguments).
+            Should -Invoke -ModuleName $script:Module Enable-Lazygit -Times 1 -Exactly
             # Completions register (under Core).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly
@@ -131,6 +137,24 @@ Describe 'Initialize-PwshProfile' {
                 -ParameterFilter { $LsColors -eq 'di=0' }
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { $Colors -eq 'pointer:#ff0000' }
+        }
+
+        It 'leaves fzf git chords unbound by default and forwards the default tab chord' {
+            Initialize-PwshProfile -EnableAll
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { -not $GitKeyBindings -and $TabExpansionChord -eq 'Ctrl+Spacebar' }
+        }
+
+        It 'binds fzf git chords when -FzfGitKeyBindings is passed' {
+            Initialize-PwshProfile -EnableAll -FzfGitKeyBindings
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $GitKeyBindings }
+        }
+
+        It 'forwards -FzfTabChord to Enable-Fzf as -TabExpansionChord' {
+            Initialize-PwshProfile -EnableAll -FzfTabChord 'Ctrl+j'
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $TabExpansionChord -eq 'Ctrl+j' }
         }
 
         It 'forwards -StepIcon to the top-level Invoke-Step calls' {
@@ -200,9 +224,10 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
         }
 
-        It '-Enable @() enables nothing but still runs oh-my-posh' {
+        It '-Enable @() enables nothing but still runs oh-my-posh and always-on git' {
             Initialize-PwshProfile -Enable @()
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Git -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 0 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly
         }
@@ -259,6 +284,13 @@ Describe 'Initialize-PwshProfile' {
             $couplingWarnings | Should -BeNullOrEmpty
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly -ParameterFilter { $ReplaceCat }
         }
+
+        It 'warns and ignores -FzfTabChord / -FzfGitKeyBindings when fzf is not enabled' {
+            Initialize-PwshProfile -Enable Zoxide -FzfTabChord 'Ctrl+j' -FzfGitKeyBindings -WarningVariable warnings -WarningAction SilentlyContinue
+            $fzfWarnings = @($warnings | Where-Object { "$_" -like '*FzfTabChord*' -or "$_" -like '*FzfGitKeyBindings*' })
+            $fzfWarnings.Count | Should -BeGreaterThan 0
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
+        }
     }
 
     Context 'banner control' {
@@ -298,7 +330,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly `
                 -ParameterFilter { $Configuration -like '*screwcity.omp.json' }
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
-                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#c9aaff' }
+                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#4c81c8' }
             Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
                 -ParameterFilter { $Description -eq 'Core' -and $Icon -eq ':nut_and_bolt:' }
         }
@@ -322,7 +354,7 @@ Describe 'Initialize-PwshProfile' {
         It 'keeps the neutral screwcity branding for a -CustomTheme' {
             Initialize-PwshProfile -CustomTheme $script:ThemePath -EnableAll
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
-                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#c9aaff' }
+                -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#4c81c8' }
         }
     }
 

@@ -65,7 +65,7 @@ function Read-PwshProfileFeatureTree {
         [string[]]$New = @(),
 
         [Parameter()]
-        [string]$Color = '',
+        [string]$Color,
 
         [Parameter()]
         [string]$CodeColor = '#5fd7ff'

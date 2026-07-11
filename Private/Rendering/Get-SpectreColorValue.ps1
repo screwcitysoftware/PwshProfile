@@ -36,7 +36,7 @@ function Get-SpectreColorValue {
     [OutputType([Spectre.Console.Color])]
     param(
         [Parameter(Position = 0)]
-        [string]$Color = ''
+        [string]$Color
     )
 
     $default = [Spectre.Console.Color]::Default
