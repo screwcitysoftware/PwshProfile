@@ -36,6 +36,8 @@ Describe 'Enable-Fd' {
         Enable-Fd -LsColors 'di=0' -IntegrateFzf
         $env:LS_COLORS           | Should -Be 'di=0'
         $env:FZF_DEFAULT_COMMAND | Should -Not -BeNullOrEmpty
+        # fd's source command forces case-insensitive matching (PowerShell/Windows is).
+        $env:FZF_DEFAULT_COMMAND | Should -Match '--ignore-case'
         $env:FZF_CTRL_T_COMMAND  | Should -BeNullOrEmpty
     }
 

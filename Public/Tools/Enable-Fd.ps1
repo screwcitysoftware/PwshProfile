@@ -21,7 +21,10 @@ function Enable-Fd {
                 scope and isn't tagged to this module — see Private/Core/Invoke-InGlobalScope.ps1.
               * When -IntegrateFzf is set and fzf.exe is on PATH, points fzf at fd as its source by
                 setting $env:FZF_DEFAULT_COMMAND, so a bare `fzf` lists files via fd (respecting
-                .gitignore). The Ctrl+T file picker is driven by PSFzf's own fd provider
+                .gitignore). The command passes --ignore-case so any fd-side matching stays
+                case-insensitive (PowerShell/Windows is); note fd is used in list-all mode here, so
+                the picker's case behavior is ultimately governed by fzf (see Enable-Fzf).
+                The Ctrl+T file picker is driven by PSFzf's own fd provider
                 (Set-PsFzfOption -EnableFd, set by Enable-Fzf), so no FZF_CTRL_T_COMMAND is needed.
                 fzf's own picker palette is themed separately by Enable-Fzf (which owns
                 $env:FZF_DEFAULT_OPTS, including the --ansi that renders fd's `--color=always`
@@ -91,7 +94,7 @@ function Enable-Fd {
             # Enable-Fzf. The Ctrl+T widget is driven by PSFzf's own fd provider (Set-PsFzfOption
             # -EnableFd), so there's no FZF_CTRL_T_COMMAND to set here.
             if ($IntegrateFzf -and (Get-Command fzf.exe -ErrorAction SilentlyContinue)) {
-                $env:FZF_DEFAULT_COMMAND = 'fd --type file --color=always --hidden --follow --exclude .git'
+                $env:FZF_DEFAULT_COMMAND = 'fd --ignore-case --type file --color=always --hidden --follow --exclude .git'
             }
         }
     }

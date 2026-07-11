@@ -892,7 +892,9 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 - **`Enable-Fzf [-Colors <spec>] [-Style <preset>] [-Height <value>] [-PreviewCommand <cmd>]
   [-ProviderChord <chord>] [-HistoryChord <chord>] [-TabExpansionChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
-  `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi`) from
+  `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi --ignore-case`
+  — the latter forces case-insensitive matching regardless of query case, since PowerShell/Windows is
+  case-insensitive) from
   `-Colors` (`--color`, the prompt blend) and `-Style` (`--style`, e.g. `full` — added only when the
   installed fzf is **0.54+**, since an older pre-existing fzf would reject the unknown option); it
   carries **no** `--preview`, so directory pickers stay clean. `-PreviewCommand` is
@@ -949,7 +951,8 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `-LsColors` (so fd's output matches the prompt — `Initialize-PwshProfile` passes the active
   theme's truecolor blend), registers fd's PowerShell completer (`fd --gen-completions powershell`),
   and — with `-IntegrateFzf`, when `fzf.exe` is present — points a bare `fzf` at fd as its file
-  source via `$env:FZF_DEFAULT_COMMAND` (the Ctrl+T picker uses PSFzf's own fd provider). **fd is
+  source via `$env:FZF_DEFAULT_COMMAND` (`fd --ignore-case …`, case-insensitive; the Ctrl+T picker
+  uses PSFzf's own fd provider). **fd is
   standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
   `ls`/`eza`.) Enabled after `Enable-Fzf`
   so `fzf.exe` is on PATH when integration is evaluated.

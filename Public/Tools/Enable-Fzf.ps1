@@ -11,11 +11,13 @@ function Enable-Fzf {
             immediately.
           - Initialize (guarded by Get-Command fzf.exe):
               * Composes $env:FZF_DEFAULT_OPTS — the baseline for every fzf invocation (plain fzf,
-                zoxide's `cdi`/`zi`, and PSFzf's widgets) — from "--ansi" plus "--style=<preset>"
-                (when -Style is given) and "--color=<spec>" (when -Colors is given). It deliberately
-                carries NO --preview, so directory pickers like zoxide's `cdi` stay clean. "--ansi"
-                is always set as the baseline (it renders colored source output, e.g. Enable-Fd's
-                `fd --color=always`, and is a no-op otherwise).
+                zoxide's `cdi`/`zi`, and PSFzf's widgets) — from "--ansi --ignore-case" plus
+                "--style=<preset>" (when -Style is given) and "--color=<spec>" (when -Colors is
+                given). It deliberately carries NO --preview, so directory pickers like zoxide's
+                `cdi` stay clean. "--ansi" is always set as the baseline (it renders colored source
+                output, e.g. Enable-Fd's `fd --color=always`, and is a no-op otherwise), and
+                "--ignore-case" is always set so fzf matches case-insensitively regardless of query
+                case (overriding fzf's default smart-case) — PowerShell/Windows is case-insensitive.
               * When -PreviewCommand is given, sets $env:FZF_CTRL_T_OPTS to "--preview '<command>'".
                 PSFzf layers this on top of FZF_DEFAULT_OPTS for the Ctrl+T file picker only — so the
                 bat preview shows for file searches but never for directory pickers. (Initialize-
@@ -186,6 +188,11 @@ function Enable-Fzf {
             # process-global. --ansi renders ANSI-colored source output (e.g. fd --color=always).
             $opts = [System.Collections.Generic.List[string]]::new()
             $opts.Add('--ansi')
+            # Always case-insensitive: fzf defaults to smart-case (case-sensitive once the query
+            # carries an uppercase char), but PowerShell/Windows is case-insensitive, so force
+            # --ignore-case as a fixed baseline. This governs every fzf surface (bare fzf, PSFzf's
+            # Ctrl+T/Ctrl+R widgets, zoxide's cdi, the git chords) — fzf, not fd, does the matching.
+            $opts.Add('--ignore-case')
             # --style is an fzf 0.54+ feature. The Install substep short-circuits when fzf.exe is
             # already on PATH, so it can't assume winget just supplied a current build — a pre-existing
             # older fzf would choke on --style and fail *every* fzf invocation (and zoxide's cdi). So
