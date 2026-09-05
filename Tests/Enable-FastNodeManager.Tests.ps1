@@ -30,11 +30,11 @@ Describe 'Enable-FastNodeManager' {
         $script:savedLoc = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
         $script:savedPwd = $PWD
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $null
-        Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_file -Scope Global -ErrorAction SilentlyContinue
 
         # An isolated temp tree with two real directories to move between: one IS a Node project
-        # (carries a .node-version file), one is not. The hook runs `fnm use` on every filesystem
-        # change regardless, but keeping both lets tests exercise project and non-project moves.
+        # (carries a .node-version file), one is not. The hook only spawns fnm when the resolved
+        # version file changes, so both are needed to exercise entering, leaving, and staying out.
         $script:testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fnmtest_" + [guid]::NewGuid().ToString('N'))
         $script:nodeDir  = Join-Path $script:testRoot 'project'
         $script:plainDir = Join-Path $script:testRoot 'plain'
@@ -52,7 +52,7 @@ Describe 'Enable-FastNodeManager' {
         # shim can't leak into a later test file if a test throws — a leaked Out-Host reading the
         # cleared $global:OutHostHits breaks every later test under StrictMode (how CI runs).
         Remove-Item Function:fnm, Function:Out-Host -ErrorAction SilentlyContinue
-        Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan, __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan, __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_file -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'registers a location hook even when zoxide is absent' {
@@ -66,12 +66,35 @@ Describe 'Enable-FastNodeManager' {
         $global:FnmUseCalls | Should -Be 1
     }
 
-    It 'runs fnm use on any directory change (auto-reverts outside a Node project)' {
-        # There is no version-file gate: fnm use runs on every filesystem change and fnm itself
-        # resolves the version (reverting to the default outside a Node project, silent if unchanged).
+    It 'runs fnm use when LEAVING a Node project, so fnm reverts to the default version' {
+        # The critical case for the version-file gate. fnm switches back to the default on its way out
+        # of a project (verified against fnm 1.x), so skipping the spawn merely because the new
+        # directory has no version file would strand the project's version after you cd away.
         Enable-FastNodeManager
+        Set-Location $script:nodeDir
+        $global:FnmUseCalls = 0
         Set-Location $script:plainDir
         $global:FnmUseCalls | Should -Be 1
+    }
+
+    It 'skips fnm when neither directory resolves to a version file' {
+        # Spawning fnm costs ~41ms on every directory change; outside a Node tree it can only ever
+        # resolve to the same default, so the spawn is pure latency.
+        Enable-FastNodeManager
+        Set-Location $script:plainDir
+        $global:FnmUseCalls = 0
+        Set-Location $script:testRoot
+        $global:FnmUseCalls | Should -Be 0
+    }
+
+    It 'skips fnm when moving deeper inside the same Node project' {
+        Enable-FastNodeManager
+        Set-Location $script:nodeDir
+        $global:FnmUseCalls = 0
+        $deep = Join-Path $script:nodeDir 'src'
+        New-Item -ItemType Directory -Path $deep -Force | Out-Null
+        Set-Location $deep
+        $global:FnmUseCalls | Should -Be 0
     }
 
     It 'chains a pre-existing LocationChangedAction' {
@@ -80,7 +103,7 @@ Describe 'Enable-FastNodeManager' {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = { $global:BaseRan++ }
 
         Enable-FastNodeManager
-        Set-Location $script:plainDir
+        Set-Location $script:nodeDir
 
         $global:BaseRan     | Should -Be 1
         $global:FnmUseCalls | Should -Be 1

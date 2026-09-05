@@ -946,11 +946,12 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
   strategy) and completions, and registers a `LocationChangedAction` hook that fires on every
-  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). On each filesystem
-  change it runs `fnm use --silent-if-unchanged` — fnm resolves the version recursively (reverting
-  to the default version outside a Node project) and emits nothing unless the active version
-  actually changes, so moving around a non-Node tree is silent (matching fnm's own `--use-on-cd`
-  integration). It fires with or without zoxide and regardless of zoxide's jump command — chaining
+  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). Spawning fnm costs
+  ~41ms, so rather than pay that on every `cd` the hook walks up for the files fnm reads (`.nvmrc`,
+  `.node-version`, `package.json`, ~3ms) and runs `fnm use --silent-if-unchanged` only when the
+  resolved file **changes** — which still fires on the way *out* of a project, the transition that
+  reverts to the default version. Moving deeper inside one project, or between two non-Node
+  directories, spawns nothing. It fires with or without zoxide and regardless of zoxide's jump command — chaining
   any existing `LocationChangedAction` (including zoxide's, which is registered the same way) and not
   re-registering on reload — so there's no ordering requirement relative to `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases

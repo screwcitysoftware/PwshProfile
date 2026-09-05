@@ -17,11 +17,18 @@ function Enable-FastNodeManager {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction (6.2+), which fires
         after *any* location change — `cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..` —
         so it works whether or not zoxide is enabled and regardless of zoxide's jump command.
-        On every filesystem change it runs `fnm use --silent-if-unchanged`: fnm resolves the
-        version recursively (the strategy set by `fnm env`), reverting to the default version
-        outside a Node project, and emits nothing unless the active version actually changes — so
-        moving around a non-Node tree is silent and produces no error. It chains any pre-existing
-        LocationChangedAction and is guarded against re-registering on profile reload.
+        Spawning fnm costs roughly 41ms, and paying that on every `cd` is latency you feel, so the
+        hook first walks up for the files fnm itself reads — `.nvmrc`, `.node-version`,
+        `package.json` — at about 3ms, and runs `fnm use --silent-if-unchanged` only when the
+        resolved file differs from the last one. Unchanged means fnm would resolve identically.
+
+        The gate compares the resolved file rather than merely checking whether one exists, because
+        fnm reverts to the default version on the way OUT of a project: skipping the call just
+        because the new directory has no version file would strand the project's version after you
+        cd away. Moving deeper inside one project, or between two non-Node directories, is skipped.
+
+        It chains any pre-existing LocationChangedAction and is guarded against re-registering on
+        profile reload.
 
         If the install doesn't produce fnm.exe on PATH, a warning is emitted (with winget's
         captured output) and Initialize is skipped (guarded by Get-Command) so profile startup
@@ -48,10 +55,10 @@ function Enable-FastNodeManager {
             Invoke-InGlobalScope (fnm env --version-file-strategy=recursive --shell powershell | Out-String)
             Invoke-InGlobalScope (fnm completions --shell powershell | Out-String)
 
-            # Auto-switch the node version on every directory change via LocationChangedAction (fires
-            # for cd, z/cdi, Set-Location, Push-Location, .., etc.), so it works without zoxide and
-            # regardless of zoxide's --cmd. Global scope so the handler and its $global:__fnm_loc_base
-            # capture resolve when the hook fires later from the prompt.
+            # Auto-switch the node version on directory change via LocationChangedAction (fires for
+            # cd, z/cdi, Set-Location, Push-Location, .., etc.), so it works without zoxide and
+            # regardless of zoxide's --cmd. Global scope so the handler and its globals resolve when
+            # the hook fires later from the prompt.
             # Capture the pre-existing handler once ($global:__fnm_loc_hooked) so a reload doesn't
             # re-capture our own wrapper and stack fnm calls, but always reinstall the wrapper so a
             # reload repairs it. The base is Enable-Zoxide's handler (it runs first) or $null.
@@ -60,16 +67,40 @@ if (-not (Get-Variable -Name __fnm_loc_hooked -Scope Global -ErrorAction Silentl
     $global:__fnm_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
     $global:__fnm_loc_hooked = $true
 }
+if (-not (Get-Variable -Name __fnm_last_version_file -Scope Global -ErrorAction SilentlyContinue)) {
+    $global:__fnm_last_version_file = $null
+}
 $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     param($source, $eventArgs)
     # The captured base is an EventHandler delegate (the property's type), so call .Invoke.
     if ($null -ne $global:__fnm_loc_base) { $global:__fnm_loc_base.Invoke($source, $eventArgs) }
-    # fnm resolves the version recursively (FNM_VERSION_FILE_STRATEGY from `fnm env`) and with
-    # --silent-if-unchanged emits nothing unless the active version changes, so no version-file gate is
-    # needed. Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op. Out-Host is
-    # required: PowerShell discards stdout emitted inside a LocationChangedAction.
+
+    # Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op.
     $new = $eventArgs.NewPath
-    if ($new -and $new.Provider.Name -eq 'FileSystem') {
+    if (-not $new -or $new.Provider.Name -ne 'FileSystem') { return }
+
+    # Resolve the version file fnm would find, walking up as its recursive strategy does. Spawning
+    # fnm costs ~41ms on EVERY directory change; this walk costs ~3ms. The file list must cover at
+    # least what fnm reads -- verified as .nvmrc, .node-version and package.json (engines.node).
+    # Erring wide only costs a redundant spawn; erring narrow leaves the wrong node version active.
+    $found = $null
+    $dir = $new.ProviderPath
+    while ($dir) {
+        foreach ($name in '.nvmrc', '.node-version', 'package.json') {
+            if ([System.IO.File]::Exists((Join-Path $dir $name))) { $found = Join-Path $dir $name; break }
+        }
+        if ($found) { break }
+        $parent = Split-Path $dir -Parent
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+
+    # Only call fnm when the resolved file changes. Unchanged means fnm would resolve identically, so
+    # the spawn is pure cost. Crucially this still fires on the way OUT of a project (path -> $null),
+    # which is what reverts to the default version -- a naive "skip when no version file" would leave
+    # the project's version active after you cd away.
+    if ($found -ne $global:__fnm_last_version_file) {
+        $global:__fnm_last_version_file = $found
         fnm use --silent-if-unchanged | Out-Host
     }
 }
