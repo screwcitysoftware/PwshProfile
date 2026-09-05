@@ -352,7 +352,10 @@ its own file named after the function:
 ```
 ScrewCitySoftware.PwshProfile/
 ├── ScrewCitySoftware.PwshProfile.psd1   # manifest: version, explicit FunctionsToExport list
-├── ScrewCitySoftware.PwshProfile.psm1   # loader: recursively dot-sources Public/ (+ Private/), exports
+├── ScrewCitySoftware.PwshProfile.psm1   # dev loader: recursively dot-sources Public/ (+ Private/), exports
+├── Prefix.ps1                          # console-encoding preamble + $script:ModuleRoot (shared with the build)
+├── Suffix.ps1                          # ensures PwshSpectreConsole (shared with the build)
+├── build.psd1                          # ModuleBuilder settings for build.ps1 -Task Build
 ├── Public/                              # one exported function per file
 │   ├── Install/
 │   │   ├── Install-PwshProfile.ps1   # wizard: write the bootstrap into a profile file
@@ -1191,8 +1194,10 @@ See [Build & release](#build--release) for the full task list.
 
 ### Build & release
 
-[`build.ps1`](build.ps1) is a dependency-free task runner — each `-Task` maps to a function and
-they run in order. The default chain lints, tests, and stages a shippable copy of the module:
+[`build.ps1`](build.ps1) is a self-contained task runner — no psake or InvokeBuild, each `-Task` just
+maps to a function and they run in order. `Bootstrap` installs the pinned dev dependencies (Pester,
+PSScriptAnalyzer, ModuleBuilder) when they are missing. The default chain lints, tests, and stages a
+shippable copy of the module:
 
 Run it in a **clean** PowerShell session (`-NoProfile`) so a profile-loaded module / global state
 can't mask or alter results — that's what CI does:
@@ -1204,12 +1209,22 @@ pwsh -NoProfile -NoLogo -Command "& .\build.ps1 -Task Analyze, Test"  # what CI 
 
 `Build` stages **only** the shippable files (`.psd1`, `Assets/`, `README.md`, `LICENSE`) into
 `Output/ScrewCitySoftware.PwshProfile/`, so `Tests/`, `CLAUDE.md`, and `.github/` never reach the
-gallery package. `Public/` and `Private/` are not copied: every function file is **merged into the
-staged `.psm1`** in the dev loader's order (Private first, then Public). One function per file is
-right for editing, but each dot-source costs roughly 9 ms of fixed overhead at import — about 650 ms
-across the tree, on every shell start. Merging collapses that to a single parse: measured **924 ms
-to 406 ms** for a full import. Bundled-asset paths hang off `$script:ModuleRoot` (set once in the
-`.psm1`) rather than a per-file `$PSScriptRoot` precisely so they survive the merge.
+gallery package. `Public/` and `Private/` are not copied: **[ModuleBuilder](https://github.com/PoshCode/ModuleBuilder)**
+compiles every function into a single `.psm1`, Private before Public, so a helper is always defined
+before the function that calls it. Settings live in `build.psd1`.
+
+One function per file is right for editing, but each dot-source costs roughly 9 ms of fixed overhead
+at import — several hundred ms across the tree, on every shell start. Compiling collapses that to one
+parse: **a full `Import-Module` drops from ~790 ms to ~254 ms.**
+
+ModuleBuilder is preferred over a hand-rolled merge because it hoists `using` statements to the top of
+the compiled file (a naive concatenation breaks the moment a source file gains one), regenerates
+`FunctionsToExport` from `Public/**/*.ps1`, and emits `#Region` markers naming the source file and
+line offset — so `Convert-LineNumber` maps a stack trace in the compiled module back to the file it
+came from. `Prefix.ps1` and `Suffix.ps1` are shared verbatim with the dev loader in the `.psm1`, so
+the console-encoding preamble and the renderer check cannot drift between an in-repo import and the
+shipped module. Bundled-asset paths hang off `$script:ModuleRoot` rather than a per-file
+`$PSScriptRoot` precisely so they survive compilation.
 
 Because the Pester suite imports the repo tree rather than the staged copy, `Build` finishes by
 importing the staged module in a clean child process and asserting it exports exactly what the

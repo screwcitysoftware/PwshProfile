@@ -4,13 +4,14 @@
     Lint, test, stage, and publish the ScrewCitySoftware.PwshProfile module.
 
 .DESCRIPTION
-    A dependency-free task runner: each value passed to -Task maps to an Invoke-<Task>
+    A self-contained task runner: each value passed to -Task maps to an Invoke-<Task>
     function, and the tasks run in the order given. There is intentionally no build
-    framework (psake / Invoke-Build) — the module's ethos is dependency-light, so the
-    dispatch is a plain switch over a handful of functions.
+    framework (psake / Invoke-Build) — the dispatch is a plain switch over a handful of
+    functions. The Build task does use ModuleBuilder to compile the module (see build.psd1);
+    everything else is stock PowerShell.
 
     Tasks:
-      Bootstrap  Install the dev dependencies (Pester, PSScriptAnalyzer) if missing.
+      Bootstrap  Install the dev dependencies (Pester, PSScriptAnalyzer, ModuleBuilder) if missing.
       Analyze    Run PSScriptAnalyzer over Public/ and Private/; fail on any finding.
       Test       Run the Pester suite under Tests/ and emit NUnit XML to Output/.
       Build      Stage only the shippable files into Output/<ModuleName>/ and validate
@@ -65,6 +66,7 @@ $AnalyzerSettings = Join-Path $RepoRoot 'PSScriptAnalyzerSettings.psd1'
 $DevDependencies = @{
     Pester           = '5.7.1'
     PSScriptAnalyzer = '1.25.0'
+    ModuleBuilder    = '3.2.18'
 }
 
 function Write-Banner {
@@ -146,96 +148,100 @@ function Invoke-Test {
 }
 
 function Invoke-Build {
-    Write-Banner "Build: staging $ModuleName -> $StagePath"
+    Assert-Dependency -Name 'ModuleBuilder' -Version $DevDependencies['ModuleBuilder']
+    Import-Module ModuleBuilder -RequiredVersion $DevDependencies['ModuleBuilder']
+    Write-Banner "Build: compiling $ModuleName -> $StagePath"
 
-    if (Test-Path $OutputRoot) {
-        Remove-Item -Path $OutputRoot -Recurse -Force
+    Remove-OutputRoot
+
+    # ModuleBuilder compiles every Private/ then Public/ function into a single .psm1, which avoids
+    # ~9ms of fixed dot-source overhead per file at import — this module is imported on every shell
+    # start. See build.psd1 for the settings; notably Prefix.ps1 / Suffix.ps1 are shared verbatim with
+    # the dev loader in the source .psm1, so the two cannot drift.
+    #
+    # Preferred over a hand-rolled merge because it also hoists `using` statements to the top of the
+    # compiled file (a naive concatenation breaks the moment a source file gains one), regenerates
+    # FunctionsToExport from Public/**/*.ps1, and emits #Region markers naming the source file and
+    # line offset — so Convert-LineNumber can map a stack trace in the built module back to the file
+    # it came from.
+    $built = Invoke-ModuleBuildWithRetry
+
+    # ModuleBuilder copies sibling .psd1 files out of the source folder; the analyzer config is dev
+    # tooling and has no business in the gallery package.
+    $strays = @('PSScriptAnalyzerSettings.psd1')
+    foreach ($stray in $strays) {
+        $strayPath = Join-Path $StagePath $stray
+        if (Test-Path $strayPath) { Remove-Item -LiteralPath $strayPath -Force }
     }
-    New-Item -ItemType Directory -Path $StagePath -Force | Out-Null
-
-    # Only the shippable set — Tests/, CLAUDE.md, .github/, build.ps1, etc. never ship. Public/ and
-    # Private/ are absent on purpose: their contents are merged into the staged .psm1 below, so the
-    # package carries one copy of every function rather than two.
-    $shippable = @(
-        "$ModuleName.psd1"
-        'Assets'
-        'README.md'
-        'LICENSE'
-    )
-    foreach ($item in $shippable) {
-        $src = Join-Path $RepoRoot $item
-        if (-not (Test-Path $src)) {
-            throw "Expected to stage '$item' but it was not found at $src"
-        }
-        Copy-Item -Path $src -Destination $StagePath -Recurse -Force
-    }
-
-    Build-MergedRootModule -Destination (Join-Path $StagePath "$ModuleName.psm1")
 
     # The staged manifest must be valid before we ever try to publish it.
-    $stagedManifest = Join-Path $StagePath "$ModuleName.psd1"
-    $null = Test-ModuleManifest -Path $stagedManifest -ErrorAction Stop
+    $null = Test-ModuleManifest -Path $built.Path -ErrorAction Stop
 
-    # The staged module is a different artifact from the source tree the tests import, so prove it
+    # The compiled module is a different artifact from the source tree the tests import, so prove it
     # actually loads and exports what the manifest promises before it can be published.
-    Assert-StagedModule -Manifest $stagedManifest
+    Assert-StagedModule -Manifest $built.Path
 
     $count = (Get-ChildItem -Path $StagePath -Recurse -File).Count
     Write-Host "    staged $count file(s)" -ForegroundColor Green
 }
 
-function Build-MergedRootModule {
+
+function Invoke-ModuleBuildWithRetry {
     <#
-        Concatenates every Public/ and Private/ function file into a single root module.
+        Runs Build-Module, retrying from a clean output directory on a transient file lock.
 
-        The repo keeps one function per file, which is right for editing but costs ~9 ms of fixed
-        dot-source overhead per file at import — roughly 650 ms across the tree, and this module is
-        imported on every shell start. Merging collapses that to a single parse (~26 ms measured).
+        ModuleBuilder writes the compiled .psm1 and then re-reads it in the same pass, and on Windows
+        that can collide with whatever still has the freshly written file open — the indexer, AV, or
+        ModuleBuilder's own handle. It surfaces as "The process cannot access the file ... because it
+        is being used by another process."
 
-        Load order matches the dev loader exactly (Private first, then Public, each recursed) so a
-        helper is always defined before the function that calls it. Bundled-asset paths hang off
-        $script:ModuleRoot rather than a per-file $PSScriptRoot precisely so they survive this merge.
+        It is load-sensitive rather than deterministic: back-to-back builds run clean on an idle
+        machine, and failed roughly a quarter of the time while a dozen other pwsh processes were
+        alive. That makes it exactly the kind of thing to retry rather than diagnose per-run, and it
+        is not specific to a ModuleBuilder version (3.1.8 and 3.2.18 both build clean when idle).
     #>
-    param([Parameter(Mandatory)][string]$Destination)
+    param()
 
-    $sourcePsm1 = Join-Path $RepoRoot "$ModuleName.psm1"
-    $lines = [System.IO.File]::ReadAllLines($sourcePsm1)
-
-    # Reuse the dev loader's own preamble (console encoding + $script:ModuleRoot) so the two can't
-    # drift; everything from the loader comment onward is replaced by the merged bodies.
-    $loaderStart = [Array]::FindIndex([string[]]$lines, [Predicate[string]] { $args[0] -like '# Loader:*' })
-    if ($loaderStart -lt 0) {
-        throw "Could not find the '# Loader:' marker in $sourcePsm1; the merge cannot determine where the preamble ends."
+    foreach ($attempt in 1..4) {
+        try {
+            return Build-Module -SourcePath (Join-Path $RepoRoot 'build.psd1') -Passthru -ErrorAction Stop
+        }
+        catch {
+            if ($attempt -eq 4) { throw }
+            Write-Host "    build attempt $attempt hit a file lock; retrying" -ForegroundColor DarkYellow
+            # The stale handle is usually ModuleBuilder's own FileStream awaiting finalization, and the
+            # retry runs in this same process — so without forcing finalizers the next attempt hits
+            # exactly the same lock.
+            [System.GC]::Collect()
+            [System.GC]::WaitForPendingFinalizers()
+            Start-Sleep -Milliseconds (250 * $attempt)
+            Remove-OutputRoot
+        }
     }
+}
+function Remove-OutputRoot {
+    <#
+        Deletes the staging directory, retrying briefly on failure.
 
-    $merged = [System.Collections.Generic.List[string]]::new()
-    $merged.AddRange([string[]]$lines[0..($loaderStart - 1)])
-    $merged.Add('# Generated by build.ps1 -Task Build: every Public/ and Private/ function file, merged')
-    $merged.Add('# in the dev loader''s order. Edit the sources in the repo, never this file.')
-    $merged.Add('')
+        Windows can hold a handle on a just-written file for a moment after the writing process is
+        done with it (the indexer and AV both do this), which surfaces as "The directory is not empty"
+        on an immediate recursive delete. Measured at roughly one failure in six on back-to-back
+        builds, so a couple of short retries turns a flaky build into a reliable one.
+    #>
+    param()
 
-    $private = @(Get-ChildItem -Path (Join-Path $RepoRoot 'Private') -Filter *.ps1 -Recurse -ErrorAction SilentlyContinue)
-    $public = @(Get-ChildItem -Path (Join-Path $RepoRoot 'Public') -Filter *.ps1 -Recurse -ErrorAction SilentlyContinue)
-    if ($public.Count -eq 0) {
-        throw "No Public/*.ps1 files found under $RepoRoot; refusing to stage a module with no functions."
+    if (-not (Test-Path $OutputRoot)) { return }
+
+    foreach ($attempt in 1..5) {
+        try {
+            Remove-Item -Path $OutputRoot -Recurse -Force -ErrorAction Stop
+            return
+        }
+        catch {
+            if ($attempt -eq 5) { throw }
+            Start-Sleep -Milliseconds (100 * $attempt)
+        }
     }
-
-    foreach ($file in $private + $public) {
-        $merged.Add("#region $($file.BaseName)")
-        $merged.AddRange([string[]][System.IO.File]::ReadAllLines($file.FullName))
-        $merged.Add('#endregion')
-        $merged.Add('')
-    }
-
-    # Same tail as the dev loader: ensure the renderer, then export the public base names.
-    $merged.Add('Import-ModuleSafe PwshSpectreConsole')
-    $merged.Add('')
-    $exported = ($public.BaseName | Sort-Object | ForEach-Object { "'$_'" }) -join ', '
-    $merged.Add("Export-ModuleMember -Function @($exported)")
-
-    $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
-    [System.IO.File]::WriteAllText($Destination, ($merged -join "`r`n") + "`r`n", $utf8NoBom)
-    Write-Host "    merged $($private.Count + $public.Count) file(s) into $(Split-Path $Destination -Leaf)" -ForegroundColor Green
 }
 
 function Assert-StagedModule {
