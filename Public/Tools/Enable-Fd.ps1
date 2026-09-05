@@ -90,26 +90,20 @@ function Enable-Fd {
 
     Invoke-Step "Initialize" {
         if (Get-Command fd.exe -ErrorAction SilentlyContinue) {
-            # fd colors come from $env:LS_COLORS (process-global already, so a plain assignment —
-            # no Invoke-InGlobalScope needed for env vars).
+            # Env vars are process-global, so a plain assignment — no Invoke-InGlobalScope needed.
             if (-not [string]::IsNullOrWhiteSpace($LsColors)) { $env:LS_COLORS = $LsColors }
 
-            # Register fd's completer in the global scope (not this module's) so it isn't tagged to
-            # the module — see Private/Core/Invoke-InGlobalScope.ps1.
+            # Global scope so fd's completer isn't tagged to this module.
             Invoke-InGlobalScope ((fd --gen-completions powershell) | Out-String)
 
-            # When asked, point fzf at fd as its source (only if fzf is actually present). A bare
-            # `fzf` reads $env:FZF_DEFAULT_COMMAND directly, and PSFzf's Ctrl+T widget prefers it over
-            # PSFzf's own fd command, so there's no FZF_CTRL_T_COMMAND to set here. fzf's own
-            # palette/--ansi is set by Enable-Fzf.
+            # Point fzf at fd as its source when fzf is present. A bare `fzf` reads FZF_DEFAULT_COMMAND
+            # directly and PSFzf's Ctrl+T widget prefers it, so there is no FZF_CTRL_T_COMMAND to set.
             if ($IntegrateFzf -and (Get-Command fzf.exe -ErrorAction SilentlyContinue)) {
                 $env:FZF_DEFAULT_COMMAND = 'fd --ignore-case --type file --color=always --hidden --follow --exclude .git'
-                # Alt+C (PSFzf's set-location picker, bound automatically when PSFzf loads) is the one
-                # path that ignores FZF_DEFAULT_COMMAND: its directory-only branch falls back to
-                # PSFzf's built-in `fd ... --fixed-strings .`, whose literal `.` pattern matches only
-                # paths containing a period, so the picker comes up empty on a typical Windows tree.
-                # FZF_ALT_C_COMMAND takes precedence over that fallback — give it a straight directory
-                # listing (--ignore-case for the same reason as above).
+                # Alt+C (PSFzf's set-location picker) is the one path that ignores FZF_DEFAULT_COMMAND:
+                # its directory branch falls back to PSFzf's `fd ... --fixed-strings .`, whose literal
+                # `.` matches only paths containing a period, so the picker comes up empty on Windows.
+                # FZF_ALT_C_COMMAND takes precedence — give it a straight directory listing.
                 $env:FZF_ALT_C_COMMAND = 'fd --ignore-case --type directory --color=always --hidden --follow --exclude .git'
             }
         }

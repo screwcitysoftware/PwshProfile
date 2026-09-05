@@ -56,8 +56,8 @@ function Format-PwshProfileColorValue {
 
     $escaped = Get-SpectreEscapedTextSafe -Text "$Color"
 
-    # Resolve + validate the color. The Spectre type is absent when PwshSpectreConsole isn't loaded, so
-    # degrade to the plain escaped value rather than throwing.
+    # Resolve + validate the color. The Spectre type is absent without PwshSpectreConsole, so degrade
+    # to the plain escaped value rather than throwing.
     try {
         $parsed = Get-SpectreColorValue -Color $Color
         if ($parsed -eq [Spectre.Console.Color]::Default) { return $escaped }

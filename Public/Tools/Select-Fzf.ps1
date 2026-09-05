@@ -116,8 +116,8 @@ function Select-Fzf {
     }
 
     process {
-        # $InputObject is [object[]], so a single piped item arrives as a 1-element array; flatten so
-        # the index/line scheme tracks individual objects whether piped or passed as an array argument.
+        # $InputObject is [object[]], so a single piped item arrives as a 1-element array — flatten so
+        # the index scheme tracks individual objects whether piped or passed as an array.
         if ($null -ne $InputObject) {
             foreach ($item in $InputObject) { $items.Add($item) }
         }
@@ -126,9 +126,8 @@ function Select-Fzf {
     end {
         if ($items.Count -eq 0) { return }
 
-        # Resolve a property-name string or a scriptblock ($_ = item) against an item. A $null
-        # selector means "no projection": the display falls back to the item's string form, the value
-        # to the item itself.
+        # Resolve a property name or scriptblock ($_ = item) against an item. A $null selector means
+        # no projection: display falls back to the item's string form, value to the item itself.
         $resolve = {
             param($item, $selector, $forDisplay)
             if ($null -eq $selector) {
@@ -141,9 +140,8 @@ function Select-Fzf {
         }
 
         # Join a hidden index and the display text with ASCII Unit Separator (0x1f) — a non-printable
-        # control char built for delimiting machine fields, so it can't collide with human-readable
-        # display text (unlike a tab or ':'). Only newlines (and a stray US char) are collapsed, since
-        # a newline would split one item across multiple fzf lines; tabs/colons in the display survive.
+        # delimiter that can't collide with display text the way a tab or ':' could. Only newlines are
+        # collapsed, since one would split an item across multiple fzf lines.
         $delim = [char]0x1f
         $lines = for ($i = 0; $i -lt $items.Count; $i++) {
             $text = "$(& $resolve $items[$i] $Display $true)" -replace "[`r`n$delim]", ' '
@@ -153,9 +151,9 @@ function Select-Fzf {
         $fzfArgs = [System.Collections.Generic.List[string]]::new()
         $fzfArgs.Add('--ansi')
         $fzfArgs.Add("--delimiter=$delim")
-        # --with-nth=2.. both DISPLAYS and SEARCHES only the text column, hiding the index from the
-        # picker and excluding it from matching. No --nth: fzf's --nth indexes the *--with-nth view*
-        # (a single field here), so adding --nth=2 would point past it and match nothing.
+        # --with-nth=2.. both displays and searches only the text column, hiding the index from the
+        # picker and from matching. No --nth: it indexes the --with-nth view, so --nth=2 would point
+        # past the single field there and match nothing.
         $fzfArgs.Add('--with-nth=2..')
         if (-not [string]::IsNullOrWhiteSpace($Height))  { $fzfArgs.Add("--height=$Height") }
         if ($Multiple)                                   { $fzfArgs.Add('--multi') }
@@ -173,22 +171,19 @@ function Select-Fzf {
             & $resolve $items[$idx] $Value $false
         }
 
-        # Under -Multiple always hand back an array (even for a single marked row), as the help and
-        # README promise. The unary comma is required: a bare `@(...)` would be unrolled by the
-        # pipeline on the way out, collapsing a one-element result back to a scalar at the call site.
-        # Single-select stays a scalar so `.Property` keeps working on the result.
+        # Under -Multiple always hand back an array, as the help and README promise. The unary comma is
+        # required: a bare @(...) is unrolled by the pipeline, collapsing a one-element result to a
+        # scalar. Single-select stays a scalar so `.Property` keeps working.
         if ($Multiple) { return , @($results) }
         $results
     }
 }
 
-# Invoke-FzfRaw is co-located here (not in Private/) on purpose: it keeps Select-Fzf a single,
-# self-contained file that can be lifted into another module without dragging a sibling helper. It is
-# NOT exported (the .psm1 loader exports only Public *file* base names, and it isn't in the manifest),
-# so it stays an internal seam. That seam isolates the one native fzf call so Select-Fzf's mapping
-# logic can be unit-tested by mocking it (Pester can't mock a native fzf.exe invocation), and it
-# centralizes the module's failure tolerance — a missing fzf.exe, a cancel (exit 130), or a no-match
-# (exit 1) all surface as no output rather than an error, so nothing throws.
+# Co-located here rather than in Private/ so Select-Fzf stays a single portable file. It is not
+# exported (the loader exports only Public file base names, and it isn't in the manifest), and it
+# isolates the one native fzf call so Select-Fzf's mapping logic stays unit-testable — Pester can't
+# mock a native fzf.exe invocation. It also centralizes failure tolerance: a missing fzf.exe, a cancel
+# (exit 130), and a no-match (exit 1) all surface as no output rather than an error.
 function Invoke-FzfRaw {
     <#
     .SYNOPSIS
@@ -248,9 +243,8 @@ function Invoke-FzfRaw {
     if ($InputLine.Count -eq 0) { return @() }
 
     try {
-        # Pipe candidates to fzf on stdin; its stdout is the selection (one line per chosen item).
-        # A cancel (exit 130) or no-match (exit 1) simply yields no stdout — treated as "nothing
-        # selected", never an error.
+        # Pipe candidates to fzf on stdin; its stdout is the selection. A cancel (130) or no-match (1)
+        # yields no stdout — treated as "nothing selected", never an error.
         $selected = $InputLine | & fzf.exe @Argument
         if ($null -eq $selected) { return @() }
         return @($selected)

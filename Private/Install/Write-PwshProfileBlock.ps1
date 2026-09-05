@@ -89,22 +89,19 @@ function Write-PwshProfileBlock {
         if ($null -eq $existing) { $existing = '' }
     }
 
-    # Locate an existing managed block (open marker through close marker, inclusive). Match the
-    # whole region so a re-run can splice in the new block without disturbing the rest of the file.
+    # Match the whole marker region so a re-run can splice in a new block without disturbing the file.
     $blockPattern = '(?s)' + [regex]::Escape($markerOpen) + '.*?' + [regex]::Escape($markerClose)
     $match = [regex]::Match($existing, $blockPattern)
     $hasBareImport = $existing -match '(?im)^\s*Import-Module\s+ScrewCitySoftware\.PwshProfile\b'
 
     if ($match.Success) {
-        # Re-run: replace just the managed block, preserving everything before and after (including
-        # the user's original line endings). Remove/Insert avoids .NET regex replacement-string
-        # interpretation of any '$' in the embedded call.
+        # Re-run: replace just the managed block, preserving the rest (and its line endings).
+        # Remove/Insert avoids .NET regex interpreting any '$' in the embedded call.
         $new = $existing.Remove($match.Index, $match.Length).Insert($match.Index, $block)
         $provisional = 'Replaced'
     }
     elseif ($hasBareImport -and -not $Force) {
-        # Already wired by hand (no managed markers); leave the file untouched. This is distinct
-        # from AlreadyPresent: the requested settings were not applied.
+        # Wired by hand (no markers) — leave it alone. Distinct from AlreadyPresent: nothing was applied.
         $new = $existing
         $provisional = 'BareImportPresent'
     }
@@ -119,8 +116,7 @@ function Write-PwshProfileBlock {
     }
 
     $changed = $new -ne $existing
-    # Preserve the distinct bare-import action when unchanged; otherwise an unchanged write is
-    # simply "already present" (e.g. a re-run whose block matched byte-for-byte).
+    # An unchanged write is "already present" unless it was the distinct bare-import case.
     $action = if ($changed) { $provisional }
               elseif ($provisional -eq 'BareImportPresent') { 'BareImportPresent' }
               else { 'AlreadyPresent' }

@@ -44,24 +44,17 @@ function Enable-FastNodeManager {
 
     Invoke-Step "Initialize" {
         if (Get-Command fnm.exe -ErrorAction SilentlyContinue) {
-            # Run in the global scope (not this module's) so the emitted env/completion helpers
-            # aren't tagged to the module — see Private/Invoke-InGlobalScope.ps1.
+            # Global scope so the emitted env/completion helpers aren't tagged to this module.
             Invoke-InGlobalScope (fnm env --version-file-strategy=recursive --shell powershell | Out-String)
             Invoke-InGlobalScope (fnm completions --shell powershell | Out-String)
 
-            # Auto-switch the node version on every directory change via PowerShell's
-            # LocationChangedAction (fires for cd, z/cdi, Set-Location, Push-Location, .., etc.),
-            # so it works without zoxide and regardless of zoxide's --cmd. Run in the global scope
-            # so the handler and its $global:__fnm_loc_base capture aren't tagged to the module and
-            # resolve when the hook fires later from the prompt. This matches fnm's own --use-on-cd
-            # integration: a thin `fnm use --silent-if-unchanged` on each change.
-            #
-            # Capture any pre-existing handler ONCE (guarded by $global:__fnm_loc_hooked) so a
-            # profile reload doesn't re-capture our own wrapper and stack fnm calls. The base is
-            # Enable-Zoxide's LocationChangedAction (it runs first and also hooks here) or $null;
-            # either way fnm chains onto it so both fire. But always (re)install the wrapper, so
-            # reloading the profile in a live session repairs or updates the hook rather than leaving
-            # a stale one frozen behind the guard.
+            # Auto-switch the node version on every directory change via LocationChangedAction (fires
+            # for cd, z/cdi, Set-Location, Push-Location, .., etc.), so it works without zoxide and
+            # regardless of zoxide's --cmd. Global scope so the handler and its $global:__fnm_loc_base
+            # capture resolve when the hook fires later from the prompt.
+            # Capture the pre-existing handler once ($global:__fnm_loc_hooked) so a reload doesn't
+            # re-capture our own wrapper and stack fnm calls, but always reinstall the wrapper so a
+            # reload repairs it. The base is Enable-Zoxide's handler (it runs first) or $null.
             Invoke-InGlobalScope @'
 if (-not (Get-Variable -Name __fnm_loc_hooked -Scope Global -ErrorAction SilentlyContinue)) {
     $global:__fnm_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
@@ -71,13 +64,10 @@ $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     param($source, $eventArgs)
     # The captured base is an EventHandler delegate (the property's type), so call .Invoke.
     if ($null -ne $global:__fnm_loc_base) { $global:__fnm_loc_base.Invoke($source, $eventArgs) }
-    # Switch the node version for the new directory. fnm resolves the version recursively (the
-    # FNM_VERSION_FILE_STRATEGY set by `fnm env`); outside a Node project it falls back to the
-    # default version, and with --silent-if-unchanged it emits nothing to stdout/stderr unless the
-    # active version actually changes — so no version-file gate is needed (verified on fnm 1.39).
-    # Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op. Pipe through Out-Host:
-    # PowerShell discards stdout emitted inside a LocationChangedAction, and fnm writes its
-    # "Using Node vX.X.X" confirmation to stdout — so without Out-Host the switch is invisible.
+    # fnm resolves the version recursively (FNM_VERSION_FILE_STRATEGY from `fnm env`) and with
+    # --silent-if-unchanged emits nothing unless the active version changes, so no version-file gate is
+    # needed. Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op. Out-Host is
+    # required: PowerShell discards stdout emitted inside a LocationChangedAction.
     $new = $eventArgs.NewPath
     if ($new -and $new.Provider.Name -eq 'FileSystem') {
         fnm use --silent-if-unchanged | Out-Host

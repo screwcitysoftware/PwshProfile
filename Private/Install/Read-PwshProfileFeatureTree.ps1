@@ -71,9 +71,8 @@ function Read-PwshProfileFeatureTree {
         [string]$CodeColor = '#5fd7ff'
     )
 
-    # Section -> ordered features (label <-> -Enable token) from the single-source catalog. Tag tokens
-    # in -New with a "(new)" suffix so additions since the prior setup stand out; the catalog returns
-    # fresh objects each call, so mutating the labels here is safe.
+    # Section -> ordered features (label <-> -Enable token) from the catalog. Tokens in -New get a
+    # "(new)" suffix; the catalog returns fresh objects each call, so mutating labels here is safe.
     $sections = Get-PwshProfileToolCatalog
     $newSet = @($New)
     foreach ($key in $sections.Keys) {
@@ -90,14 +89,13 @@ function Read-PwshProfileFeatureTree {
     # Opt-in: a token is checked only when the caller marked it enabled.
     $isEnabled = { param($token) [bool]($Enabled.ContainsKey($token) -and $Enabled[$token]) }
 
-    # Non-interactive / Spectre unavailable: return only the tokens already marked enabled (nothing on
-    # a first run), matching the opt-in model rather than turning everything on.
+    # Non-interactive: return only the already-enabled tokens, matching the opt-in model.
     if (-not ('Spectre.Console.MultiSelectionPrompt`1' -as [type])) {
         return @($allTokens | Where-Object { & $isEnabled $_ })
     }
 
-    # A per-feature legend above the tree, so each checkbox has context (the Spectre tree itself can't
-    # carry per-item descriptions). oh-my-posh isn't a checkbox — it always runs — so it's noted here.
+    # Per-feature legend above the tree — Spectre trees can't carry per-item descriptions. oh-my-posh
+    # isn't a checkbox (it always runs), so it's noted here instead.
     $accent = if ($Color) { $Color } else { '#c9aaff' }
     $legend = @(
         '**oh-my-posh** is always enabled — it draws the prompt and has no checkbox.'
@@ -132,11 +130,9 @@ function Read-PwshProfileFeatureTree {
         $prompt = [Spectre.Console.MultiSelectionPromptExtensions]::AddChoiceGroup($prompt, $key, [string[]]$labels)
     }
 
-    # Pre-check every currently-enabled feature so the tree opens with the seeded state (Core on,
-    # WinGet off on a clean first run). A fully-enabled section also gets its header checked — in Leaf mode
-    # the parent's box is derived from children only during interaction, not at the initial render, so
-    # without this the section shows unchecked while its features show checked. A partially-enabled
-    # section is left unselected so it correctly shows as partial.
+    # Pre-check every enabled feature so the tree opens seeded. A fully-enabled section also needs its
+    # header checked: in Leaf mode the parent box is derived from children only during interaction, not
+    # at first render. A partially-enabled section is left alone so it correctly shows as partial.
     foreach ($key in $sections.Keys) {
         $children = @($sections[$key])
         $enabledChildren = @($children | Where-Object { & $isEnabled $_.Token })

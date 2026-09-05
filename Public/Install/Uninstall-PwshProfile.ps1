@@ -75,9 +75,9 @@ function Uninstall-PwshProfile {
         $existing = Get-Content -LiteralPath $Path -Raw -Encoding utf8
         if ($null -eq $existing) { $existing = '' }
 
-        # Match the managed block and consume its closing line terminator plus one optional blank
-        # separator line (the gap Install inserts above existing content), leaving everything else
-        # — and the user's line endings — intact. An empty replacement avoids regex $-substitution.
+        # Consume the block's closing line terminator plus one optional blank separator (the gap
+        # Install inserts), leaving the rest — and the user's line endings — intact. An empty
+        # replacement avoids regex $-substitution.
         $pattern = '(?s)' + [regex]::Escape($marker.Open) + '.*?' + [regex]::Escape($marker.Close) + '\r?\n?(\r?\n)?'
         $new = [regex]::Replace($existing, $pattern, '')
 

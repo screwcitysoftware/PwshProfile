@@ -15,10 +15,9 @@ AfterAll {
 
 Describe 'Write-Figlet' {
     BeforeEach {
-        # Intercept the Spectre renderer so nothing is drawn and we can inspect arguments.
-        # -RemoveParameterType Color: the real -Color is [Spectre.Console.Color] and relies on a
-        # custom string->Color transformation attribute that the mock doesn't replicate, so a
-        # string like 'Blue' won't bind to the mock without dropping the type.
+        # Intercept the Spectre renderer so nothing is drawn and the arguments can be inspected.
+        # -RemoveParameterType Color: the real -Color is [Spectre.Console.Color] behind a custom
+        # string transformation the mock doesn't replicate, so 'Blue' won't bind without dropping it.
         Mock -ModuleName $script:Module Write-SpectreFigletText -RemoveParameterType 'Color' { }
     }
 

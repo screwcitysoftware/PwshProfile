@@ -53,9 +53,8 @@ function Repair-PsFzfCompletionQuoting {
     & $module {
         function script:FixCompletionResult($str, [switch]$AlwaysQuote) {
             if ([string]::IsNullOrEmpty($str)) { return '' }
-            # TrimEnd drops the trailing "completion-complete" space some completers append
-            # (argcomplete SUPPRESS_SPACE=0, Cobra MenuComplete, winget); interior spaces are
-            # left intact, so real paths like "Program Files" are still quoted below.
+            # TrimEnd drops the trailing space some completers append (argcomplete, Cobra, winget);
+            # interior spaces survive, so real paths like "Program Files" are still quoted below.
             $str = $str.Replace("`r`n", '').TrimEnd()
             $isAlreadyQuoted = ($str.StartsWith("'") -and $str.EndsWith("'")) -or `
                 ($str.StartsWith('"') -and $str.EndsWith('"'))

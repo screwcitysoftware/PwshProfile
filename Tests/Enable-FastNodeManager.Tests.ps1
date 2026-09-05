@@ -47,12 +47,10 @@ Describe 'Enable-FastNodeManager' {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $script:savedLoc
         Set-Location $script:savedPwd
         Remove-Item -LiteralPath $script:testRoot -Recurse -Force -ErrorAction SilentlyContinue
-        # Remove any global function shims the tests defined. The Function: provider does NOT honor a
-        # 'global:' scope qualifier in the path (Remove-Item Function:global:X is a silent no-op), so
-        # use the bare name — it resolves to the global function and removes it, unshadowing the cmdlet.
-        # Done here (not inline) so a shim never leaks into later test files even if a test throws —
-        # a leaked Out-Host reading the cleared $global:OutHostHits breaks every later test under
-        # Set-StrictMode -Version Latest (how CI runs the suite).
+        # Remove the global function shims the tests defined. The Function: provider ignores a
+        # 'global:' qualifier in the path, so use the bare name. Done here rather than inline so a
+        # shim can't leak into a later test file if a test throws — a leaked Out-Host reading the
+        # cleared $global:OutHostHits breaks every later test under StrictMode (how CI runs).
         Remove-Item Function:fnm, Function:Out-Host -ErrorAction SilentlyContinue
         Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan, __fnm_loc_hooked, __fnm_loc_base -Scope Global -ErrorAction SilentlyContinue
     }
@@ -97,9 +95,8 @@ Describe 'Enable-FastNodeManager' {
 
     It 'surfaces fnm output to the host (not swallowed inside the location hook)' {
         # PowerShell discards stdout emitted inside a LocationChangedAction, so the hook pipes fnm
-        # through Out-Host. Shadow Out-Host to prove fnm's output is routed there; emit a line from
-        # the fnm stub so there is something to surface. A regression to a bare `fnm use` (no pipe)
-        # would leave the counter at 0.
+        # through Out-Host. Shadow Out-Host to prove the output is routed there; a regression to a
+        # bare `fnm use` would leave the counter at 0.
         $global:OutHostHits = 0
         function global:Out-Host { $global:OutHostHits += @($input).Count }
         function global:fnm { if ($args -contains 'use') { 'Using Node v1.2.3' } else { '# fnm stub' } }

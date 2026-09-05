@@ -26,8 +26,7 @@ function Initialize-PSReadline {
     [CmdletBinding()]
     param()
 
-    # PSReadLine ships with pwsh, but a minimal/constrained host may lack it. Guard so startup stays
-    # tolerant — all the cmdlets below live in the same module, so one resolved check covers them all.
+    # PSReadLine ships with pwsh but a minimal host may lack it; one check covers the whole module.
     if (-not (Get-Command Set-PSReadLineOption -ErrorAction SilentlyContinue)) { return }
 
     ### PS ReadLine ###
@@ -36,8 +35,7 @@ function Initialize-PSReadline {
     Set-PSReadLineOption -HistorySearchCursorMovesToEnd
     Set-PSReadLineOption -MaximumHistoryCount 5000
     Set-PSReadLineOption -BellStyle Visual
-    # Predictions require a real interactive console — PSReadLine errors out when output
-    # is redirected (e.g. scripted `pwsh -Command` runs), so skip them in that case.
+    # PSReadLine errors on predictions when output is redirected (e.g. scripted pwsh -Command runs).
     if (-not [Console]::IsOutputRedirected) {
         Set-PSReadLineOption -PredictionSource History
         Set-PSReadLineOption -PredictionViewStyle ListView
@@ -50,10 +48,8 @@ function Initialize-PSReadline {
     # Show completions (e.g. the Azure CLI's) as a navigable menu rather than cycling inline.
     Set-PSReadLineKeyHandler -Key Tab -Function MenuComplete
 
-    # Sometimes you enter a command but realize you forgot to do something else first.
-    # This binding will let you save that command in the history so you can recall it,
-    # but it doesn't actually execute.  It also clears the line with RevertLine so the
-    # undo stack is reset - though redo will still reconstruct the command line.
+    # Park a half-typed command in history without running it, then clear the line. RevertLine resets
+    # the undo stack, though redo still reconstructs the command line.
     Set-PSReadLineKeyHandler -Key Alt+w `
         -BriefDescription SaveInHistory `
         -LongDescription "Save current line in history but do not execute" `
@@ -67,9 +63,7 @@ function Initialize-PSReadline {
         [Microsoft.PowerShell.PSConsoleReadLine]::RevertLine()
     }
 
-    # Sometimes you want to get a property of invoke a member on what you've entered so far
-    # but you need parens to do that.  This binding will help by putting parens around the current selection,
-    # or if nothing is selected, the whole line.
+    # Wrap the current selection — or the whole line when nothing is selected — in parens.
     Set-PSReadLineKeyHandler -Key 'Alt+(' `
         -BriefDescription ParenthesizeSelection `
         -LongDescription "Put parenthesis around the selection or entire line and move the cursor to after the closing parenthesis" `

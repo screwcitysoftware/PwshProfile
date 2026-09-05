@@ -86,11 +86,9 @@ function Read-PwshProfileInstalledSetting {
                 return @($node.Elements | ForEach-Object { & $scalar $_ })
             }
             if ($node -is [System.Management.Automation.Language.ArrayExpressionAst]) {
-                # Handles the @(...) form, e.g. `-Enable @()` (no sub-statements -> empty) or
-                # `-Enable @('Zoxide','Bat')`. This is tuned to the array shape Build-PwshProfile-
-                # InitializeCall emits, where every element is a plain string literal; the recursive
-                # FindAll harvests those constants. It is NOT a general expression evaluator — for an
-                # arbitrary @(...) it would also collect strings nested in sub-expressions.
+                # Handles `-Enable @()` (no sub-statements -> empty) and `-Enable @('Zoxide','Bat')`.
+                # Tuned to the shape Build-PwshProfileInitializeCall emits, where every element is a
+                # plain string literal — not a general expression evaluator.
                 $items = @($node.FindAll({
                             $args[0] -is [System.Management.Automation.Language.StringConstantExpressionAst]
                         }, $true) | ForEach-Object { $_.Value })
@@ -102,8 +100,7 @@ function Read-PwshProfileInstalledSetting {
         $stringParams = @('Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment',
             'BannerFont', 'BannerFontPath', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle',
             'FzfTabChord')
-        # FzfGitKeyBindings is a switch emitted as a bare -FzfGitKeyBindings (opt-in) -> parsed $true;
-        # the switch branch also handles an explicit -FzfGitKeyBindings:$false if ever hand-written.
+        # A bare -FzfGitKeyBindings parses as $true; the switch branch also handles an explicit :$false.
         $switchParams = @('EnableAll', 'NoBanner', 'ReplaceCat', 'ReplaceMore', 'FzfGitKeyBindings')
 
         # Canonical-case lookup so '-bannertext' etc. still map to the proper key.
@@ -118,8 +115,7 @@ function Read-PwshProfileInstalledSetting {
             $name = $canon[$el.ParameterName.ToLowerInvariant()]
             if (-not $name) { continue }
 
-            # A value can be attached (-Foo:bar) or be the next element (-Foo bar). Switches usually
-            # have neither.
+            # A value can be attached (-Foo:bar) or be the next element (-Foo bar); switches have neither.
             $argNode = $el.Argument
             if (-not $argNode -and ($idx + 1) -lt $elements.Count -and
                 $elements[$idx + 1] -isnot [System.Management.Automation.Language.CommandParameterAst]) {
@@ -128,9 +124,8 @@ function Read-PwshProfileInstalledSetting {
             }
 
             if ($switchParams -contains $name) {
-                # Present switch -> $true unless explicitly -Foo:$false (e.g. -FzfGitKeyBindings:$false).
-                # Read the boolean literal straight off the AST: the generic $value stringifies, and
-                # [bool]'False' is $true, which would flip an explicit :$false.
+                # Present switch -> $true unless explicitly -Foo:$false. Read the boolean off the AST:
+                # the generic $value stringifies, and [bool]'False' is $true, which would flip it.
                 if ($argNode) {
                     try { $settings[$name] = [bool]$argNode.SafeGetValue() }
                     catch { $settings[$name] = [bool](& $value $argNode) }

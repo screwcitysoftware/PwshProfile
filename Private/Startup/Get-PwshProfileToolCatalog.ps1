@@ -67,10 +67,9 @@ function Get-PwshProfileToolCatalog {
         [switch]$DefaultEnabled
     )
 
-    # Flat feature list in display/run order: the Core features first, then the WinGet tools (their
-    # order mirrors the orchestrator's run order: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit). The group a
-    # feature belongs to is DERIVED from its Install kind, so the "WinGet = winget installs" rule can't
-    # drift. oh-my-posh and the `which` alias are intentionally absent (always-on, not tokens).
+    # Flat feature list in display/run order: Core first, then the WinGet tools in the orchestrator's
+    # run order. A feature's group is DERIVED from its Install kind, so the "WinGet = winget installs"
+    # rule can't drift. oh-my-posh, git and the `which` alias are absent (always-on, not tokens).
     $entries = @(
         [pscustomobject]@{ Label = 'PSReadLine config'; Token = 'PSReadLine'; Install = 'none' }
         [pscustomobject]@{ Label = 'Terminal-Icons'; Token = 'TerminalIcons'; Install = 'module' }

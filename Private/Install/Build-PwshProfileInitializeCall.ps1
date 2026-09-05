@@ -96,9 +96,8 @@ function Build-PwshProfileInitializeCall {
 
     $parts = [System.Collections.Generic.List[string]]::new()
 
-    # Resolve the tool-selection shape up front. -EnableAll covers the whole catalog (and future
-    # additions); otherwise the explicit Enable list is authoritative. The resolved set gates which
-    # tool-specific params are worth emitting, so a disabled tool's flags never appear.
+    # Resolve the tool selection up front: -EnableAll covers the whole catalog, otherwise the explicit
+    # Enable list. It gates which tool-specific params are emitted, so a disabled tool's flags never are.
     $enableAll = [bool](& $value 'EnableAll')
     $enableList = @(& $value 'Enable')
     $enabledSet = if ($enableAll) { Get-PwshProfileToolCatalog -Token } else { $enableList }
@@ -116,9 +115,8 @@ function Build-PwshProfileInitializeCall {
     # -NoBanner suppresses the banner; the banner params below are then omitted as moot.
     if ($noBanner) { $parts.Add('-NoBanner') }
 
-    # Scalar string parameters: emit only when they differ from the (themed) default. BannerText is
-    # double-quoted (interpolation); the rest are single-quoted (verbatim). Banner params are skipped
-    # under -NoBanner, and tool-specific params (zoxide/bat) only emit when that tool is enabled.
+    # Scalars: emit only when they differ from the (themed) default. BannerText is double-quoted so it
+    # interpolates at startup; the rest are verbatim. Banner params are skipped under -NoBanner.
     $bannerKeys = @('BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont')
     $keyTool = @{ ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat'; FzfTabChord = 'Fzf' }
     foreach ($key in @($bannerKeys + @('StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'FzfTabChord'))) {
@@ -141,16 +139,14 @@ function Build-PwshProfileInitializeCall {
     if ([bool]$replaceMore -ne [bool]$Default['ReplaceMore'] -and $replaceMore -and $enabledSet -contains 'Less') {
         $parts.Add('-ReplaceMore')
     }
-    # FzfGitKeyBindings is off by default (opt-in), so it's emitted as a bare flag only when turned ON
-    # and fzf is enabled — same shape as -ReplaceCat / -ReplaceMore above.
+    # Opt-in, so emit the bare flag only when it is ON and fzf is enabled — like -ReplaceCat above.
     $fzfGit = & $value 'FzfGitKeyBindings'
     if ([bool]$fzfGit -ne [bool]$Default['FzfGitKeyBindings'] -and $fzfGit -and $enabledSet -contains 'Fzf') {
         $parts.Add('-FzfGitKeyBindings')
     }
 
-    # Tool selection is always emitted explicitly — that's what pins the set against future-tool drift.
-    # -EnableAll for "everything + future"; otherwise -Enable with the chosen tokens, or -Enable @()
-    # to deterministically enable nothing without triggering the bare-call prompt.
+    # Always emitted explicitly — that is what pins the set against future-tool drift. -EnableAll for
+    # "everything + future"; otherwise -Enable with the chosen tokens, or -Enable @() for nothing.
     if ($enableAll) {
         $parts.Add('-EnableAll')
     }

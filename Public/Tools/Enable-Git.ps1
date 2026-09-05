@@ -42,8 +42,7 @@ function Enable-Git {
 
     Invoke-Step "Initialize" {
         if (Get-Command git.exe -ErrorAction SilentlyContinue) {
-            # No-op: git has no PowerShell init/completion script to run. Just having git.exe on PATH
-            # is enough for posh-git, PSFzf's git chords, lazygit, and gh.
+            # No-op: git has no PowerShell init script. Having git.exe on PATH is what the rest wants.
         }
     }
 }

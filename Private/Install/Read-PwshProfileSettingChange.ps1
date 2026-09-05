@@ -58,16 +58,14 @@ function Read-PwshProfileSettingChange {
 
     if (-not (Get-Command Read-SpectreConfirm -ErrorAction SilentlyContinue)) { return $false }
 
-    # Escape a display value for markup; render an empty value as a plain "(none)" placeholder
-    # (Get-SpectreEscapedTextSafe rejects empty input, and a blank value reads better named).
+    # Escape a display value; render an empty one as "(none)" (Get-SpectreEscapedTextSafe rejects empty).
     $fmt = {
         param($v)
         if ([string]::IsNullOrEmpty("$v")) { return '(none)' }
         Get-SpectreEscapedTextSafe -Text "$v"
     }
 
-    # Render a row's display value — a colored swatch when the row is flagged as a color, otherwise the
-    # escaped value (or the "(none)" placeholder for an empty one).
+    # Render a row's value — a colored swatch when the row is flagged as a color, else the escaped text.
     $render = {
         param($r, $v)
         if ($r.Color -and -not [string]::IsNullOrEmpty("$v")) { return Format-PwshProfileColorValue "$v" }

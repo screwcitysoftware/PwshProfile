@@ -537,10 +537,9 @@ Describe 'Invoke-PwshProfileWizard' {
             # Banner: shown by default; Nerd Fonts: declined by default.
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color'
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }
-            # fzf git keybindings default to No — the BeforeEach catch-all Read-SpectreConfirm { $false }
-            # answers the git-chords prompt, matching the default-off behavior.
-            # Open both "make changes?" gates by default so the per-setting prompts below run; the
-            # gate-closed paths get their own tests.
+            # The BeforeEach catch-all Read-SpectreConfirm { $false } answers the git-chords prompt.
+            # Open both "make changes?" gates so the per-setting prompts below run; the gate-closed
+            # paths get their own tests.
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Change these banner settings?' }
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Change these winget settings?' }
             # Selections, keyed by prompt message.
@@ -770,10 +769,9 @@ Describe 'Invoke-PwshProfileWizard' {
 
     It 'returns a hashtable even when the step-header panel leaks to the pipeline' {
         InModuleScope $script:Module {
-            # The real Format-SpectrePanel emits its rendered string to the pipeline; Write-PwshProfileStepHeader
-            # pipes it to Out-Host so it never escapes. Simulate the panel output with a sentinel: without
-            # the Out-Host inside the header helper, this would leak through the bare step calls and the
-            # result would become Object[] instead of a hashtable.
+            # Format-SpectrePanel emits its rendered string to the pipeline; Write-PwshProfileStepHeader
+            # pipes it to Out-Host so it never escapes. Without that Out-Host this sentinel would leak
+            # through the bare step calls and the result would be Object[] instead of a hashtable.
             Mock Format-SpectrePanel { 'LEAKED-PANEL' } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard

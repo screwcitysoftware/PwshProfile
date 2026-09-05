@@ -431,6 +431,17 @@ ScrewCitySoftware.PwshProfile/
 └── Tests/                               # Pester 5 tests
 ```
 
+Before it loads anything, the `.psm1` sets `[Console]::InputEncoding`, `[Console]::OutputEncoding`
+and `$OutputEncoding` to BOM-less UTF-8 (one shared `UTF8Encoding` instance, wrapped in
+`try`/`catch` so a host without a real console can't break the import). This is required for
+rendering, not cosmetic: PwshSpectreConsole writes through `[Console]::Out`, so at the default OEM
+code page every non-ASCII glyph the module emits — step icons, dotted leaders, nerd-font prompt
+segments, figlet banners — is mangled by the encoder before it reaches the terminal. Two
+consequences worth knowing: the `[Console]` properties are *console-wide*
+(`SetConsoleCP`/`SetConsoleOutputCP`), so the code page change is inherited by child processes and
+outlives the session if you launched `pwsh` from another console; and native tools that still emit
+OEM-encoded text will render as mojibake, since PowerShell now decodes their stdout as UTF-8.
+
 To add a function: create `Verb-Noun.ps1` in the matching `Public/` subfolder (file name ==
 function name), add the name to `FunctionsToExport` in the `.psd1`, and document it below. Pick
 the subfolder by responsibility (`Tools/` for tool/completion enablers, `Prompt/` for

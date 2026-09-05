@@ -62,9 +62,8 @@ function Get-PwshProfileDefault {
         BatStyle        = 'numbers,changes,header'
         ReplaceCat      = $false
         ReplaceMore     = $false
-        # PSFzf keybinding tuning (only meaningful when Fzf is enabled). Git chords off by default
-        # (opt-in; lazygit covers git); the tab-completion picker chord defaults to Ctrl+Spacebar.
-        # Match Initialize-PwshProfile's defaults.
+        # Only meaningful when Fzf is enabled. Git chords are opt-in (lazygit covers git); the picker
+        # chord defaults to Ctrl+Spacebar. Matches Initialize-PwshProfile's defaults.
         FzfGitKeyBindings = $false
         FzfTabChord     = 'Ctrl+Spacebar'
         NoBanner        = $false

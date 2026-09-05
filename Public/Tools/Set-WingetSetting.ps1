@@ -73,8 +73,7 @@ function Set-WingetSetting {
             return
         }
 
-        # Read the current user settings (a nested hashtable incl. $schema) so we can write the full
-        # object back — preserving every key we don't manage, regardless of merge semantics.
+        # Read the whole user settings object so every key we don't manage survives the write back.
         $current = Get-WinGetUserSetting
         if ($current -isnot [System.Collections.IDictionary]) { $current = @{} }
         if (-not $current.Contains('$schema')) {

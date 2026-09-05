@@ -93,8 +93,7 @@ function Install-PwshProfile {
         [switch]$PassThru
     )
 
-    # The wizard's chrome uses fixed colors decoupled from the prompt theme being configured: the
-    # module's signature purple as the accent, soft cyan for code literals / paths.
+    # Wizard chrome, fixed and decoupled from the prompt theme being configured.
     $accent = '#c9aaff'
     $code = '#5fd7ff'
     $marker = Get-PwshProfileMarker
@@ -109,17 +108,15 @@ function Install-PwshProfile {
     }
 
     # Interactive-only: the wizard is the only way to make a tool choice, so without prompts there is
-    # nothing sensible to write. Warn and make no changes (no write on a first run; an existing block is
-    # left intact on a re-run) rather than guessing at a configuration.
+    # nothing sensible to write. Warn and change nothing rather than guessing at a configuration.
     $interactive = [bool](Get-Command Read-SpectreSelection -ErrorAction SilentlyContinue)
     if (-not $interactive) {
         Write-Warning 'Install-PwshProfile requires an interactive session (PwshSpectreConsole prompts are unavailable); no changes made. Run it in an interactive PowerShell to configure your profile.'
         return
     }
 
-    # On a re-run, parse the existing managed block so the wizard can default to the prior choices and
-    # flag tools added since (current catalog minus the recorded snapshot). A missing/old snapshot
-    # leaves $newTools empty so nothing is falsely flagged "(new)".
+    # On a re-run, parse the existing block so the wizard defaults to the prior choices and can flag
+    # tools added since. A missing/old snapshot leaves $newTools empty, so nothing is falsely "(new)".
     $priorSettings = $null
     $newTools = @()
     if ($reconfiguring) {
@@ -160,15 +157,13 @@ function Install-PwshProfile {
         return
     }
 
-    # Optional Nerd Font install (a one-time machine action; not part of the profile bootstrap).
-    # Skipped under -WhatIf, since a preview must make no changes (this also installs a module).
+    # One-time machine action, not part of the bootstrap. Skipped under -WhatIf: a preview writes nothing.
     $fonts = @($settings.NerdFont | Where-Object { $_ })
     if ($fonts.Count -and -not $WhatIfPreference) {
         Invoke-Step "Nerd Fonts ($($fonts -join ', '))" -Icon ':gear:' {
             Import-ModuleSafe NerdFonts
             if (Get-Command Install-NerdFont -ErrorAction SilentlyContinue) {
-                # Standard variant = the 'MesloLGM Nerd Font' / 'CaskaydiaCove Nerd Font' families
-                # Show-NerdFontSetup recommends, and a smaller download than the default 'All'.
+                # The families Show-NerdFontSetup recommends, and a smaller download than 'All'.
                 Install-NerdFont -Name $fonts -Scope CurrentUser -Variant Standard
             }
             else {
@@ -177,9 +172,8 @@ function Install-PwshProfile {
         }
     }
 
-    # Apply the chosen winget client settings to winget's settings.json — a one-time machine action
-    # like the font install, not part of the profile bootstrap. Skipped under -WhatIf (a preview must
-    # make no changes), and only when the wizard supplied the winget keys.
+    # One-time machine action like the font install, not part of the bootstrap. Skipped under -WhatIf,
+    # and only when the wizard supplied the winget keys.
     if ($settings.ContainsKey('WingetScope') -and -not $WhatIfPreference) {
         Invoke-Step 'Winget settings' -Icon ':gear:' {
             Set-WingetSetting -Scope $settings.WingetScope -ProgressBar $settings.WingetProgressBar `
@@ -187,37 +181,31 @@ function Install-PwshProfile {
         }
     }
 
-    # Point Windows Terminal at the Meslo Nerd Font as its default profile font — a one-time machine
-    # action like the font install, not part of the profile bootstrap. Skipped under -WhatIf (a preview
-    # must make no changes), and only when the wizard opted in. Set-WindowsTerminalFont no-ops with a
-    # warning if Windows Terminal's settings.json can't be found.
+    # One-time machine action, not part of the bootstrap. Skipped under -WhatIf, and only when the
+    # wizard opted in. Set-WindowsTerminalFont no-ops with a warning if settings.json isn't found.
     if ($settings.ContainsKey('SetTerminalFont') -and $settings.SetTerminalFont -and -not $WhatIfPreference) {
         Invoke-Step 'Windows Terminal font' -Icon ':gear:' {
-            # Suppress the host feedback (stream 6) so it doesn't tear the live spinner; a settings.json
-            # not-found warning (stream 3) still flows through Invoke-Step's warning replay.
+            # Suppress host feedback (stream 6) so it can't tear the spinner; warnings (stream 3)
+            # still flow through Invoke-Step's replay.
             Set-WindowsTerminalFont -FontFace 'MesloLGM Nerd Font' 6> $null
         }
     }
 
-    # Install the matching Windows Terminal color scheme (optionally as the default) — a one-time machine
-    # action like the font set, not part of the profile bootstrap. Skipped under -WhatIf, and only when
-    # the wizard opted in. Resolve the theme defensively (as Build-PwshProfileInitializeCall does) since a
-    # custom theme leaves Theme as 'screwcity'. Install-WindowsTerminalScheme no-ops with a warning if
-    # Windows Terminal's settings.json can't be found.
+    # One-time machine action, not part of the bootstrap. Skipped under -WhatIf, and only when the
+    # wizard opted in. Resolve the theme defensively (as Build-PwshProfileInitializeCall does) since a
+    # custom theme leaves Theme as 'screwcity'.
     if ($settings.ContainsKey('InstallTerminalScheme') -and $settings.InstallTerminalScheme -and -not $WhatIfPreference) {
         Invoke-Step 'Windows Terminal scheme' -Icon ':gear:' {
             $schemeTheme = if ($settings.ContainsKey('Theme') -and $settings.Theme) { $settings.Theme } else { 'screwcity' }
             $schemeArgs = @{ Theme = $schemeTheme }
             if ($settings.ContainsKey('SetSchemeDefault') -and $settings.SetSchemeDefault) { $schemeArgs['SetDefault'] = $true }
-            # Suppress host feedback (stream 6) so it doesn't tear the spinner; a not-found warning
-            # (stream 3) still flows through Invoke-Step's warning replay.
+            # Suppress host feedback (stream 6); warnings (stream 3) still reach Invoke-Step's replay.
             Install-WindowsTerminalScheme @schemeArgs 6> $null
         }
     }
 
-    # Terminal-font guidance — display-only (runs under -WhatIf), shown every run so users know to
-    # point their terminal at a Nerd Font even if they declined the install. Pass -Font only when
-    # fonts were chosen so it names the installed families; otherwise it shows the recommended pairing.
+    # Display-only, so it runs under -WhatIf, and every run — users need to point their terminal at a
+    # Nerd Font even if they declined the install. -Font names the installed families when there are any.
     $fontSetupArgs = @{}
     if ($fonts.Count) { $fontSetupArgs.Font = $fonts }
     Show-NerdFontSetup @fontSetupArgs
@@ -229,8 +217,8 @@ function Install-PwshProfile {
         $preview | Format-SpectrePanel -Header "Bootstrap for $Path" -Border Rounded -Color $accent -Expand | Out-Host
     }
 
-    # The writer carries SupportsShouldProcess, and -WhatIf/-Confirm flow into it via preference
-    # variables, so the actual write stays fully gated.
+    # The writer carries SupportsShouldProcess and -WhatIf/-Confirm reach it via preference variables,
+    # so the actual write stays fully gated.
     $writeArgs = @{ Path = $Path; InitializeCall = $call }
     if ($Force) { $writeArgs.Force = $true }
     $result = Write-PwshProfileBlock @writeArgs

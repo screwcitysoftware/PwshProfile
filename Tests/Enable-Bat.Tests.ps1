@@ -7,10 +7,9 @@ BeforeAll {
 
 Describe 'Enable-Bat' {
     BeforeEach {
-        # Run each substep body inline (no spinner) and never touch winget. The completer text from
-        # `bat --completion ps1` is captured by the Invoke-InGlobalScope mock (so nothing actually
-        # registers), and a global `bat` shim emits a registration line shaped like bat's real output
-        # so the -CommandName -replace can be exercised without bat installed.
+        # Run each substep body inline (no spinner) and never touch winget. Invoke-InGlobalScope is
+        # mocked so nothing registers, and a global `bat` shim emits a registration line shaped like
+        # bat's real output so the -CommandName -replace can be exercised without bat installed.
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
         $script:registered = $null

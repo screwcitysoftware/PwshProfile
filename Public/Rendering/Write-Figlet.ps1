@@ -81,8 +81,7 @@ function Write-Figlet {
         [Parameter(ParameterSetName = 'BundledFont')]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                # Completers run in the caller's scope, so use the public Show-FigletFont (which
-                # lists the bundled names) rather than the module-private Get-BundledFontName.
+                # Completers run in the caller's scope, where Get-BundledFontName isn't visible.
                 Show-FigletFont | Where-Object { $_ -like "$wordToComplete*" } |
                     ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
             })]
@@ -104,8 +103,8 @@ function Write-Figlet {
     if ($PSCmdlet.ParameterSetName -eq 'BundledFont') {
         $resolvedFontPath = Get-BundledFontPath -Name $Font
         if (-not (Test-Path -Path $resolvedFontPath)) {
-            # A missing bundled file is a packaging bug, not a caller error: warn and fall back to
-            # the default font rather than letting Spectre throw out of profile startup.
+            # A missing bundled file is a packaging bug, not a caller error — warn and fall back
+            # rather than letting Spectre throw out of profile startup.
             Write-Warning "Write-Figlet: bundled font '$Font' not found at '$resolvedFontPath'; using the default font."
             $resolvedFontPath = $null
         }

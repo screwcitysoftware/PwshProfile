@@ -4,10 +4,9 @@ BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'ScrewCitySoftware.PwshProfile.psd1') -Force
     $script:Module = 'ScrewCitySoftware.PwshProfile'
 
-    # Fake stand-in for [Spectre.Console.StatusContext]: the spinner renders through
-    # AnsiConsole (not PowerShell streams), so the renderer is tested by invoking
-    # Invoke-Step's scriptblock with a fake context whose Status setter records every
-    # breadcrumb update.
+    # Fake stand-in for [Spectre.Console.StatusContext]: the spinner renders through AnsiConsole, not
+    # PowerShell streams, so the renderer is tested by invoking Invoke-Step's scriptblock with a fake
+    # context whose Status setter records every breadcrumb update.
     function New-FakeStatusContext {
         $ctx = [pscustomobject]@{ History = [System.Collections.Generic.List[string]]::new() }
         $ctx | Add-Member -MemberType ScriptProperty -Name Status `

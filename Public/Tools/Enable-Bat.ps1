@@ -83,8 +83,7 @@ function Enable-Bat {
 
     Invoke-Step "Initialize" {
         if (Get-Command bat.exe -ErrorAction SilentlyContinue) {
-            # Drive bat's appearance through environment variables (process-global already, so these
-            # are plain assignments — no Invoke-InGlobalScope needed for env vars).
+            # Env vars are process-global, so plain assignments — no Invoke-InGlobalScope needed.
             if (-not [string]::IsNullOrWhiteSpace($Theme)) { $env:BAT_THEME = $Theme }
             if (-not [string]::IsNullOrWhiteSpace($Style)) { $env:BAT_STYLE = $Style }
 
@@ -93,17 +92,13 @@ function Enable-Bat {
                 Set-Alias -Name cat -Value bat.exe -Scope Global -Force
             }
 
-            # Register bat's completer in the global scope (not this module's) so it isn't tagged to
-            # the module — see Private/Core/Invoke-InGlobalScope.ps1.
+            # Global scope so bat's completer isn't tagged to this module.
             $batCompletion = bat --completion ps1
             if ($ReplaceCat) {
-                # Extend bat's own completer registration to also cover the `cat` alias, so `cat <Tab>`
-                # completes bat's flags. PowerShell completers don't follow aliases, so the alias must be
-                # named explicitly. Coupled to bat's exact output (the literal `-CommandName 'bat'`; note
-                # bat uses `-Native` and single quotes — unlike xh's `-CommandName 'xh'`). If a future bat
-                # build changes that quoting/spacing the replace silently no-ops and `cat` loses completion
-                # (bat itself still completes). Gated on -ReplaceCat: without the alias, `cat` is still
-                # Get-Content, and registering bat's flag completer onto it would be wrong.
+                # Extend bat's completer to cover the `cat` alias too — PowerShell completers don't
+                # follow aliases. Coupled to bat's exact `-CommandName 'bat'` output: a change to that
+                # quoting silently no-ops and `cat` loses completion (bat itself still works). Gated on
+                # -ReplaceCat, since without the alias `cat` is still Get-Content.
                 $batCompletion = $batCompletion -replace "-CommandName 'bat'", "-CommandName 'bat', 'cat'"
             }
             Invoke-InGlobalScope ($batCompletion | Out-String)

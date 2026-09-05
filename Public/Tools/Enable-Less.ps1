@@ -72,8 +72,7 @@ function Enable-Less {
 
     Invoke-Step "Initialize" {
         if (Get-Command less.exe -ErrorAction SilentlyContinue) {
-            # Drive less's defaults through environment variables (process-global already, so these
-            # are plain assignments — no Invoke-InGlobalScope needed for env vars).
+            # Env vars are process-global, so plain assignments — no Invoke-InGlobalScope needed.
             if (-not [string]::IsNullOrWhiteSpace($Options)) { $env:LESS = $Options }
 
             if ($ReplaceMore) {

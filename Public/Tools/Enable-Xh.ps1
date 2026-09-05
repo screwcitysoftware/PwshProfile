@@ -30,18 +30,15 @@ function Enable-Xh {
     Invoke-Step "Initialize" {
         if (Get-Command xh.exe -ErrorAction SilentlyContinue) {
             Set-Alias -Name http -Value xh.exe -Scope Global
-            # Run in the global scope (not this module's) so the registered completer isn't
-            # tagged to the module — see Private/Invoke-InGlobalScope.ps1.
-            # The -replace extends xh's own completer registration to also cover the `http` alias; it
-            # is coupled to xh's exact output (the literal `-CommandName 'xh'`). If a future xh build
-            # changes that quoting/spacing the replace silently no-ops and `http` loses completion.
+            # Global scope so the registered completer isn't tagged to this module. The -replace extends
+            # xh's completer to cover the `http` alias; it is coupled to xh's exact `-CommandName 'xh'`
+            # output, so a format change there silently drops `http` completion.
             Invoke-InGlobalScope ((xh --generate complete-powershell) -replace "-CommandName 'xh'", "-CommandName 'xh', 'http'" | Out-String)
         }
 
         if (Get-Command xhs.exe -ErrorAction SilentlyContinue) {
             Set-Alias -Name https -Value xhs.exe -Scope Global
-            # Same coupling as above: the -replace depends on xhs emitting the literal
-            # `-CommandName 'xhs'`; a format change there would silently drop `https` completion.
+            # Same coupling: a change to xhs's `-CommandName 'xhs'` output silently drops `https`.
             Invoke-InGlobalScope ((xhs --generate complete-powershell) -replace "-CommandName 'xhs'", "-CommandName 'xhs', 'https'" | Out-String)
         }
     }

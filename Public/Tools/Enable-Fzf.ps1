@@ -188,91 +188,69 @@ function Enable-Fzf {
 
     Invoke-Step "Initialize" {
         if (Get-Command fzf.exe -ErrorAction SilentlyContinue) {
-            # Global baseline opts (read by EVERY fzf invocation, incl. zoxide's cdi): theme + style
-            # only, NO --preview, so directory pickers stay clean. Plain assignment — env vars are
-            # process-global. --ansi renders ANSI-colored source output (e.g. fd --color=always).
+            # Global baseline opts, read by EVERY fzf invocation including zoxide's cdi: theme + style
+            # only, no --preview, so directory pickers stay clean. --ansi renders colored source output.
             $opts = [System.Collections.Generic.List[string]]::new()
             $opts.Add('--ansi')
-            # Always case-insensitive: fzf defaults to smart-case (case-sensitive once the query
-            # carries an uppercase char), but PowerShell/Windows is case-insensitive, so force
-            # --ignore-case as a fixed baseline. This governs every fzf surface (bare fzf, PSFzf's
-            # Ctrl+T/Ctrl+R widgets, zoxide's cdi, the git chords) — fzf, not fd, does the matching.
+            # Force case-insensitive: fzf defaults to smart-case, but PowerShell/Windows isn't. Governs
+            # every fzf surface (bare fzf, PSFzf widgets, cdi, git chords) — fzf does the matching, not fd.
             $opts.Add('--ignore-case')
-            # --style is an fzf 0.54+ feature. The Install substep short-circuits when fzf.exe is
-            # already on PATH, so it can't assume winget just supplied a current build — a pre-existing
-            # older fzf would choke on --style and fail *every* fzf invocation (and zoxide's cdi). So
-            # gate on the installed version (one `fzf --version` probe per session, via Get-FzfVersion,
-            # and only when a -Style was actually requested); an undeterminable version ($null) is
-            # treated as too-old and skips --style.
+            # --style needs fzf 0.54+. The Install substep short-circuits on an existing fzf.exe, so a
+            # pre-existing older build would choke on --style and break every fzf call. Gate on the
+            # probed version (Get-FzfVersion, once per session); an unknown version counts as too old.
             if (-not [string]::IsNullOrWhiteSpace($Style)) {
                 $fzfVersion = Get-FzfVersion
                 if ($fzfVersion -and $fzfVersion -ge [version]'0.54') { $opts.Add("--style=$Style") }
             }
             if (-not [string]::IsNullOrWhiteSpace($Colors)) { $opts.Add("--color=$Colors") }
 
-            # Always assign OPTS so --ansi is a guaranteed baseline: Enable-Fd's `fd --color=always`
-            # source command relies on it to render colored output rather than raw escape codes, and
-            # --ansi is a no-op when the input carries no color.
+            # Assign unconditionally so --ansi is a guaranteed baseline: Enable-Fd's `fd --color=always`
+            # relies on it, and --ansi is a no-op when the input carries no color.
             $env:FZF_DEFAULT_OPTS = ($opts -join ' ')
 
-            # PSFzf's PSReadLine widgets (Ctrl+T/Ctrl+R/git) force --height=40% unless the opts it
-            # reads already carry a --height. PSFzf reads _PSFZF_FZF_DEFAULT_OPTS in preference to
-            # FZF_DEFAULT_OPTS, so giving it its own opts (= the base + an explicit --height) both
-            # suppresses that 40% default and sizes the pickers, while FZF_DEFAULT_OPTS stays
-            # height-free → a bare fzf and zoxide's cdi keep their native alternate-screen fullscreen.
-            # Assign unconditionally (like FZF_DEFAULT_OPTS above) so a live-session reload that drops
-            # -Height resets to the height-free baseline rather than leaving a stale --height behind.
+            # PSFzf's widgets force --height=40% unless the opts they read already carry a --height, and
+            # PSFzf reads _PSFZF_FZF_DEFAULT_OPTS in preference to FZF_DEFAULT_OPTS. Giving it its own
+            # opts sizes the pickers while FZF_DEFAULT_OPTS stays height-free, so a bare fzf and cdi keep
+            # their native fullscreen. Unconditional, so a reload that drops -Height clears the old value.
             $env:_PSFZF_FZF_DEFAULT_OPTS = if (-not [string]::IsNullOrWhiteSpace($Height)) {
                 "$env:FZF_DEFAULT_OPTS --height=$Height"
             }
             else { $env:FZF_DEFAULT_OPTS }
 
-            # The bat preview is scoped to PSFzf's Ctrl+T file picker (FZF_CTRL_T_OPTS), never the
-            # global opts — so it shows for file searches but not for directory pickers like cdi.
-            # Assign unconditionally so a reload that drops -PreviewCommand clears a stale preview.
+            # Scoped to PSFzf's Ctrl+T file picker, never the global opts, so it shows for file searches
+            # but not directory pickers like cdi. Unconditional, so a reload clears a stale preview.
             $env:FZF_CTRL_T_OPTS = if (-not [string]::IsNullOrWhiteSpace($PreviewCommand)) {
                 "--preview '$PreviewCommand'"
             }
             else { '' }
 
-            # fzf ships no PowerShell key bindings — PSFzf provides them. Build the option set first
-            # (the Ctrl+G git chords only when git is present, so a git-less machine isn't left with
-            # dead bindings), then install/import PSFzf and apply it only when something will actually
-            # be set — so e.g. a lone -GitKeyBindings on a git-less box doesn't pull PSFzf in for nothing.
+            # fzf ships no PowerShell key bindings — PSFzf provides them. Build the option set first (git
+            # chords only when git is present, so a git-less box isn't left with dead bindings), then pull
+            # PSFzf in only if something will actually be set.
             $psfzf = @{}
             if (-not [string]::IsNullOrWhiteSpace($ProviderChord)) { $psfzf.PSReadlineChordProvider = $ProviderChord }
             if (-not [string]::IsNullOrWhiteSpace($HistoryChord))  { $psfzf.PSReadlineChordReverseHistory = $HistoryChord }
             if ($UseFd) { $psfzf.EnableFd = $true }
             if ($GitKeyBindings -and (Get-Command git -ErrorAction SilentlyContinue)) { $psfzf.GitKeyBindings = $true }
-            # -TabExpansionChord also needs PSFzf (it binds PSFzf's Invoke-FzfTabCompletion), so fold it
-            # into the "do we need PSFzf?" decision even though it's not a Set-PsFzfOption option.
+            # -TabExpansionChord needs PSFzf too, so fold it into the "do we need PSFzf?" decision.
             $needPsfzf = $psfzf.Count -gt 0 -or -not [string]::IsNullOrWhiteSpace($TabExpansionChord)
             if ($needPsfzf) {
                 Import-ModuleSafe PSFzf
-                # PSFzf double-quotes any completion candidate containing whitespace — including
-                # the trailing "complete" space that argcomplete (az), Cobra MenuComplete
-                # (gh/tailscale/op), and winget append — so they'd insert as `"account "`. Patch
-                # PSFzf's FixCompletionResult to trim that trailing space so fuzzy completions
-                # insert unquoted. No-op when PSFzf didn't load. Benefits Ctrl+T too, not just the
-                # Tab-expansion chord, so it runs whenever PSFzf is imported.
+                # PSFzf double-quotes any candidate containing whitespace — including the trailing space
+                # that argcomplete, Cobra, and winget append, which would insert as `"account "`. Patch it
+                # to trim that space. No-op when PSFzf didn't load; benefits Ctrl+T as well.
                 Repair-PsFzfCompletionQuoting
                 if ($psfzf.Count -gt 0 -and (Get-Command Set-PsFzfOption -ErrorAction SilentlyContinue)) {
                     Set-PsFzfOption @psfzf
                 }
-                # Fuzzy completion on its own chord, NOT Tab: Set-PsFzfOption -TabExpansion only ever
-                # targets Tab, so we bind Invoke-FzfTabCompletion directly and leave Tab = MenuComplete.
-                # Invoke-FzfTabCompletion feeds PowerShell's native completions (paths, cmdlet/parameter
-                # names, and every registered argument completer) into fzf, and the picker inherits the
-                # theme + height from $env:_PSFZF_FZF_DEFAULT_OPTS. The scriptblock resolves the global
-                # PSFzf Invoke-FzfTabCompletion at key-press time.
+                # Fuzzy completion on its own chord, not Tab: Set-PsFzfOption -TabExpansion only targets
+                # Tab, so bind Invoke-FzfTabCompletion directly and leave Tab = MenuComplete. The
+                # scriptblock resolves the global Invoke-FzfTabCompletion at key-press time.
                 if (-not [string]::IsNullOrWhiteSpace($TabExpansionChord) -and
                     (Get-Command Invoke-FzfTabCompletion -ErrorAction SilentlyContinue)) {
-                    # Many terminal emulators emit the same byte (NUL, 0x00) for Ctrl+Spacebar and
-                    # Ctrl+@, and PSReadLine may report the keypress under either name — so when the
-                    # tab-expansion chord is one of that pair, bind BOTH so the picker fires regardless
-                    # of which name the terminal surfaces. -Key takes a string[]; separate array
-                    # elements are independent bindings to the same handler (a comma inside one string
-                    # would instead be a chord sequence). Any other chord binds as-is.
+                    # Many terminals emit the same byte (NUL) for Ctrl+Spacebar and Ctrl+@, and PSReadLine
+                    # may report either name — so bind both when the chord is one of that pair. Separate
+                    # -Key array elements are independent bindings (a comma inside one string is a chord).
                     $tabKeys = if ($TabExpansionChord -in 'Ctrl+Spacebar', 'Ctrl+@') {
                         'Ctrl+Spacebar', 'Ctrl+@'
                     }

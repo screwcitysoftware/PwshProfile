@@ -90,34 +90,27 @@ function Invoke-Step {
         return
     }
 
-    # Top-level call: open the status spinner, stash its context for nested calls, run this
-    # same step inside it, then print the summary line. The scriptblock is a plain literal so
-    # $script: binds to this module's scope even though PwshSpectreConsole invokes it (do NOT
-    # add .GetNewClosure() — it rebinds $script: writes to a throwaway dynamic module and
-    # silently breaks the stash). The status helper's result is swallowed because it emits
-    # $null even for a void scriptblock.
+    # Top-level call: open the status spinner, stash its context for nested calls, run this step inside
+    # it, then print the summary line. The scriptblock must stay a plain literal so $script: binds to
+    # this module's scope — .GetNewClosure() rebinds those writes to a throwaway dynamic module and
+    # silently breaks the stash. Swallow the result: the helper emits $null even for a void block.
     if ($null -eq $script:StepStatusContext) {
-        # Warnings written into the live spinner are torn off-screen when it clears, so capture
-        # them (3>&1, below) instead of letting them paint, and replay them once the spinner is
-        # gone. Reset the accumulator for this top-level step.
+        # Warnings painted into the live spinner are torn off-screen when it clears, so capture them
+        # (3>&1, below) and replay them after. Reset the accumulator for this top-level step.
         $script:StepWarnings.Clear()
         $label = Get-SpectreEscapedTextSafe ((Get-StepIconPrefix $Icon) + $Description)
-        # PwshSpectreConsole invokes the inner block below and resolves its free variables
-        # dynamically; reference the step body through a distinctly-named local so it can't be
-        # shadowed by the invoker's own -ScriptBlock parameter (Invoke-SpectreCommandWithStatus
-        # has one) when the block runs.
+        # PwshSpectreConsole resolves the inner block's free variables dynamically, so hold the body in
+        # a distinctly-named local that the invoker's own -ScriptBlock parameter can't shadow.
         $stepBody = $ScriptBlock
         try {
             $elapsed = Measure-Command {
                 $null = Invoke-SpectreCommandWithStatus -Title $label -ScriptBlock {
-                    # $Context is a [Spectre.Console.StatusContext]; left untyped so tests can
-                    # inject a fake context through a mocked Invoke-SpectreCommandWithStatus.
+                    # A [Spectre.Console.StatusContext]; left untyped so tests can inject a fake.
                     param($Context)
                     $script:StepStatusContext = $Context
                     try {
-                        # 3>&1 redirects the body's warning stream into the pipeline so warnings
-                        # don't tear the live spinner; the WarningRecord guard keeps non-warning
-                        # output (already $null'd inside Invoke-StepInternal) from leaking.
+                        # 3>&1 keeps the body's warnings out of the live spinner; the WarningRecord
+                        # guard stops non-warning output from leaking into the pipeline.
                         Invoke-StepInternal -Description $Description -ScriptBlock $stepBody -Icon $Icon 3>&1 |
                             ForEach-Object { if ($_ -is [System.Management.Automation.WarningRecord]) { $script:StepWarnings.Add($_) } }
                     }

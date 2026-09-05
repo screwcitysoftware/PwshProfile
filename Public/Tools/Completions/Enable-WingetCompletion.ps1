@@ -6,8 +6,9 @@ function Enable-WingetCompletion {
     .DESCRIPTION
         Registers a native argument completer for `winget` that delegates to winget's own
         `winget complete` subcommand, so tab completion stays in sync with the installed winget
-        version. The completer forces UTF-8 on the console/pipeline encoding (winget emits UTF-8)
-        and escapes embedded quotes before forwarding the word, command line, and cursor position.
+        version. It escapes embedded quotes before forwarding the word, command line, and cursor
+        position. winget emits UTF-8, which the `.psm1` already sets at import, so the completer
+        does not re-set the encoding the way Microsoft's stock snippet does.
 
         winget is assumed present (it is how this module installs every other tool), so there is
         no install step — the function only registers the completer. It opens no Invoke-Step of
@@ -29,7 +30,7 @@ function Enable-WingetCompletion {
 
     Register-ArgumentCompleter -Native -CommandName winget -ScriptBlock {
         param($wordToComplete, $commandAst, $cursorPosition)
-        [Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = [System.Text.Utf8Encoding]::new()
+        # No encoding reset here — the .psm1 sets UTF-8 at import.
         $Local:word = $wordToComplete.Replace('"', '""')
         $Local:ast = $commandAst.ToString().Replace('"', '""')
         winget complete --word="$Local:word" --commandline "$Local:ast" --position $cursorPosition | ForEach-Object {

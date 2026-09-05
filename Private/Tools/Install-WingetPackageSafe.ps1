@@ -111,10 +111,9 @@ function Install-WingetPackageSafe {
         $ProgressPreference = $prevProgress
     }
 
-    # winget only updates the *user* PATH (registry) — patch this session's PATH so the Initialize
-    # substep can resolve the exe immediately.
-    # Split on ';' and compare exactly (case-insensitive -notcontains) so $PathDir is matched
-    # literally — avoids -like treating any '[' / '*' in the path as a wildcard pattern.
+    # winget only updates the user PATH in the registry — patch this session's PATH so the Initialize
+    # substep can resolve the exe now. Split and compare exactly so a '[' or '*' in the path isn't
+    # treated as a wildcard.
     if (($env:Path -split ';') -notcontains $PathDir) {
         $env:Path += ";$PathDir"
     }
