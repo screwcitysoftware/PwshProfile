@@ -12,7 +12,7 @@ Describe 'Enable-Fzf' {
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
         Mock -ModuleName $script:Module Import-ModuleSafe { }
         # Pretend fzf.exe is present so the Initialize guard passes (no install needed).
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'fzf.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'fzf.exe' }
 
         # These env vars are process-global; snapshot and clear so assertions are clean.
         $script:savedOpts  = $env:FZF_DEFAULT_OPTS
@@ -89,7 +89,7 @@ Describe 'Enable-Fzf' {
     }
 
     It 'does not import PSFzf when only -GitKeyBindings is requested and git is absent' {
-        Mock -ModuleName $script:Module Get-Command { $null } -ParameterFilter { $Name -eq 'git' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $null } -ParameterFilter { $Name -eq 'git' }
         Enable-Fzf -GitKeyBindings
         Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 0 -Exactly
     }

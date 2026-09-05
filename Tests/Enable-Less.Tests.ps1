@@ -28,7 +28,7 @@ Describe 'Enable-Less' {
     }
 
     It 'sets $env:LESS and leaves the pager untouched without -ReplaceMore' {
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'less.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'less.exe' }
         Enable-Less -Options '-R'
         $env:LESS  | Should -Be '-R'
         $env:PAGER | Should -BeNullOrEmpty
@@ -36,14 +36,14 @@ Describe 'Enable-Less' {
     }
 
     It 'routes the pager through less and aliases more -> less with -ReplaceMore' {
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'less.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'less.exe' }
         Enable-Less -ReplaceMore
         $env:PAGER | Should -Be 'less'
         (Get-Alias more).Definition | Should -Be 'less.exe'
     }
 
     It 'does nothing when less.exe is not on PATH' {
-        Mock -ModuleName $script:Module Get-Command { $null } -ParameterFilter { $Name -eq 'less.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $null } -ParameterFilter { $Name -eq 'less.exe' }
         Enable-Less -Options '-R' -ReplaceMore
         $env:LESS  | Should -BeNullOrEmpty
         $env:PAGER | Should -BeNullOrEmpty

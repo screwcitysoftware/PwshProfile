@@ -7,7 +7,7 @@ function Enable-Fd {
         Runs two nested Invoke-Step substeps:
           - Install: if fd.exe isn't on PATH, installs sharkdp.fd with winget and patches the current
             session's PATH so the Initialize substep can see it immediately.
-          - Initialize (guarded by Get-Command fd.exe): sets $env:LS_COLORS from -LsColors (fd has no
+          - Initialize (guarded by Test-CommandAvailable): sets $env:LS_COLORS from -LsColors (fd has no
             color variable of its own), registers fd's own PowerShell completer via
             `fd --gen-completions powershell` through Invoke-InGlobalScope, and optionally wires fzf.
 
@@ -30,7 +30,7 @@ function Enable-Fd {
 
     .PARAMETER IntegrateFzf
         Point fzf at fd as its source, setting $env:FZF_DEFAULT_COMMAND and $env:FZF_ALT_C_COMMAND as
-        described above. Off by default. Guarded by Get-Command fzf.exe, so it no-ops without fzf.
+        described above. Off by default. Guarded by Test-CommandAvailable, so it no-ops without fzf.
 
     .EXAMPLE
         Enable-Fd
@@ -63,7 +63,7 @@ function Enable-Fd {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command fd.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'fd.exe') {
             # Env vars are process-global, so a plain assignment — no Invoke-InGlobalScope needed.
             if (-not [string]::IsNullOrWhiteSpace($LsColors)) { $env:LS_COLORS = $LsColors }
 
@@ -72,7 +72,7 @@ function Enable-Fd {
 
             # Point fzf at fd as its source when fzf is present. A bare `fzf` reads FZF_DEFAULT_COMMAND
             # directly and PSFzf's Ctrl+T widget prefers it, so there is no FZF_CTRL_T_COMMAND to set.
-            if ($IntegrateFzf -and (Get-Command fzf.exe -ErrorAction SilentlyContinue)) {
+            if ($IntegrateFzf -and (Test-CommandAvailable -Name 'fzf.exe')) {
                 $env:FZF_DEFAULT_COMMAND = 'fd --ignore-case --type file --color=always --hidden --follow --exclude .git'
                 # Alt+C (PSFzf's set-location picker) is the one path that ignores FZF_DEFAULT_COMMAND:
                 # its directory branch falls back to PSFzf's `fd ... --fixed-strings .`, whose literal

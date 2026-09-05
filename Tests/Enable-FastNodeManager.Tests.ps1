@@ -14,7 +14,7 @@ Describe 'Enable-FastNodeManager' {
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
         # fnm.exe is "present" so Initialize runs; zoxide is deliberately NOT involved (the hook must
         # not depend on it).
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'fnm.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'fnm.exe' }
 
         # A global `fnm` shim. `fnm use` records the invocation and emits nothing, so the hook's
         # `| Out-Host` produces no stray output here. `fnm env`/`completions` must emit a non-empty

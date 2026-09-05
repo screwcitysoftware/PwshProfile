@@ -74,7 +74,7 @@ function Install-WingetPackageSafe {
     )
 
     # Short-circuit BEFORE loading the module: an already-installed tool costs nothing at startup.
-    if (Get-Command $Exe -ErrorAction SilentlyContinue) { return }
+    if (Test-CommandAvailable -Name $Exe) { return }
 
     # Resolve the default Links dir only after the short-circuit, so a present tool never builds it.
     # Most enablers install winget portables, which all land in this shared directory.

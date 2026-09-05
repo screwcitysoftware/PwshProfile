@@ -31,7 +31,7 @@ Describe 'Enable-Bat' {
     }
 
     It 'sets the theme and style and registers a bat-only completer without -ReplaceCat' {
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'bat.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'bat.exe' }
         Enable-Bat -Theme Dracula -Style 'plain'
         $env:BAT_THEME      | Should -Be 'Dracula'
         $env:BAT_STYLE      | Should -Be 'plain'
@@ -40,7 +40,7 @@ Describe 'Enable-Bat' {
     }
 
     It 'extends the completer to the cat alias and aliases cat -> bat under -ReplaceCat' {
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'bat.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'bat.exe' }
         Enable-Bat -Theme Dracula -ReplaceCat
         $script:registered          | Should -Match "-CommandName 'bat', 'cat'"
         (Get-Alias cat).Definition  | Should -Be 'bat.exe'

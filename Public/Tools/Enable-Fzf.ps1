@@ -7,7 +7,7 @@ function Enable-Fzf {
         Runs two nested Invoke-Step substeps:
           - Install: if fzf.exe isn't on PATH, installs junegunn.fzf with winget and patches the
             current session's PATH so the exe is usable immediately.
-          - Initialize (guarded by Get-Command fzf.exe): composes the environment variables fzf and
+          - Initialize (guarded by Test-CommandAvailable): composes the environment variables fzf and
             PSFzf read, then binds the key chords.
 
         $env:FZF_DEFAULT_OPTS is the baseline every fzf invocation sees — plain fzf, zoxide's
@@ -70,7 +70,7 @@ function Enable-Fzf {
 
     .PARAMETER GitKeyBindings
         Registers PSFzf's Ctrl+G,Ctrl+<key> fuzzy-git chords (files, branches, hashes, tags, stashes).
-        Guarded by Get-Command git so a git-less machine isn't left with dead chords.
+        Guarded by Test-CommandAvailable so a git-less machine isn't left with dead chords.
 
     .EXAMPLE
         Enable-Fzf
@@ -133,7 +133,7 @@ function Enable-Fzf {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command fzf.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'fzf.exe') {
             # Global baseline opts, read by EVERY fzf invocation including zoxide's cdi: theme + style
             # only, no --preview, so directory pickers stay clean. --ansi renders colored source output.
             $opts = [System.Collections.Generic.List[string]]::new()
@@ -177,7 +177,7 @@ function Enable-Fzf {
             if (-not [string]::IsNullOrWhiteSpace($ProviderChord)) { $psfzf.PSReadlineChordProvider = $ProviderChord }
             if (-not [string]::IsNullOrWhiteSpace($HistoryChord))  { $psfzf.PSReadlineChordReverseHistory = $HistoryChord }
             if ($UseFd) { $psfzf.EnableFd = $true }
-            if ($GitKeyBindings -and (Get-Command git -ErrorAction SilentlyContinue)) { $psfzf.GitKeyBindings = $true }
+            if ($GitKeyBindings -and (Test-CommandAvailable -Name 'git')) { $psfzf.GitKeyBindings = $true }
             # -TabExpansionChord needs PSFzf too, so fold it into the "do we need PSFzf?" decision.
             $needPsfzf = $psfzf.Count -gt 0 -or -not [string]::IsNullOrWhiteSpace($TabExpansionChord)
             if ($needPsfzf) {

@@ -218,7 +218,7 @@ function Invoke-FzfRaw {
         [string[]]$Argument = @()
     )
 
-    if (-not (Get-Command fzf.exe -ErrorAction SilentlyContinue)) {
+    if (-not (Test-CommandAvailable -Name 'fzf.exe')) {
         Write-Warning 'Select-Fzf: fzf.exe is not on PATH. Run Enable-Fzf (or install fzf) first.'
         return @()
     }

@@ -7,7 +7,7 @@ function Enable-Bat {
         Runs two nested Invoke-Step substeps:
           - Install: if bat.exe isn't on PATH, installs sharkdp.bat with winget and patches the current
             session's PATH so the Initialize substep can see it immediately.
-          - Initialize (guarded by Get-Command bat.exe): sets $env:BAT_THEME and $env:BAT_STYLE,
+          - Initialize (guarded by Test-CommandAvailable): sets $env:BAT_THEME and $env:BAT_STYLE,
             optionally aliases cat -> bat, and registers bat's own completer from `bat --completion ps1`
             through Invoke-InGlobalScope.
 
@@ -65,7 +65,7 @@ function Enable-Bat {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command bat.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'bat.exe') {
             # Env vars are process-global, so plain assignments — no Invoke-InGlobalScope needed.
             if (-not [string]::IsNullOrWhiteSpace($Theme)) { $env:BAT_THEME = $Theme }
             if (-not [string]::IsNullOrWhiteSpace($Style)) { $env:BAT_STYLE = $Style }

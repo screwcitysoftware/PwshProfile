@@ -7,7 +7,7 @@ function Enable-Less {
         Runs two nested Invoke-Step substeps:
           - Install: if less.exe isn't on PATH, installs jftuga.less (GNU less built standalone for
             Windows) with winget and patches the current session's PATH.
-          - Initialize (guarded by Get-Command less.exe): sets $env:LESS from -Options, and under
+          - Initialize (guarded by Test-CommandAvailable): sets $env:LESS from -Options, and under
             -ReplaceMore sets $env:PAGER and aliases more -> less.
 
         less materially upgrades bat: bat's default pager is less, so without it bat can't page colored
@@ -59,7 +59,7 @@ function Enable-Less {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command less.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'less.exe') {
             # Env vars are process-global, so plain assignments — no Invoke-InGlobalScope needed.
             if (-not [string]::IsNullOrWhiteSpace($Options)) { $env:LESS = $Options }
 

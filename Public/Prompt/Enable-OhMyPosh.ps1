@@ -41,7 +41,7 @@ function Enable-OhMyPosh {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command oh-my-posh.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'oh-my-posh.exe') {
             if (-not $Configuration) {
                 $defaultTheme = Get-BundledThemePath
                 if (Test-Path $defaultTheme) { $Configuration = $defaultTheme }

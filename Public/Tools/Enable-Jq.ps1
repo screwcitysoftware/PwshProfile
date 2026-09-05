@@ -8,7 +8,7 @@ function Enable-Jq {
           - Install: if jq.exe isn't on PATH, installs it with winget (jqlang.jq, a
             portable package) and patches the current session's PATH so the exe is usable
             immediately.
-          - Initialize: a Get-Command-guarded no-op. jq is a standalone C program with a
+          - Initialize: a no-op. jq is a standalone C program with a
             hand-rolled argument parser — it ships no PowerShell shell-init or tab-completion
             script (unlike the Cobra CLIs that emit `<cmd> completion powershell`), so there's
             nothing to run. The substep exists only to keep the install/initialize shape

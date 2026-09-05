@@ -13,7 +13,7 @@ Describe 'Enable-Zoxide' {
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
         # zoxide.exe is "present" so Initialize runs.
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'zoxide.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'zoxide.exe' }
 
         # A global `zoxide` shim. `zoxide add` records the invocation and emits nothing; `zoxide init`
         # must emit a non-empty string because Invoke-InGlobalScope rejects an empty -Expression. The

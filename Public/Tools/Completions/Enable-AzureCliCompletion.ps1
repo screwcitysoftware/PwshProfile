@@ -37,7 +37,7 @@ function Enable-AzureCliCompletion {
     [CmdletBinding()]
     param()
 
-    if (-not (Get-Command az -ErrorAction SilentlyContinue)) { return }
+    if (-not (Test-CommandAvailable -Name 'az')) { return }
 
     Register-ArgumentCompleter -Native -CommandName az -ScriptBlock {
         param($commandName, $wordToComplete, $cursorPosition)

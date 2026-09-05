@@ -35,7 +35,7 @@ Describe 'Enable-Fd' {
     }
 
     It 'colors fd and points a bare fzf at fd, without setting the dead FZF_CTRL_T_COMMAND' {
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -in @('fd.exe', 'fzf.exe') }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -in @('fd.exe', 'fzf.exe') }
         Enable-Fd -LsColors 'di=0' -IntegrateFzf
         $env:LS_COLORS           | Should -Be 'di=0'
         $env:FZF_DEFAULT_COMMAND | Should -Not -BeNullOrEmpty
@@ -47,7 +47,7 @@ Describe 'Enable-Fd' {
     It 'points PSFzf''s Alt+C directory picker at fd, case-insensitively' {
         # Alt+C is the one PSFzf lookup that ignores FZF_DEFAULT_COMMAND and falls back to a built-in
         # `fd ... --fixed-strings .` that matches almost nothing on Windows, so Enable-Fd overrides it.
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -in @('fd.exe', 'fzf.exe') }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -in @('fd.exe', 'fzf.exe') }
         Enable-Fd -LsColors 'di=0' -IntegrateFzf
         $env:FZF_ALT_C_COMMAND | Should -Match '--ignore-case'
         $env:FZF_ALT_C_COMMAND | Should -Match '--type directory'
@@ -56,7 +56,7 @@ Describe 'Enable-Fd' {
     }
 
     It 'leaves both fzf source commands unset when -IntegrateFzf is omitted' {
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'fd.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'fd.exe' }
         Enable-Fd -LsColors 'di=0'
         $env:FZF_DEFAULT_COMMAND | Should -BeNullOrEmpty
         $env:FZF_ALT_C_COMMAND   | Should -BeNullOrEmpty

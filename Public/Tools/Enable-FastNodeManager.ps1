@@ -43,7 +43,7 @@ function Enable-FastNodeManager {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command fnm.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'fnm.exe') {
             # Global scope so the emitted env/completion helpers aren't tagged to this module.
             Invoke-InGlobalScope (fnm env --version-file-strategy=recursive --shell powershell | Out-String)
             Invoke-InGlobalScope (fnm completions --shell powershell | Out-String)

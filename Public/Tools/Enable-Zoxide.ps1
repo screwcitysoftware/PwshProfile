@@ -54,7 +54,7 @@ function Enable-Zoxide {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command zoxide.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'zoxide.exe') {
             # Global scope so the emitted __zoxide_* helpers and cd/cdi aliases aren't tagged to this
             # module. `--hook none` skips zoxide's prompt wrapper — oh-my-posh's remove/re-add of its
             # prompt module on reload wipes it, silently stopping directory tracking.

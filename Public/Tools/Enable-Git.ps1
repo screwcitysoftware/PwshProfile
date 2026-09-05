@@ -13,7 +13,7 @@ function Enable-Git {
             tool packages, Git.Git is a full installer that lands in %ProgramFiles%\Git\cmd (a machine
             install), so an explicit -PathDir is passed (the winget Links default is wrong for it) and
             the current session's PATH is patched so git is usable immediately.
-          - Initialize: a Get-Command-guarded no-op. git ships no PowerShell shell-init or
+          - Initialize: a no-op. git ships no PowerShell shell-init or
             tab-completion script of its own (the GitHub CLI's completion is handled separately by
             Enable-GithubCliCompletion), so there's nothing to run. The substep exists only to keep the
             install/initialize shape consistent with the other tool enablers and to gate on the exe
