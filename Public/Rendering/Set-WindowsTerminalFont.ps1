@@ -4,30 +4,23 @@ function Set-WindowsTerminalFont {
         Sets the default profile font face in Windows Terminal's settings.json.
 
     .DESCRIPTION
-        Points profiles.defaults.font.face in the user's Windows Terminal settings.json at a given
-        font family, so every profile renders with it — handy right after installing a Nerd Font, so
-        the oh-my-posh prompt glyphs (folder, git, OS icons) show up instead of boxes. The default
-        font face is 'MesloLGM Nerd Font', the installed family name of the Meslo Nerd Font the
+        Points profiles.defaults.font.face at a given font family so every profile renders with it —
+        handy right after installing a Nerd Font, so the oh-my-posh prompt glyphs show up instead of
+        boxes. The default is 'MesloLGM Nerd Font', the installed family name of the Meslo Nerd Font the
         install wizard offers.
 
-        The edit is idempotent: re-running just overwrites the same face. The original settings.json is
-        backed up to '<settings.json>.bak' before the rewrite. Supports -WhatIf / -Confirm.
-
-        If Windows Terminal's settings.json can't be found (Windows Terminal not installed, or never
-        launched), a warning is emitted and nothing is changed. Pass -SettingsPath to point at a
-        specific file.
-
-        JSONC note: settings.json may contain // comments; the parse -> rewrite round-trip does not
-        preserve comments or hand-formatting (the .bak backup is the safety net).
+        The edit is idempotent, and settings.json is backed up to '<settings.json>.bak' first, since the
+        parse-then-rewrite round-trip does not preserve // comments or hand-formatting. Supports
+        -WhatIf / -Confirm. If settings.json can't be found (Windows Terminal not installed, or never
+        launched), a warning is emitted and nothing changes.
 
     .PARAMETER FontFace
-        The font family name to set as profiles.defaults.font.face. Defaults to 'MesloLGM Nerd Font'.
-        Use the exact family name as it appears installed (for the Meslo Nerd Font that is
-        'MesloLGM Nerd Font', not 'Menlo' or 'Meslo').
+        The font family to set. Defaults to 'MesloLGM Nerd Font'. Use the exact family name as
+        installed — for Meslo that is 'MesloLGM Nerd Font', not 'Menlo' or 'Meslo'.
 
     .PARAMETER SettingsPath
-        Optional path to the Windows Terminal settings.json to edit. Defaults to the first existing
-        of the stable, preview, and unpackaged install locations (Get-WindowsTerminalSettingsPath).
+        Optional path to the settings.json to edit. Defaults to the first existing of the stable,
+        preview, and unpackaged install locations.
 
     .EXAMPLE
         Set-WindowsTerminalFont

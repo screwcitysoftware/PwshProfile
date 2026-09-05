@@ -1,46 +1,36 @@
 function Get-PwshProfileToolCatalog {
     <#
     .SYNOPSIS
-        Returns the catalog of opt-in startup features — grouped Core / WinGet — as the single source
-        of truth for the tool set, its install kinds, and the clean-install defaults.
+        Returns the catalog of opt-in startup features — grouped Core / WinGet — as the single source of
+        truth for the tool set, its install kinds, and the clean-install defaults.
 
     .DESCRIPTION
-        The one place the toggleable startup features are defined, so the wizard's feature tree
-        (Read-PwshProfileFeatureTree), the wizard's seeding/defaults (Invoke-PwshProfileWizard), the
-        orchestrator's section rendering (Initialize-PwshProfile), and the opt-in resolution / new-tool
-        detection all agree on the same list. The set is also mirrored by the [ValidateSet] on
-        Initialize-PwshProfile's -Enable parameter, and a test (Tests/ToolCatalog.Tests.ps1) asserts
-        that literal stays in sync with this catalog.
+        The one place the toggleable startup features are defined, so the wizard's feature tree, the
+        wizard's seeding, the orchestrator's section rendering, and the opt-in resolution all agree.
+        Initialize-PwshProfile's -Enable [ValidateSet] mirrors this list, and Tests/ToolCatalog.Tests.ps1
+        asserts the literal stays in sync.
 
         Each feature carries an Install kind:
           winget — installed as a CLI binary via Install-WingetPackageSafe.
           module — installed as a PowerShell Gallery module via Import-ModuleSafe.
           none   — no install (built-in config, or registration that detects an external tool).
 
-        The grouping rule is derived from that kind, not hard-coded by name: the **WinGet** group is
-        exactly the entries with Install 'winget'; everything else is **Core**. So a future feature that
-        doesn't fit just declares its kind and lands in the right group with no rework. oh-my-posh and
-        the `which` alias are deliberately absent — they are always-on (not opt-in tokens).
+        The grouping is DERIVED from that kind rather than hard-coded by name: the WinGet group is
+        exactly the 'winget' entries, everything else is Core. A future feature just declares its kind
+        and lands in the right group. oh-my-posh, git and the `which` alias are deliberately absent —
+        they are always-on, not opt-in tokens.
 
-        By default returns an ordered hashtable of group name (Core, then WinGet) -> array of
-        [pscustomobject] feature rows, each with:
-          Label   — the human-readable label shown in the wizard's feature tree.
-          Token   — the Initialize-PwshProfile -Enable token.
-          Install — the install kind ('winget' | 'module' | 'none').
-
-        With -Token, returns the flat, ordered token list (Core tokens first, then WinGet) — the order
-        -Enable lists them and the ValidateSet declares them.
-
-        With -DefaultEnabled, returns the tokens that should be checked on a clean (first-run) install:
-        everything that is NOT a winget install (Install -ne 'winget'). This centralizes the
-        "Core checked, WinGet unchecked by default" rule.
+        By default returns an ordered map of group name -> feature rows, each carrying Label (shown in
+        the wizard tree), Token (the -Enable token), and Install (the kind).
 
     .PARAMETER Token
-        Return the flat ordered token list (string[]) rather than the grouped structure.
+        Return the flat ordered token list instead — the order -Enable lists them and the ValidateSet
+        declares them.
 
     .PARAMETER DefaultEnabled
-        Return the clean-install default-on token list (string[]) — the non-winget tokens. Mutually
-        exclusive with -Token.
+        Return the tokens checked on a clean first-run install: everything that is not a winget
+        install. This centralizes the "Core checked, WinGet unchecked" rule. Mutually exclusive
+        with -Token.
 
     .EXAMPLE
         Get-PwshProfileToolCatalog
@@ -55,8 +45,7 @@ function Get-PwshProfileToolCatalog {
     .EXAMPLE
         Get-PwshProfileToolCatalog -DefaultEnabled
 
-        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions') — the non-winget tokens checked
-        by default on a clean install.
+        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions') — the non-winget tokens.
     #>
     [CmdletBinding(DefaultParameterSetName = 'Grouped')]
     param(

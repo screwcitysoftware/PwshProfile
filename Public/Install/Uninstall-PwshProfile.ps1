@@ -4,28 +4,21 @@ function Uninstall-PwshProfile {
         Removes the ScrewCitySoftware.PwshProfile bootstrap block from a profile file.
 
     .DESCRIPTION
-        Deletes the marker-wrapped managed block that Install-PwshProfile writes (the module
-        import plus the Initialize-PwshProfile call between the conda-style sentinels),
-        preserving every other line in the file. It is the counterpart to Install-PwshProfile;
-        to merely change settings, re-run Install instead (it rewrites the block in place).
+        Deletes the marker-wrapped managed block that Install-PwshProfile writes, preserving every other
+        line in the file. It is the counterpart to Install-PwshProfile; to merely change settings,
+        re-run Install instead, which rewrites the block in place.
 
-        This touches ONLY the profile file. It does NOT uninstall any tools, Nerd Fonts, or
-        PowerShell modules that were installed during setup — removing the bootstrap simply stops
-        the module from initializing on future sessions.
-
-        Only the marker-delimited block is removed. A hand-written, unmanaged
-        'Import-Module ScrewCitySoftware.PwshProfile' (with no markers) is left untouched, since it
-        is your own code rather than the managed injection.
+        This touches only the profile file. It does NOT uninstall any tools, Nerd Fonts, or PowerShell
+        modules installed during setup — removing the bootstrap simply stops the module initializing in
+        future sessions. A hand-written, unmarked 'Import-Module ScrewCitySoftware.PwshProfile' is left
+        untouched, since that is your own code rather than the managed injection.
 
         Supports -WhatIf / -Confirm; the single write is the only mutating action and is fully gated.
-        Throws if -Path is a directory.
-
-        Returns one [pscustomobject] with Path, Action ('Removed' | 'NotInstalled'), and Changed
-        ([bool]).
+        Throws if -Path is a directory. Returns an object with Path, Action ('Removed' or
+        'NotInstalled') and Changed — under -WhatIf that describes intent, not a change that happened.
 
     .PARAMETER Path
-        The profile file to clean. Defaults to $PROFILE (current user, current host) — the same
-        default as Install-PwshProfile. $PROFILE is host-specific.
+        The profile file to clean. Defaults to $PROFILE, the same default as Install-PwshProfile.
 
     .PARAMETER PassThru
         Emit the result object. By default the command returns nothing.
@@ -41,13 +34,9 @@ function Uninstall-PwshProfile {
         Previews removing the block from the all-hosts profile without changing anything.
 
     .NOTES
-        $PROFILE is host-specific (VS Code and ISE use different files). The file is rewritten as
-        UTF-8 without a BOM. If removing the block leaves the file empty, the (empty) file is left
-        in place rather than deleted.
-
-        Under -WhatIf the returned object describes the action that *would* be taken (e.g.
-        Action = 'Removed', Changed = $true) — the write is skipped, so the result reflects intent,
-        not a change that happened.
+        $PROFILE is host-specific — VS Code and ISE use different files. The file is rewritten as UTF-8
+        without a BOM. If removing the block leaves the file empty, the empty file is left in place
+        rather than deleted.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(

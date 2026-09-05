@@ -1,48 +1,42 @@
 function Build-PwshProfileInitializeCall {
     <#
     .SYNOPSIS
-        Turns a settings hashtable into the Initialize-PwshProfile command line to embed in
-        a profile.
+        Turns a settings hashtable into the Initialize-PwshProfile command line to embed in a profile.
 
     .DESCRIPTION
-        Renders the single line that Install-PwshProfile writes into the managed bootstrap
-        block. Most parameters are emitted only when they differ from the defaults, to keep the line
-        tidy. Tool selection is the deliberate exception: it is ALWAYS emitted explicitly (-EnableAll,
-        or -Enable with the chosen tokens, or -Enable @() for nothing), because that explicit pin is
-        what stops a tool added in a later module version from auto-installing on the next shell.
+        Renders the single line Install-PwshProfile writes into the managed bootstrap block. Most
+        parameters are emitted only when they differ from the defaults, to keep the line tidy. Tool
+        selection is the deliberate exception: it is ALWAYS emitted explicitly (-EnableAll, -Enable with
+        the chosen tokens, or -Enable @() for nothing), because that explicit pin is what stops a tool
+        added in a later module version from auto-installing on the next shell.
 
-        The theme drives the comparison baseline: the banner branding (text/color/icon) is compared
-        against Get-PwshProfileDefault for the *selected* theme, so a forestcity install that keeps
-        the Forest City branding emits just "-Theme forestcity" rather than re-spelling the matching
-        banner text/color/icon. A bundled theme other than screwcity emits "-Theme <name>"; a custom
-        theme path emits "-CustomTheme '<path>'" (the two are mutually exclusive in the generated
-        call, mirroring Initialize-PwshProfile's parameter sets).
+        The theme sets the comparison baseline. Banner branding is compared against
+        Get-PwshProfileDefault for the *selected* theme, so a forestcity install that keeps the Forest
+        City branding emits just "-Theme forestcity" rather than re-spelling the matching text, color
+        and icon. A custom theme emits "-CustomTheme '<path>'" instead, mirroring Initialize-PwshProfile's
+        mutually exclusive parameter sets.
 
-        String values are single-quoted (embedded single quotes are doubled) so values such as
-        the ':nut_and_bolt:' step icon survive verbatim. The one exception is -BannerText, which is
-        double-quoted so values like $env:COMPUTERNAME interpolate at profile startup (embedded
-        double quotes and backticks are backtick-escaped; $ is intentionally left unescaped).
+        Strings are single-quoted (embedded quotes doubled) so a value like ':nut_and_bolt:' survives
+        verbatim. -BannerText is the exception: it is double-quoted so $env:COMPUTERNAME interpolates at
+        startup, with $ deliberately left unescaped.
 
-        Tool-specific params are kept consistent with the selection: -ReplaceCat / -BatTheme / -BatStyle
-        (bat), -ReplaceMore (less), and -ZoxideCommand (zoxide) are emitted only when their tool is in
-        the enabled set, and the banner params are omitted under -NoBanner — so a generated call never
-        carries a flag for a disabled feature.
+        Tool-specific params stay consistent with the selection — the bat, less and zoxide flags are
+        emitted only when their tool is enabled, and banner params are omitted under -NoBanner — so a
+        generated call never carries a flag for a disabled feature.
 
     .PARAMETER Setting
-        The settings hashtable (keys as produced by Get-PwshProfileDefault / the wizard:
-        Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-        ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, NoBanner, Enable, EnableAll). Keys
-        that are absent fall back to the default and are not emitted.
+        The settings hashtable, keyed as Get-PwshProfileDefault and the wizard produce it. Absent keys
+        fall back to the default and are not emitted.
 
     .PARAMETER Default
-        The baseline to compare against. When omitted it is resolved as Get-PwshProfileDefault for
-        the setting's selected theme; exposed mainly for testing.
+        The baseline to compare against. Resolved from the setting's selected theme when omitted;
+        exposed mainly for testing.
 
     .EXAMPLE
         Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault)
 
-        Returns 'Initialize-PwshProfile -Enable @()' (the default has nothing selected, so it pins an
-        empty enable list rather than a bare call).
+        Returns 'Initialize-PwshProfile -Enable @()' — the default selects nothing, so it pins an empty
+        enable list rather than emitting a bare call.
 
     .EXAMPLE
         $s = Get-PwshProfileDefault -Theme forestcity; $s.Enable = @('Zoxide', 'Bat')
@@ -60,14 +54,14 @@ function Build-PwshProfileInitializeCall {
         $s = Get-PwshProfileDefault; $s.Enable = @('Bat'); $s.ReplaceCat = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -ReplaceCat -Enable Bat' (the cat -> bat switch is emitted
-        because bat is enabled).
+        Returns 'Initialize-PwshProfile -ReplaceCat -Enable Bat' — the switch is emitted because bat is
+        enabled.
 
     .EXAMPLE
         $s = Get-PwshProfileDefault; $s.Enable = @('Zoxide'); $s.NoBanner = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -NoBanner -Enable Zoxide' (banner params are omitted).
+        Returns 'Initialize-PwshProfile -NoBanner -Enable Zoxide' — banner params are omitted.
     #>
     [CmdletBinding()]
     param(

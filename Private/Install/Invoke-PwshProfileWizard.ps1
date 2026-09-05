@@ -5,91 +5,63 @@ function Invoke-PwshProfileWizard {
         $null if the user cancels).
 
     .DESCRIPTION
-        Drives the PwshSpectreConsole prompts that collect the user's profile configuration and
-        returns a settings hashtable (the keys of Get-PwshProfileDefault, plus a NerdFont key
-        holding the chosen Nerd Font name(s) as an array, or $null when none were selected, a
-        SetTerminalFont boolean for whether to set the Windows Terminal default font, the
-        InstallTerminalScheme / SetSchemeDefault booleans for whether to install the matching Windows
-        Terminal color scheme and set it as the default, plus the WingetScope / WingetProgressBar /
-        WingetAnonymizePath / WingetDisableInstallNote keys carrying the chosen winget client settings).
-        If the user cancels at the review screen, it returns $null and Install-PwshProfile writes nothing.
+        Drives the PwshSpectreConsole prompts that collect the profile configuration and returns a
+        settings hashtable: the keys of Get-PwshProfileDefault, plus NerdFont (the chosen font names,
+        or $null), SetTerminalFont, InstallTerminalScheme / SetSchemeDefault, and the four Winget*
+        keys. Cancelling at the review screen returns $null and Install-PwshProfile writes nothing.
 
-        Each step opens with a rounded header panel (Write-PwshProfileStepHeader) carrying the step
-        title, a "N of M" progress counter, and a primary description; secondary prompts get inline
-        hint lines (Write-PwshProfilePromptHelp). Both run their text through Format-PwshProfileHelpMarkup,
-        so tool names and code literals are highlighted rather than flat grey — users unfamiliar with
-        the underlying tools (zoxide and its jump command especially) aren't left guessing.
+        Each step opens with a rounded header panel (Write-PwshProfileStepHeader) carrying the title, a
+        "N of M" counter, and a description; secondary prompts get inline hint lines
+        (Write-PwshProfilePromptHelp). Both run their text through Format-PwshProfileHelpMarkup so tool
+        names and code literals are highlighted rather than flat grey. Selection prompts clear
+        themselves on submit, unlike text prompts, so each choice is echoed afterward via
+        Write-PwshProfilePromptAnswer to keep a visible record.
 
-        Selection prompts (Read-SpectreSelection) clear themselves on submit, unlike the text prompts
-        that leave their answer on screen, so each selection's chosen value is echoed afterward via
-        Write-PwshProfilePromptAnswer (an accent check mark + the value) to keep a visible record.
+        One forward pass through the steps, then a review hub where any step can be re-edited before
+        submitting, or the whole thing cancelled:
 
-        The wizard makes one forward pass through the steps, then lands on a review hub where any
-        step can be re-edited before submitting, or the whole thing cancelled:
+          1. Nerd Fonts (optional): installs the recommended Meslo + CascadiaCode pair, then offers to
+             set 'MesloLGM Nerd Font' as the Windows Terminal default font.
+          2. Winget: a curated set of winget client settings (install scope, progress bar, anonymize
+             paths, suppress install notes), pre-filled from the live settings.json and gated behind a
+             single "change these?" prompt that defaults to No.
+          3. Theme: a bundled oh-my-posh theme or a custom path. The bundled choice seeds the banner
+             color and step icon that later prompts pre-fill from; a custom path seeds neutral ones.
+             Re-picking a theme preserves any color/icon already customized. It then offers the
+             matching Windows Terminal color scheme, and if accepted, whether to make it the default.
+          4. Banner: shows the current config and gates the per-setting prompts behind the same
+             "change these?" pattern. Clearing the banner text hides the banner — since BannerText must
+             be non-empty, a cleared text becomes -NoBanner rather than a shown-but-blank half-state.
+          5. Step icon: always asked, since the icon marks every startup step whether or not there is a
+             banner. A curated shortcode menu with the current icon floated to the top, plus a custom
+             escape hatch.
+          6. Features (opt-in): pick specific tools, or enable everything including future additions.
+             "Specific" shows the grouped Core / WinGet tree, pre-checking the prior -Enable set on a
+             re-run or the Core default-on set on a clean run, and tagging new tools "(new)". If
+             zoxide, bat, less or fzf end up enabled, their tuning prompts follow.
 
-          1. Nerd Fonts: optional, a single yes/no; on yes, ensures the NerdFonts module and installs
-             the recommended Meslo + CascadiaCode pair; on no, nothing is installed. Then a second
-             yes/no (default No) offers to set 'MesloLGM Nerd Font' as the Windows Terminal default
-             font, applied to settings.json at install time by Install-PwshProfile via
-             Set-WindowsTerminalFont.
-          2. Winget: a curated set of winget client settings (default install scope, progress-bar
-             style, anonymize-displayed-paths, suppress-install-notes). It first shows the current
-             values (pre-filled from the live settings.json via Get-WingetSettingDefault, flagging any
-             that differ from the recommendation) and asks whether to change them — defaulting to No,
-             via Read-PwshProfileSettingChange — only prompting per-setting on Yes. The values are
-             applied to settings.json at install time by Install-PwshProfile via Set-WingetSetting
-             (not baked into the bootstrap call).
-          3. Theme: pick a bundled oh-my-posh theme (screwcity / forestcity) or supply a custom theme
-             path. The bundled choice seeds the banner color and step icon the later prompts are
-             pre-filled with; a custom path seeds neutral color/icon (a neutral color, a generic icon)
-             so you define those fresh. The banner text defaults to the machine name regardless of
-             theme. Re-picking a theme later preserves any color/icon you already customized (only
-             still-default fields are re-seeded). It then asks whether to install the matching Windows
-             Terminal color scheme (default No) and, only if accepted, whether to set it as the default
-             color scheme (default Yes) — applied to settings.json at install time by Install-PwshProfile
-             via Install-WindowsTerminalScheme (a custom theme falls back to the neutral Screw City scheme).
-          4. Banner: shows the current banner config (shown/hidden plus text/color/alignment/font,
-             flagging anything off the theme default) and asks whether to change it — defaulting to No,
-             via Read-PwshProfileSettingChange. On Yes it asks a show/hide yes-no (no suppresses the
-             banner via -NoBanner and skips the theming sub-steps; yes prompts text, color, alignment,
-             and bundled font). Clearing the banner text also hides the banner — since BannerText must
-             be non-empty, a cleared text is treated like a declined banner (-NoBanner, default text
-             restored) rather than left as a shown-but-blank half-state.
-          5. Step icon: always asked (the icon marks every startup step, banner or not) — a curated
-             shortcode menu with the current icon floated to the top, plus a "custom shortcode" escape.
-          6. Features (opt-in): first a mode choice — pick specific tools, or enable everything
-             including tools added in future updates (-EnableAll). "Specific" shows a grouped tree
-             (Read-PwshProfileFeatureTree) under the Core / WinGet sections (shell completions sit under
-             Core). On a re-run it pre-checks the prior -Enable set; on a clean first run it pre-checks
-             the Core default-on set (WinGet left unchecked). Newly-added tools are tagged "(new)"; the
-             checked set becomes -Enable. oh-my-posh is always on and
-             not listed. If zoxide/bat/less/fzf end up enabled, their tuning prompts (jump command,
-             cat→bat, more→less, and fzf's git keybindings + tab-completion chord) follow.
+        The font, winget, and terminal-scheme choices are one-time machine actions applied by
+        Install-PwshProfile, not baked into the bootstrap call.
 
-        Then a review panel summarizes the choices and offers Submit / Edit <step> / Cancel.
-
-        Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and, when
-        they are not, warns that an interactive session is required and makes no changes.
+        Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and warns
+        that an interactive session is required when they are not.
 
     .PARAMETER Reconfiguring
-        Indicates the target profile already contains a managed block, so the intro line can say it
-        is updating rather than creating. Purely cosmetic.
+        The target profile already contains a managed block, so the intro says "updating" rather than
+        "creating". Purely cosmetic.
 
     .PARAMETER PriorSetting
-        On a re-run, the settings parsed from the existing managed block (via
-        Read-PwshProfileInstalledSetting). Used to seed the wizard so each prompt defaults to last
-        time's choice — the feature tree pre-checks the prior -Enable set, the mode prompt defaults to
-        the prior mode, and theme/banner/icon/tuning prompts pre-fill from it.
+        On a re-run, the settings parsed from the existing block via Read-PwshProfileInstalledSetting,
+        used to seed every prompt with last time's choice.
 
     .PARAMETER NewTool
-        Tokens newly available since the prior setup (current catalog minus the recorded snapshot),
-        forwarded to the feature tree so they are tagged "(new)" and start unchecked.
+        Tokens newly available since the prior setup, forwarded to the feature tree so they are tagged
+        "(new)" and start unchecked.
 
     .EXAMPLE
         Invoke-PwshProfileWizard
 
-        Walks the user through the prompts and returns the resulting settings hashtable (or $null if
-        cancelled).
+        Walks the prompts and returns the resulting settings hashtable, or $null if cancelled.
     #>
     [CmdletBinding()]
     param(

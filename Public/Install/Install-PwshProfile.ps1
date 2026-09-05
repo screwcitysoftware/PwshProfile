@@ -5,58 +5,49 @@ function Install-PwshProfile {
 
     .DESCRIPTION
         Walks you through a PwshSpectreConsole wizard and writes a marker-wrapped bootstrap block — a
-        tools snapshot comment plus a tailored Initialize-PwshProfile call (which auto-loads the module
-        when it runs, so no import line is needed) — into a profile file (by default $PROFILE). It is the
-        one-time setup companion to Initialize-PwshProfile, which then runs every session from that block.
+        tools snapshot comment plus a tailored Initialize-PwshProfile call — into a profile file
+        ($PROFILE by default). No import line is needed: invoking Initialize-PwshProfile auto-loads the
+        module. This is the one-time setup companion to Initialize-PwshProfile, which then runs every
+        session from that block.
 
-        On a re-run it parses the existing block to default each prompt to your previous choices and to
-        flag tools added to the module since (shown "(new)" and starting unchecked).
+        The wizard makes one forward pass — an optional Nerd Font install, winget client settings,
+        theme, an optional banner, the step icon, and an opt-in Features tree — then lands on a review
+        screen where any step can be re-edited before submitting, or the whole setup cancelled without
+        writing. On a re-run it parses the existing block to default each prompt to your previous
+        choices and to flag tools added since (shown "(new)" and starting unchecked).
 
-        Note: this wires the module into your profile *file*; it does not install the module itself
-        from the gallery (use Install-PSResource ScrewCitySoftware.PwshProfile for that).
-
-        The wizard walks one forward pass — an optional Nerd Font install, a set of winget client
-        settings, theme, an optional banner (a yes/no that gates the text/color/alignment/font
-        prompts), the step icon, and a Features step (pick specific tools from an opt-in tree, or enable
-        everything including future additions; oh-my-posh is always on) — then lands on a review screen
-        where any step can be re-edited before submitting, or the whole setup cancelled without writing. The Nerd
-        Font install uses the NerdFonts module (CurrentUser scope, no admin required), defaulting to
-        the recommended Meslo + CascadiaCode pairing. The winget settings (default install scope,
-        progress-bar style, anonymize-displayed-paths, suppress-install-notes) are pre-filled from
-        the current settings.json and merged back into it via Set-WingetSetting at the end of the
-        run — a one-time machine action, not part of the bootstrap block (so re-running the wizard
-        re-applies them; -WhatIf previews without touching settings.json).
+        The Nerd Font install (NerdFonts module, CurrentUser scope, no admin), the winget settings, and
+        the Windows Terminal font/scheme are one-time machine actions applied at the end of the run,
+        not part of the bootstrap block — so re-running re-applies them, and -WhatIf previews without
+        touching anything.
 
         Your existing profile code is never destroyed:
           - A new file (and its parent directory) is created if needed.
-          - An existing managed block is replaced in place, so the command is safe to re-run to
-            change options.
-          - Any other existing content is left intact, with the block prepended above it.
-          - A profile that already contains a bare 'Import-Module ScrewCitySoftware.PwshProfile'
-            (no markers) is left untouched unless -Force is given.
+          - An existing managed block is replaced in place, so this is safe to re-run.
+          - Any other content is left intact, with the block prepended above it.
+          - A profile with a bare 'Import-Module ScrewCitySoftware.PwshProfile' and no markers is left
+            untouched unless -Force is given.
 
-        This is a user-invoked setup command (not silent startup), so genuine errors throw. It is
-        interactive-only: when the Spectre prompt cmdlets are unavailable it warns that an interactive
-        session is required and makes no changes (rather than guessing at a configuration).
+        This wires the module into your profile *file*; it does not install the module itself from the
+        gallery (use Install-PSResource for that). Being a user-invoked setup command rather than
+        silent startup, genuine errors throw. It is interactive-only: without the Spectre prompt
+        cmdlets it warns that an interactive session is required and makes no changes.
 
     .PARAMETER Path
         The profile file to configure. Defaults to $PROFILE (current user, current host). Pass an
-        explicit path to target another profile (e.g. the all-hosts profile or the VS Code host
-        profile).
+        explicit path to target another profile, e.g. the all-hosts or VS Code host profile.
 
     .PARAMETER Force
         When the target already contains a bare module import but no managed markers, prepend the
         managed block anyway instead of treating the file as already wired.
 
     .PARAMETER PassThru
-        Emit a result object ([pscustomobject] with Path, Action, and Changed). By default the
-        command writes the file and returns nothing.
+        Emit a result object with Path, Action, and Changed. By default the command returns nothing.
 
     .EXAMPLE
         Install-PwshProfile
 
-        Runs the wizard and writes the bootstrap into $PROFILE, creating it (and its directory) if
-        needed.
+        Runs the wizard and writes the bootstrap into $PROFILE, creating it and its directory if needed.
 
     .EXAMPLE
         Install-PwshProfile -WhatIf
@@ -76,7 +67,7 @@ function Install-PwshProfile {
     .NOTES
         $PROFILE is host-specific — the VS Code and ISE hosts use different files than the default
         console. The file is written as UTF-8 without a BOM. Re-run any time to change settings; the
-        managed block is rewritten in place. Spectre prompts only render in an interactive console.
+        managed block is rewritten in place.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '',
         Justification = 'SupportsShouldProcess is declared so -WhatIf/-Confirm are accepted and flow via $WhatIfPreference into the gated writer Write-PwshProfileBlock (and the -not $WhatIfPreference guards on the font/winget steps); this function intentionally delegates rather than calling ShouldProcess itself. Covered by the -WhatIf tests.')]

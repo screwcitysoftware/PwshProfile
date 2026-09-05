@@ -1,51 +1,43 @@
 function Write-Figlet {
     <#
     .SYNOPSIS
-        Renders text as figlet (large ASCII) art via PwshSpectreConsole, optionally in a bundled
-        or custom FIGlet font.
+        Renders text as figlet (large ASCII) art via PwshSpectreConsole, optionally in a bundled or
+        custom FIGlet font.
 
     .DESCRIPTION
-        Writes Spectre figlet text to the console. A general-purpose figlet writer: it is used for
-        the profile startup banner (Initialize-PwshProfile, suppressed via -NoBanner) but is not
-        banner-specific — call it anywhere you want big ASCII text.
+        A general-purpose figlet writer. Initialize-PwshProfile uses it for the startup banner, but it
+        is not banner-specific — call it anywhere you want big ASCII text.
 
-        By default it uses PwshSpectreConsole's built-in figlet font. Pass -Font to pick one of the
-        module's bundled fonts (tab-completes) or -FontPath to point at any .flf file of your own;
-        the two are mutually exclusive. The bundled fonts span sizes so you can match the font to
-        the message length — Small for long strings, Colossal/ANSIShadow for short, punchy ones.
-        Run Show-FigletFont to list the names (add -Preview to render samples).
+        Pass -Font to pick one of the module's bundled fonts (tab-completes) or -FontPath for any .flf
+        of your own; the two are mutually exclusive. The bundled fonts span sizes, so you can match the
+        font to the message length — Small for long strings, Colossal or ANSIShadow for short punchy
+        ones. Run Show-FigletFont to list them, or Show-FigletFont -Preview to render samples.
 
-        It writes only the figlet text (no trailing blank line); add your own spacing if you want
-        a gap after it.
-
-        Failure tolerance: if PwshSpectreConsole isn't loaded (no Write-SpectreFigletText command),
-        the function returns silently without rendering, so it never breaks profile startup. If a
-        bundled font file is somehow missing, it warns and falls back to the default font rather
-        than throwing.
+        It writes only the figlet text, with no trailing blank line; add your own spacing if you want a
+        gap after it. Without PwshSpectreConsole it returns silently rather than throwing, and a missing
+        bundled font file warns and falls back to the default.
 
     .PARAMETER Text
         The text to render as figlet. Required.
 
     .PARAMETER Color
-        The figlet color (any Spectre color name or hex). Defaults to '#c9aaff', the bundled
-        oh-my-posh theme's signature purple (the prompt caret / path color).
+        Any Spectre color name or hex. Defaults to '#c9aaff', the bundled theme's signature purple.
 
     .PARAMETER Alignment
-        Horizontal alignment of the figlet text: 'Left', 'Center', or 'Right'. Defaults to 'Left'.
+        'Left' (default), 'Center', or 'Right'.
 
     .PARAMETER Font
-        A bundled FIGlet font to render with (tab-completes; run Show-FigletFont to list them).
-        Defaults to 'ANSIShadow'. Mutually exclusive with -FontPath.
+        A bundled FIGlet font (tab-completes; run Show-FigletFont to list them). Defaults to
+        'ANSIShadow'. Mutually exclusive with -FontPath.
 
     .PARAMETER FontPath
-        Path (relative or absolute) to a custom .flf FIGlet font file. Mutually exclusive with
-        -Font. Validated to exist at call time, so a typo surfaces immediately. Note that not
-        every .flf loads under Spectre's parser; if rendering fails, try a different font file.
+        Path to a custom .flf font file, validated to exist at call time. Mutually exclusive with -Font.
+        Not every .flf loads under Spectre's parser; if rendering fails, try another file.
 
     .EXAMPLE
         Write-Figlet 'Screw City'
 
-        Renders "Screw City" in the ANSI Shadow font, in the theme's purple, left-aligned (defaults).
+        Renders "Screw City" in the ANSI Shadow font, in the theme's purple, left-aligned.
 
     .EXAMPLE
         Write-Figlet 'DEPLOY' -Font ANSIShadow -Color Green -Alignment Center
@@ -63,8 +55,8 @@ function Write-Figlet {
         Renders with a custom .flf font supplied by the caller.
 
     .NOTES
-        Out-Host is required: the figlet widget emits its rendered ANSI string to the pipeline
-        rather than writing to the console, so it is forced to the host directly.
+        Out-Host is required: the figlet widget emits its rendered ANSI string to the pipeline rather
+        than writing to the console, so it is forced to the host directly.
     #>
     [CmdletBinding(DefaultParameterSetName = 'BundledFont')]
     param(

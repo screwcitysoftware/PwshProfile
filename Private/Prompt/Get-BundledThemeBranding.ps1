@@ -5,45 +5,31 @@ function Get-BundledThemeBranding {
         Terminal color scheme paired with a bundled theme.
 
     .DESCRIPTION
-        Each bundled theme has a matching identity so the startup banner, step marker, and the
-        colors of bat, fd, and fzf feel cohesive with the prompt colors:
+        Each bundled theme has a matching identity, so the startup banner, step marker, and the colors
+        of bat, fd and fzf feel cohesive with the prompt:
 
-          screwcity  -> 'Screw City'  / banner #4c81c8 (signature purple #c9aaff stays in the palettes)
-                                       / :nut_and_bolt:   (🔩) / Dracula
-          forestcity -> 'Forest City' / banner #8fce72 (also the signature green)
-                                       / :deciduous_tree: (🌳) / gruvbox-dark
+          screwcity  -> 'Screw City'  / :nut_and_bolt:   (🔩) / Dracula
+          forestcity -> 'Forest City' / :deciduous_tree: (🌳) / gruvbox-dark
 
-        DisplayName is the theme's friendly label (shown in the install wizard's theme picker); it is
-        NOT the banner text — the default banner text is uniformly $env:COMPUTERNAME for every theme
-        (see Get-PwshProfileDefault / Initialize-PwshProfile). The step icon is stored without a
-        trailing space; the separator between the glyph and the step text is added at render time
-        (Get-StepIconPrefix). BatTheme is the `bat --list-themes` value Enable-Bat assigns to
-        $env:BAT_THEME so bat's highlighting matches the prompt palette.
+        DisplayName is the friendly label shown in the wizard's theme picker — it is NOT the banner
+        text, which is uniformly $env:COMPUTERNAME for every theme. The step icon is stored without a
+        trailing space; the separator is added at render time by Get-StepIconPrefix. BatTheme,
+        LsColors and FzfColors are the values Enable-Bat, Enable-Fd and Enable-Fzf assign so those
+        tools match the prompt; the color specs are fixed truecolor RGB, so they render identically
+        across terminals rather than following the terminal's own scheme.
 
-        LsColors is an LS_COLORS spec Enable-Fd assigns to $env:LS_COLORS so fd's output is tinted to
-        match the prompt; it uses truecolor (38;2;R;G;B) matching the signature hex exactly. FzfColors
-        is an fzf `--color` spec Enable-Fzf folds into $env:FZF_DEFAULT_OPTS so fzf's picker matches
-        the prompt (also truecolor hex). Both are fixed RGB, so they render identically across
-        terminals rather than following the terminal's own scheme.
+        TerminalScheme is a hashtable in the shape Windows Terminal's settings.json `schemes` array
+        expects, written by Install-WindowsTerminalScheme so the terminal's palette matches too. Its
+        `name` is the DisplayName. Like LsColors and FzfColors its hex values are hardcoded here rather
+        than parsed out of the .omp.json, keeping this map the single source of truth for a theme's
+        color identity.
 
-        TerminalScheme is a Windows Terminal color scheme (a hashtable in the shape Windows Terminal's
-        settings.json `schemes` array expects: `name`, `background`, `foreground`, `cursorColor`,
-        `selectionBackground`, and the 16 ANSI keys black..white + bright*). Install-WindowsTerminalScheme
-        writes it into the user's settings.json so the terminal's own palette matches the prompt. Its
-        `name` is the DisplayName, so it reads nicely in Windows Terminal's color-scheme dropdown. Like
-        LsColors/FzfColors the hex values are hardcoded here (not parsed out of the theme's .omp.json),
-        keeping this map the single source of truth for the theme's color identity.
-
-        Both Initialize-PwshProfile (at startup, to fill the banner color/icon not explicitly passed)
-        and Get-PwshProfileDefault (at install time, to pre-fill the wizard and seed the comparison
-        baseline) resolve color/icon through here, so the two stay in sync from one source.
-
-        Any unrecognized name — including a custom theme path chosen at install — falls back to the
-        'screwcity' branding, which is the module's neutral default identity.
+        Both Initialize-PwshProfile (at startup) and Get-PwshProfileDefault (at install time) resolve
+        branding through here, so the two stay in sync. Any unrecognized name — including a custom theme
+        chosen at install — falls back to 'screwcity', the module's neutral default identity.
 
     .PARAMETER Name
-        The bundled theme name (e.g. 'screwcity', 'forestcity'). Unknown names fall back to
-        'screwcity'.
+        The bundled theme name. Unknown names fall back to 'screwcity'.
 
     .EXAMPLE
         Get-BundledThemeBranding -Name forestcity

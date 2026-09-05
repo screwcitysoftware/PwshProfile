@@ -1,61 +1,36 @@
 function Enable-Fd {
     <#
     .SYNOPSIS
-        Installs (if necessary) and activates fd, a fast and friendly `find` alternative, for the
-        session.
+        Installs (if necessary) and activates fd, a fast and friendly `find` alternative.
 
     .DESCRIPTION
         Runs two nested Invoke-Step substeps:
-          - Install: if fd.exe isn't on PATH, installs it with winget (sharkdp.fd, a portable
-            package) and patches the current session's PATH so the Initialize substep can see it
-            immediately.
-          - Initialize (guarded by Get-Command fd.exe): configures fd for the session:
-              * When -LsColors is non-empty, sets $env:LS_COLORS so fd's output (directories,
-                symlinks, executables, …) is colored to match the active oh-my-posh theme.
-                Initialize-PwshProfile resolves this from the theme's branding. fd has no
-                fd-specific color variable — LS_COLORS is the mechanism it (and ls/eza) read — so an
-                empty value leaves LS_COLORS untouched.
-              * Registers fd's PowerShell tab completion. fd emits a Register-ArgumentCompleter
-                script via `fd --gen-completions powershell`; it is run through Invoke-InGlobalScope
-                (not a bare Invoke-Expression) so the registered completer lands in the true global
-                scope and isn't tagged to this module — see Private/Core/Invoke-InGlobalScope.ps1.
-              * When -IntegrateFzf is set and fzf.exe is on PATH, points fzf at fd as its source by
-                setting $env:FZF_DEFAULT_COMMAND, so a bare `fzf` lists files via fd (respecting
-                .gitignore). PSFzf's Ctrl+T file picker reads that same variable in preference to its
-                own fd command, so no FZF_CTRL_T_COMMAND is needed either.
-              * PSFzf's Alt+C directory picker, however, does NOT read FZF_DEFAULT_COMMAND: its
-                directory-only lookup skips it and falls back to a built-in PSFzf command
-                (`fd --full-path <dir> --fixed-strings .`) whose literal `.` pattern matches only
-                paths containing a period — so on Windows that picker comes up empty. PSFzf checks
-                $env:FZF_ALT_C_COMMAND ahead of that fallback, so it is set here too, to a plain
-                `fd --type directory` listing.
-                Both commands pass --ignore-case so any fd-side matching stays case-insensitive
-                (PowerShell/Windows is); note fd is used in list-all mode here, so the picker's case
-                behavior is ultimately governed by fzf (see Enable-Fzf).
-                fzf's own picker palette is themed separately by Enable-Fzf (which owns
-                $env:FZF_DEFAULT_OPTS, including the --ansi that renders fd's `--color=always`
-                output in the picker).
+          - Install: if fd.exe isn't on PATH, installs sharkdp.fd with winget and patches the current
+            session's PATH so the Initialize substep can see it immediately.
+          - Initialize (guarded by Get-Command fd.exe): sets $env:LS_COLORS from -LsColors (fd has no
+            color variable of its own), registers fd's own PowerShell completer via
+            `fd --gen-completions powershell` through Invoke-InGlobalScope, and optionally wires fzf.
 
-        fd is a STANDALONE utility: it never aliases or replaces Get-ChildItem, `ls`, or any other
-        configured command. Enabling it only puts `fd` on PATH (plus colors and completion).
+        -IntegrateFzf sets two variables because PSFzf reads them differently. $env:FZF_DEFAULT_COMMAND
+        covers a bare `fzf` and PSFzf's Ctrl+T picker, which prefers it over its own fd command. Alt+C
+        does not read it at all: PSFzf's directory lookup falls back to a built-in
+        `fd --full-path <dir> --fixed-strings .`, whose literal `.` matches only paths containing a
+        period, so on Windows that picker comes up empty. $env:FZF_ALT_C_COMMAND takes precedence over
+        that fallback, so it is set to a plain directory listing. Both pass --ignore-case, though fd
+        runs in list-all mode here so fzf ultimately does the matching.
 
-        If the install doesn't produce fd.exe on PATH, a warning is emitted (with winget's captured
-        output) and Initialize is skipped (guarded by Get-Command) so profile startup continues.
+        fd is a standalone utility: it never aliases or replaces Get-ChildItem, `ls`, or anything else.
+        Enabling it only puts `fd` on PATH, with colors and completion. If the install doesn't produce
+        fd.exe on PATH, a warning is emitted and Initialize is skipped so startup continues.
 
     .PARAMETER LsColors
-        An LS_COLORS spec assigned to $env:LS_COLORS for the session (e.g.
-        'di=1;38;2;201;170;255:ln=38;2;95;215;255'), coloring fd's output. Initialize-PwshProfile
-        resolves this from the active theme's branding so fd's colors match the prompt. An empty
-        value leaves $env:LS_COLORS untouched. Note: LS_COLORS is a shared variable also read by ls
-        and eza.
+        An LS_COLORS spec assigned to $env:LS_COLORS for the session, coloring fd's output.
+        Initialize-PwshProfile resolves this from the active theme's branding. Empty leaves the
+        variable untouched. Note LS_COLORS is shared with ls and eza.
 
     .PARAMETER IntegrateFzf
-        When set (and fzf.exe is on PATH), wires fzf to use fd as its source by setting two env vars:
-        $env:FZF_DEFAULT_COMMAND (the file listing a bare `fzf` runs, which PSFzf's Ctrl+T picker also
-        prefers over its own fd command) and $env:FZF_ALT_C_COMMAND (the directory listing PSFzf's
-        Alt+C picker runs, which would otherwise fall back to a built-in PSFzf command that matches
-        nothing). Off by default. Initialize-PwshProfile passes this when fzf is enabled; the inner
-        Get-Command fzf.exe guard means it is a no-op when fzf isn't installed.
+        Point fzf at fd as its source, setting $env:FZF_DEFAULT_COMMAND and $env:FZF_ALT_C_COMMAND as
+        described above. Off by default. Guarded by Get-Command fzf.exe, so it no-ops without fzf.
 
     .EXAMPLE
         Enable-Fd
@@ -65,14 +40,13 @@ function Enable-Fd {
     .EXAMPLE
         Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 
-        Colors fd's output to match the Screw City palette and points fzf at fd as its source — both
-        the file listing (bare `fzf` and PSFzf's Ctrl+T) and the directory listing (PSFzf's Alt+C).
+        Colors fd's output to match the Screw City palette and points fzf at fd for both its file and
+        directory listings.
 
     .NOTES
-        Standalone file finder (https://github.com/sharkdp/fd). fd is clap-based, so it ships its own
-        PowerShell completer (`fd --gen-completions powershell`), registered here in the Initialize
-        substep (run in the global scope so it isn't attributed to the module). Call after Enable-Fzf
-        so fzf.exe is already on PATH when -IntegrateFzf is evaluated.
+        Standalone file finder (https://github.com/sharkdp/fd). fzf's own picker palette is themed
+        separately by Enable-Fzf, which owns $env:FZF_DEFAULT_OPTS. Call after Enable-Fzf so fzf.exe is
+        already on PATH when -IntegrateFzf is evaluated.
     #>
     [CmdletBinding()]
     param(

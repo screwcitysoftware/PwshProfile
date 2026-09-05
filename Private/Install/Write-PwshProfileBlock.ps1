@@ -5,57 +5,42 @@ function Write-PwshProfileBlock {
         preserving any existing content.
 
     .DESCRIPTION
-        The safety-critical file writer behind Install-PwshProfile. It places a marker-wrapped
-        bootstrap block (built by Get-PwshProfileBlock — markers, a short guidance comment, a tools
-        snapshot, and the supplied Initialize-PwshProfile call) into the target file without ever
-        destroying surrounding code:
-
-          # >>> ScrewCitySoftware.PwshProfile bootstrap >>>
-          # Managed by Install-PwshProfile. To change these settings, RE-RUN Install-PwshProfile rather
-          # than editing by hand: the installer reads the call and the tools list below to prefill your
-          # prior choices and flag tools added since. Manual edits between the >>> / <<< markers are
-          # overwritten on the next Install; put your own code outside them. Uninstall-PwshProfile removes it.
-          # Tools available: PSReadLine,TerminalIcons,PoshGit,Completions,Zoxide,Fzf,Fnm,Xh,Jq,Bat,Fd,Less
-          <InitializeCall>
-          # <<< ScrewCitySoftware.PwshProfile bootstrap <<<
+        The safety-critical file writer behind Install-PwshProfile. It places a marker-wrapped block
+        (built by Get-PwshProfileBlock — markers, a guidance comment, a tools snapshot, and the supplied
+        Initialize-PwshProfile call) into the target file without ever destroying surrounding code.
 
         Behavior by file state:
-          - Missing file        -> creates the parent directory if needed and writes the block.
-          - Empty file          -> writes the block (no leading blank line).
-          - Managed block found  (both markers) -> replaces it in place, leaving everything above
-                                  and below untouched (this is the re-run path).
-          - Bare 'Import-Module ScrewCitySoftware.PwshProfile' present, no markers -> treated as
-                                  already wired; nothing is written unless -Force, which prepends
-                                  the managed block.
-          - Other existing file -> prepends the block (a blank separator line, then the original
-                                  content verbatim).
+          - Missing file  -> creates the parent directory if needed and writes the block.
+          - Empty file    -> writes the block with no leading blank line.
+          - Managed block -> replaces it in place, leaving everything above and below untouched. This
+                             is the re-run path.
+          - Bare import, no markers -> treated as already wired; nothing is written unless -Force,
+                             which prepends the managed block.
+          - Anything else -> prepends the block, a blank separator, then the original content verbatim.
 
-        Writes UTF-8 without a BOM (PowerShell 7's 'utf8' encoding). Existing content is preserved
-        byte-for-byte except a leading BOM, which is dropped. Supports -WhatIf / -Confirm; the
-        single write is the only mutating action and is fully gated. Throws if -Path is a directory.
+        Writes UTF-8 without a BOM. Existing content is preserved byte-for-byte except a leading BOM,
+        which is dropped. Supports -WhatIf / -Confirm; the single write is the only mutating action and
+        is fully gated. Throws if -Path is a directory.
 
-        Returns one [pscustomobject] with Path, Action ('Created' | 'Prepended' | 'Replaced' |
-        'ForcePrepended' | 'AlreadyPresent' | 'BareImportPresent'), and Changed ([bool]).
-        'BareImportPresent' means a hand-written import (no managed markers) was found and left as
-        is — the requested settings were NOT applied; pass -Force to add the managed block anyway.
-        Under -WhatIf the result describes the action that *would* be taken (Action/Changed reflect
-        intent); the write itself is skipped.
+        Returns one object with Path, Action ('Created', 'Prepended', 'Replaced', 'ForcePrepended',
+        'AlreadyPresent' or 'BareImportPresent') and Changed. 'BareImportPresent' means a hand-written
+        import was found and left alone — the requested settings were NOT applied; pass -Force to add
+        the block anyway. Under -WhatIf the result describes what *would* happen and no write occurs.
 
     .PARAMETER Path
         The profile file to write to.
 
     .PARAMETER InitializeCall
-        The Initialize-PwshProfile command line to embed (as produced by
-        Build-PwshProfileInitializeCall).
+        The Initialize-PwshProfile command line to embed, as produced by Build-PwshProfileInitializeCall.
 
     .PARAMETER Force
-        When the file already contains a bare module import but no managed markers, prepend the
-        managed block anyway instead of treating the file as already wired.
+        When the file already contains a bare module import but no managed markers, prepend the managed
+        block anyway instead of treating the file as already wired.
 
     .EXAMPLE
         Write-PwshProfileBlock -Path $PROFILE -InitializeCall 'Initialize-PwshProfile'
 
-        Writes the default bootstrap into $PROFILE, creating it (and its directory) if needed.
+        Writes the default bootstrap into $PROFILE, creating it and its directory if needed.
     #>
     [CmdletBinding(SupportsShouldProcess)]
     param(

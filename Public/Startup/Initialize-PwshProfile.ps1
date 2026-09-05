@@ -1,164 +1,127 @@
 function Initialize-PwshProfile {
     <#
     .SYNOPSIS
-        Runs the default Screw City profile startup: banner, shell config, prompt, tools, and
-        shell completions.
+        Runs the Screw City profile startup: banner, shell config, prompt, tools, and completions.
 
     .DESCRIPTION
-        Runs the profile startup as a single call. In order it:
-          1. Shows the startup banner (Write-Figlet), unless -NoBanner.
-          2. Runs "Core" (always): the `which` global alias, PSReadLine, oh-my-posh (the prompt engine,
-             always on), Terminal-Icons, posh-git, and the shell completions (winget, Azure CLI,
-             Tailscale, Docker, 1Password, GitHub CLI — registration only; they detect external CLIs and
-             install nothing). Everything here except the `which` alias and oh-my-posh is opt-in.
-          3. Runs "WinGet" (only when ≥1 winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat, fd,
-             less, and lazygit — the CLIs installed via WinGet. fzf sits next to zoxide (zoxide's
-             interactive picker auto-uses fzf when on PATH); fnm registers a LocationChangedAction so
-             it auto-switches the node version on any directory change (independent of zoxide and call
-             order); fd follows fzf so it can wire fzf to use fd as its file source; less is bat's
-             pager (and PowerShell's, via $env:PAGER); and lazygit is a standalone git TUI.
+        Runs the whole profile startup as a single call:
+          1. The startup banner (Write-Figlet), unless -NoBanner.
+          2. "Core" (always renders): the `which` alias, git, PSReadLine, oh-my-posh, Terminal-Icons,
+             posh-git, and the shell completions (winget, Azure CLI, Tailscale, Docker, 1Password,
+             GitHub CLI — registration only; they detect external CLIs and install nothing).
+          3. "WinGet" (only when at least one winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat,
+             fd, less, and lazygit. Order matters twice — git leads Core so it is on PATH for posh-git
+             and lazygit, and fd follows fzf so it can wire fzf to use fd as its file source.
 
-        The two groups mirror the install model: WinGet = tools installed via WinGet (opt-in), Core =
-        everything else. Each is its own top-level Invoke-Step (its own status spinner + summary line).
-        Steps that depend on a missing tool degrade silently (guarded by Get-Command / Import-ModuleSafe),
-        so this never throws out of profile startup.
+        The two groups mirror the install model: WinGet = the CLIs installed via WinGet, Core =
+        everything else. Each is its own top-level Invoke-Step (status spinner + summary line). A step
+        whose tool is missing degrades silently, so this never throws out of profile startup.
 
-        Use -Theme to choose a bundled theme ('screwcity' or 'forestcity'), or -CustomTheme to point
-        oh-my-posh at a theme file of your own (the two are mutually exclusive). The banner text
-        defaults to the machine name ($env:COMPUTERNAME) regardless of theme; the bundled themes each
-        carry a matching banner color and step marker — picking 'forestcity' defaults the banner to
-        the theme's green with a 🌳 marker, while 'screwcity' keeps purple / 🔩 — applied only to the
-        banner color/icon you don't set explicitly. The theme likewise seeds bat's syntax theme
-        (-BatTheme), fd's LS_COLORS palette (-FdColors), and fzf's picker palette (-FzfColors) so
-        those tools' colors blend with the prompt (screwcity -> Dracula/purple, forestcity ->
-        gruvbox-dark/green). fzf also gets the `full` UI style and — via the PSFzf module — Ctrl+T
-        (file picker, with a bat preview when bat is in play) and Ctrl+R (fuzzy history) key
-        bindings, fd-backed traversal, and the Ctrl+G fuzzy-git chords (when git is present). Those
-        PSFzf pickers are sized to fill the shell (--height=100%), overriding PSFzf's inline 40%
-        default; a bare fzf and zoxide's `cdi` keep their native alternate-screen fullscreen.
-        Tool selection is opt-in. Pass -Enable with the tools you want (e.g. -Enable Zoxide,Bat); only
-        those run, so a tool added to the module in a later version never installs until you ask for it.
-        Pass -EnableAll to enable every current tool and auto-adopt future additions. -Enable wins if
-        both are given (the explicit list is the safer choice) and a warning notes -EnableAll was
-        ignored. A bare call (neither, e.g. a hand-typed Initialize-PwshProfile) prompts before
-        enabling everything when interactive, and enables nothing in a non-interactive session.
-        oh-my-posh and the `which` alias always run; the banner is on by default and suppressed with
-        -NoBanner. A tool-specific parameter (e.g. -ReplaceCat) for a tool that isn't enabled is warned
-        about and ignored rather than throwing.
+        Tool selection is opt-in. -Enable lists the tools to run; -EnableAll takes every current tool
+        and auto-adopts future additions; a bare call asks first when interactive and enables nothing
+        when not. -Enable wins if both are passed (a warning notes -EnableAll was ignored). git,
+        oh-my-posh and the `which` alias always run and are not tokens. A tool-specific parameter for a
+        tool that isn't enabled is warned about and ignored, never thrown.
 
-        Use -ZoxideCommand to rename zoxide's jump command, -StepIcon to rebrand the step marker,
-        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -ReplaceMore
-        to route the pager (more.com -> less) through $env:PAGER and alias more -> less, and -FdColors /
-        -FzfColors to tune fd's and fzf's colors.
+        The theme drives more than the prompt. Unless set explicitly, it also supplies the banner color,
+        the step icon, bat's syntax theme, fd's LS_COLORS palette, and fzf's picker palette, so every
+        tool's colors blend with the prompt (screwcity -> Dracula/purple, forestcity -> gruvbox-dark/
+        green). Banner *text* is not themed — it defaults to the machine name for every theme.
 
-        It deliberately runs only the module's own startup — any other personal profile scripts you
-        keep in $PROFILE are left untouched.
+        Only the module's own startup runs here; anything else in your $PROFILE is left untouched.
 
     .PARAMETER BannerText
-        Text rendered by the startup banner. When omitted, defaults to the machine name
-        ($env:COMPUTERNAME) for every theme. Must be non-empty — to render no banner, use -NoBanner.
+        Text rendered by the startup banner. Defaults to the machine name ($env:COMPUTERNAME) for every
+        theme. Must be non-empty — to render no banner, use -NoBanner.
 
     .PARAMETER BannerColor
-        Spectre color name or hex for the banner. When omitted, defaults to the selected theme's
-        signature color (screwcity's purple '#c9aaff' or forestcity's green '#8fce72').
+        Spectre color name or hex for the banner. Defaults to the selected theme's signature color.
 
     .PARAMETER BannerAlignment
-        Banner alignment: 'Left', 'Center', or 'Right'. Defaults to 'Left'.
+        Banner alignment: 'Left' (default), 'Center', or 'Right'.
 
     .PARAMETER BannerFont
         A bundled FIGlet font for the banner (tab-completes), forwarded to Write-Figlet as -Font.
-        Mutually exclusive with -BannerFontPath. When neither is given, Write-Figlet's default
-        ('ANSIShadow') is used. Run Show-FigletFont to list the bundled fonts (or -Preview to see
-        samples).
+        Mutually exclusive with -BannerFontPath; Write-Figlet's default is used when neither is given.
+        Run Show-FigletFont to list the bundled fonts, or Show-FigletFont -Preview to see samples.
 
     .PARAMETER BannerFontPath
-        Path to a custom .flf FIGlet font for the banner, forwarded to Write-Figlet as -FontPath.
-        Mutually exclusive with -BannerFont. Validated to exist at call time.
+        Path to a custom .flf FIGlet font, forwarded to Write-Figlet as -FontPath. Mutually exclusive
+        with -BannerFont. Validated to exist at call time.
 
     .PARAMETER Theme
-        The bundled oh-my-posh theme to use (tab-completes): 'screwcity' (default) or 'forestcity'.
-        Resolved to its file under Assets/Themes and forwarded to Enable-OhMyPosh as -Configuration.
-        The choice also seeds the banner color and step icon for any you don't set explicitly (the
-        banner text defaults to the machine name regardless of theme). Mutually exclusive with
-        -CustomTheme. Run Get-OhMyPoshTheme to dump a bundled theme's JSON as a starting point for your own.
+        The bundled oh-my-posh theme to use (tab-completes), default 'screwcity'. Resolved to its file
+        under Assets/Themes and forwarded to Enable-OhMyPosh as -Configuration; it also seeds the
+        branding described above. Mutually exclusive with -CustomTheme. Run Get-OhMyPoshTheme to dump a
+        bundled theme's JSON as a starting point for your own.
 
     .PARAMETER CustomTheme
-        Path (relative or absolute) to a custom oh-my-posh theme file, forwarded to Enable-OhMyPosh
-        as -Configuration in place of a bundled theme. The path is validated to exist at call time,
-        so a typo surfaces immediately rather than silently falling back to the bundle. Mutually
-        exclusive with -Theme; banner branding falls back to the screwcity defaults.
+        Path to your own oh-my-posh theme file, used in place of a bundled theme. Validated to exist at
+        call time, so a typo surfaces immediately rather than silently falling back to the bundle.
+        Mutually exclusive with -Theme; branding falls back to the screwcity defaults.
 
     .PARAMETER ZoxideCommand
-        The command name zoxide binds for jumping, forwarded to Enable-Zoxide as -Command.
-        Defaults to 'cd' (replacing the built-in cd); pass e.g. 'z' to keep cd intact.
+        The command name zoxide binds for jumping, forwarded to Enable-Zoxide as -Command. Defaults to
+        'cd' (replacing the built-in); pass 'z' to keep cd intact.
 
     .PARAMETER BatTheme
-        The bat syntax-highlighting theme, forwarded to Enable-Bat as -Theme (sets $env:BAT_THEME).
-        When omitted, defaults to the selected theme's branding (screwcity's 'Dracula' or forestcity's
-        'gruvbox-dark') so bat's colors blend with the prompt. A value from `bat --list-themes`.
+        bat's syntax-highlighting theme (a value from `bat --list-themes`), forwarded to Enable-Bat as
+        -Theme. Defaults to the selected theme's branding.
 
     .PARAMETER BatStyle
-        The bat layout, forwarded to Enable-Bat as -Style (sets $env:BAT_STYLE) — a comma-separated
-        list of components. Defaults to 'numbers,changes,header'.
+        bat's layout — a comma-separated component list forwarded to Enable-Bat as -Style. Defaults to
+        'numbers,changes,header'.
 
     .PARAMETER ReplaceCat
-        Forwarded to Enable-Bat as -ReplaceCat: when set, aliases cat -> bat for the session (so the
-        built-in cat, an alias for Get-Content, is replaced by bat). Off by default.
+        Alias cat -> bat for the session, replacing the built-in cat (an alias for Get-Content).
+        Forwarded to Enable-Bat; off by default.
 
     .PARAMETER ReplaceMore
-        Forwarded to Enable-Less as -ReplaceMore: when set, sets $env:PAGER to 'less' (so PowerShell's
-        `help`, bat, git, delta, and gh page through less instead of more.com) and aliases more -> less
-        for the session. Off by default.
+        Make less the pager: sets $env:PAGER (so `help`, bat, git, delta and gh page through less) and
+        aliases more -> less. Forwarded to Enable-Less; off by default.
 
     .PARAMETER FdColors
-        The LS_COLORS spec, forwarded to Enable-Fd as -LsColors (sets $env:LS_COLORS) so fd's output
-        is tinted to match the prompt. When omitted, defaults to the selected theme's branding
-        (screwcity's purple-led palette or forestcity's green-led one). fd stays a standalone utility
-        and never replaces Get-ChildItem. Note: LS_COLORS is shared with ls/eza.
+        The LS_COLORS spec forwarded to Enable-Fd as -LsColors, so fd's output matches the prompt.
+        Defaults to the selected theme's branding. Note LS_COLORS is shared with ls/eza.
 
     .PARAMETER FzfColors
-        The fzf `--color` spec, forwarded to Enable-Fzf as -Colors (folded into $env:FZF_DEFAULT_OPTS)
-        so fzf's picker palette matches the prompt. When omitted, defaults to the selected theme's
-        branding (screwcity's purple/cyan or forestcity's green/gold).
+        The fzf `--color` spec forwarded to Enable-Fzf as -Colors, so the picker matches the prompt.
+        Defaults to the selected theme's branding.
 
     .PARAMETER StepIcon
-        The marker printed before each top-level step description, forwarded to Invoke-Step as
-        -Icon. Defaults to ':nut_and_bolt:' (a Spectre emoji shortcode, rendered as 🔩). No trailing
-        space is needed — the separator between the icon and the step text is added at render time.
+        The marker printed before each top-level step, forwarded to Invoke-Step as -Icon. A Spectre
+        emoji shortcode, e.g. ':nut_and_bolt:'. No trailing space — the separator is added at render
+        time. Defaults to the selected theme's branding.
 
     .PARAMETER FzfGitKeyBindings
-        Bind PSFzf's Ctrl+G git chords (fzf-powered pickers for branches, commits, files). Off by
-        default (opt-in) — pass -FzfGitKeyBindings to enable them; they're off by default because
-        lazygit already covers git workflows. Only applies when Fzf is enabled (a warning notes it
-        otherwise); Enable-Fzf drops the chords regardless if git isn't on PATH.
+        Bind PSFzf's Ctrl+G git chords (fzf pickers for branches, commits, files). Off by default,
+        since lazygit already covers git workflows. Only applies when Fzf is enabled (a warning notes
+        it otherwise), and Enable-Fzf drops the chords anyway when git isn't on PATH.
 
     .PARAMETER FzfTabChord
-        The PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (Tab itself stays
-        MenuComplete). Defaults to 'Ctrl+Spacebar' — Enable-Fzf also binds 'Ctrl+@' to the same picker
-        (many terminals emit the same byte for both and report it under either name). Only applies when
-        Fzf is enabled (a warning notes it otherwise).
+        The PSReadLine chord for PSFzf's fuzzy tab-completion picker; Tab itself stays MenuComplete.
+        Defaults to 'Ctrl+Spacebar', and Enable-Fzf also binds 'Ctrl+@' to the same picker (many
+        terminals emit the same byte for both). Only applies when Fzf is enabled.
 
     .PARAMETER Enable
-        The tools to enable (opt-in): any of 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf',
-        'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit', 'Completions'. Only the listed tools run (and the
-        auto-installing ones install); everything else is skipped, so a tool added in a later module
-        version never installs unless you add it here. Pass -Enable @() to enable nothing. The set mirrors
-        Get-PwshProfileToolCatalog. oh-my-posh and the `which` alias always run and are not tokens.
+        The tools to enable, from the Get-PwshProfileToolCatalog set: 'PSReadLine', 'TerminalIcons',
+        'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit'.
+        Only the listed tools run, so a tool added in a later module version never installs until you
+        add it here. Pass -Enable @() to enable nothing.
 
     .PARAMETER EnableAll
-        Enable every tool in the catalog, including any added in future module versions. Convenient but
-        opts into auto-installing future tools. If both -EnableAll and -Enable are given, -Enable wins
-        (the explicit list is the safer choice) and a warning notes -EnableAll was ignored.
+        Enable every tool in the catalog, including any added in future module versions. Convenient,
+        but it opts into installing future tools with no prompt. -Enable wins if both are passed.
 
     .PARAMETER NoBanner
-        Render no startup banner. Use this to suppress the banner instead of clearing -BannerText (which
-        rejects empty). Passing banner params (e.g. -BannerColor) alongside -NoBanner warns and ignores them.
+        Render no startup banner. Use this rather than clearing -BannerText, which rejects empty.
+        Banner params passed alongside it are warned about and ignored.
 
     .EXAMPLE
         Initialize-PwshProfile
 
         A bare call has no tool selection: interactively it asks whether to enable all tools;
-        non-interactively it enables none. Generated profiles pass -Enable/-EnableAll, so they never prompt.
+        non-interactively it enables none. Generated profiles always pass -Enable/-EnableAll.
 
     .EXAMPLE
         Initialize-PwshProfile -BannerText 'HELLO' -BannerColor Green -BannerAlignment Center
@@ -173,13 +136,12 @@ function Initialize-PwshProfile {
     .EXAMPLE
         Initialize-PwshProfile -Theme forestcity
 
-        Uses the bundled Forest City theme, with the machine-name banner in the theme's green and a 🌳
-        step marker applied automatically.
+        Uses the bundled Forest City theme, with the banner and step marker branded to match.
 
     .EXAMPLE
         Initialize-PwshProfile -Enable Zoxide,Bat,Fd
 
-        Enables only zoxide, bat, and fd (plus the always-on prompt and `which`); no other tool installs.
+        Enables only zoxide, bat, and fd (plus the always-on prompt, git, and `which`).
 
     .EXAMPLE
         Initialize-PwshProfile -CustomTheme '~/.config/themes/custom.omp.json' -EnableAll -NoBanner

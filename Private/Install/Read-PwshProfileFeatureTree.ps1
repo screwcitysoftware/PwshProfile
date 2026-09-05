@@ -5,55 +5,43 @@ function Read-PwshProfileFeatureTree {
 
     .DESCRIPTION
         Drives the Install-PwshProfile wizard's feature step. The features come from
-        Get-PwshProfileToolCatalog and are grouped under two sections — Core and WinGet — so the user
-        can toggle an individual feature or a whole section at once. The shell completions live under
-        Core. This function is purely seed-driven: a feature starts CHECKED only when -Enabled marks it
-        (so an empty map opens with everything unchecked), and the wizard maps the checked set to
-        -Enable. The caller decides the seed — a re-run passes the prior -Enable set, a clean first run
-        passes the Core default-on set (Get-PwshProfileToolCatalog -DefaultEnabled), so Core opens
-        checked and WinGet unchecked.
+        Get-PwshProfileToolCatalog, grouped under Core and WinGet so a whole section can be toggled at
+        once.
 
-        oh-my-posh is deliberately absent from the tree: it always runs, so listing it would be a
-        checkbox that does nothing. Above the prompt a grey legend (Write-PwshProfilePromptHelp)
-        describes each feature in one line — including the note that oh-my-posh is always enabled — since
-        the Spectre tree can't carry per-item descriptions. Tools in -New are tagged "(new)" with a
-        legend note so additions since the prior setup stand out.
+        Selection is purely seed-driven: a feature starts checked only when -Enabled marks it, so an
+        empty map opens with everything unchecked. The caller owns the seed — a re-run passes the prior
+        -Enable set, a clean first run passes the Core default-on set.
 
-        The grouped multi-selection is built directly on the Spectre.Console MultiSelectionPrompt
-        API rather than Read-SpectreMultiSelectionGrouped, because that wrapper cannot pre-check
-        items. The prompt's string values are the (possibly "(new)"-tagged) feature labels; this
-        function maps the returned labels back to their tokens.
+        oh-my-posh is deliberately absent: it always runs, so a checkbox for it would do nothing.
+        A grey legend above the prompt describes each feature in one line (and notes that oh-my-posh is
+        always enabled), since a Spectre tree can't carry per-item descriptions.
 
-        If the Spectre prompt types are unavailable (non-interactive host), it degrades by returning
-        just the tokens marked enabled in -Enabled (whatever the caller seeded), matching the module's
+        The prompt is built directly on the Spectre.Console MultiSelectionPrompt API rather than
+        Read-SpectreMultiSelectionGrouped, because that wrapper cannot pre-check items. Its values are
+        the (possibly "(new)"-tagged) labels, which this function maps back to tokens. Without the
+        Spectre types it degrades to returning whatever -Enabled marked, matching the module's
         non-interactive fallback elsewhere.
 
     .PARAMETER Enabled
-        A hashtable mapping each feature token (from Get-PwshProfileToolCatalog) to a boolean for its
-        initial checked state. Selection is seed-driven: a token is checked ONLY when its value is $true,
-        so an empty map opens with everything unchecked. The caller supplies the seed — a re-run passes
-        the prior -Enable set, a clean first run passes the Core default-on set (Core checked, WinGet
-        unchecked).
+        Maps each feature token to its initial checked state. A token is checked ONLY when its value is
+        $true, so an empty map opens with everything unchecked.
 
     .PARAMETER New
-        Tokens that are newly available since the prior setup (current catalog minus the recorded
-        snapshot). Their labels are tagged "(new)" and a legend note calls them out; they still start
-        unchecked (per the opt-in rule) so the user consciously adopts them.
+        Tokens newly available since the prior setup. Their labels are tagged "(new)" and a legend note
+        calls them out, but they still start unchecked so the user consciously adopts them.
 
     .PARAMETER Color
-        The accent color for the prompt's highlight style and the **tool name** spans in the legend,
-        as a string — a hex value like '#c9aaff' or a Spectre color name like 'Silver'. Converted to a
-        Spectre.Console.Color via Get-SpectreColorValue for the highlight style.
+        Accent color for the prompt highlight and the tool-name spans in the legend — a hex value or a
+        Spectre color name.
 
     .PARAMETER CodeColor
-        The color for `code literal` spans (commands, cmdlets) in the legend, as a hex value or Spectre
-        color name. Defaults to a soft cyan (#5fd7ff).
+        Color for `code literal` spans in the legend. Defaults to a soft cyan (#5fd7ff).
 
     .EXAMPLE
         Read-PwshProfileFeatureTree -Enabled @{ PSReadLine = $true; Fnm = $false } -Color '#c9aaff'
 
-        Shows the tree with everything checked except Fast Node Manager, and returns the tokens the
-        user leaves checked.
+        Opens the tree with PSReadLine checked and fnm unchecked, and returns what the user leaves
+        checked.
     #>
     [CmdletBinding()]
     [OutputType([string[]])]

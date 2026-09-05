@@ -6,47 +6,50 @@ function Edit-WindowsTerminalSettings {
 
     .DESCRIPTION
         The shared read-modify-write engine behind Install-WindowsTerminalScheme,
-        Uninstall-WindowsTerminalScheme, and Set-WindowsTerminalFont, factored out so the backup +
+        Uninstall-WindowsTerminalScheme and Set-WindowsTerminalFont, factored out so the backup and
         (de)serialize logic lives in one place and stays unit-testable.
 
-        It reads the file, parses it (ConvertFrom-Json), then either edits the `schemes` array by
-        scheme `name` (idempotent — an add replaces any same-named scheme rather than duplicating it;
-        a remove drops the match) or sets profiles.defaults.font.face. It backs the original up to
-        "<path>.bak", then writes the result back as UTF-8 (no BOM) via ConvertTo-Json. The caller is
-        expected to have gated the call behind its own ShouldProcess, so this engine performs the
-        write unconditionally.
+        It parses the file, then either edits the `schemes` array by scheme `name` (idempotent — an add
+        replaces a same-named scheme rather than duplicating it) or sets profiles.defaults.font.face.
+        It backs the original up to "<path>.bak", then writes back as UTF-8 without a BOM. The caller is
+        expected to have gated the call behind its own ShouldProcess, so the write is unconditional here.
 
-        JSONC caveat: settings.json may contain // comments and trailing commas. ConvertFrom-Json
-        tolerates them on read, but the parse -> reserialize round-trip does not reproduce comments
-        or the original hand-formatting. The .bak backup written before the rewrite is the safety net.
+        JSONC caveat: settings.json may carry // comments and trailing commas. ConvertFrom-Json tolerates
+        them on read, but the parse-then-reserialize round-trip does not reproduce comments or the
+        original formatting. The .bak backup is the safety net.
 
     .PARAMETER Path
         Path to the settings.json file to edit. Must exist.
 
     .PARAMETER Scheme
-        (Add set) The color scheme to add or replace, as a hashtable in Windows Terminal's scheme
-        shape (its `name` key identifies it for idempotent replace).
+        (Add set) The scheme to add or replace, as a hashtable in Windows Terminal's scheme shape; its
+        `name` key identifies it for the idempotent replace.
 
     .PARAMETER SetDefault
-        (Add set) When set, also point profiles.defaults.colorScheme at the scheme's name so it
-        applies immediately. Skipped with a warning if the file's `profiles` isn't an editable object.
+        (Add set) Also point profiles.defaults.colorScheme at the scheme so it applies immediately.
+        Skipped with a warning if `profiles` isn't an editable object.
 
     .PARAMETER RemoveName
         (Remove set) The `name` of the scheme to remove.
 
     .PARAMETER FontFace
-        (Font set) The font family name to set as profiles.defaults.font.face (e.g.
-        'MesloLGM Nerd Font'). Skipped with a warning if the file's `profiles` isn't an editable
-        object.
+        (Font set) The font family to set as profiles.defaults.font.face. Skipped with a warning if
+        `profiles` isn't an editable object.
 
     .EXAMPLE
         Edit-WindowsTerminalSettings -Path $p -Scheme $scheme -SetDefault
 
+        Adds (or replaces) the scheme and makes it the default for all profiles.
+
     .EXAMPLE
         Edit-WindowsTerminalSettings -Path $p -RemoveName 'Screw City'
 
+        Removes that scheme, reporting whether it was still referenced as an active colorScheme.
+
     .EXAMPLE
         Edit-WindowsTerminalSettings -Path $p -FontFace 'MesloLGM Nerd Font'
+
+        Sets the default profile font, leaving the schemes array untouched.
 
     .NOTES
         Returns a result object describing what happened:
