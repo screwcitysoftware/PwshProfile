@@ -21,11 +21,17 @@ function Enable-Fd {
                 scope and isn't tagged to this module — see Private/Core/Invoke-InGlobalScope.ps1.
               * When -IntegrateFzf is set and fzf.exe is on PATH, points fzf at fd as its source by
                 setting $env:FZF_DEFAULT_COMMAND, so a bare `fzf` lists files via fd (respecting
-                .gitignore). The command passes --ignore-case so any fd-side matching stays
-                case-insensitive (PowerShell/Windows is); note fd is used in list-all mode here, so
-                the picker's case behavior is ultimately governed by fzf (see Enable-Fzf).
-                The Ctrl+T file picker is driven by PSFzf's own fd provider
-                (Set-PsFzfOption -EnableFd, set by Enable-Fzf), so no FZF_CTRL_T_COMMAND is needed.
+                .gitignore). PSFzf's Ctrl+T file picker reads that same variable in preference to its
+                own fd command, so no FZF_CTRL_T_COMMAND is needed either.
+              * PSFzf's Alt+C directory picker, however, does NOT read FZF_DEFAULT_COMMAND: its
+                directory-only lookup skips it and falls back to a built-in PSFzf command
+                (`fd --full-path <dir> --fixed-strings .`) whose literal `.` pattern matches only
+                paths containing a period — so on Windows that picker comes up empty. PSFzf checks
+                $env:FZF_ALT_C_COMMAND ahead of that fallback, so it is set here too, to a plain
+                `fd --type directory` listing.
+                Both commands pass --ignore-case so any fd-side matching stays case-insensitive
+                (PowerShell/Windows is); note fd is used in list-all mode here, so the picker's case
+                behavior is ultimately governed by fzf (see Enable-Fzf).
                 fzf's own picker palette is themed separately by Enable-Fzf (which owns
                 $env:FZF_DEFAULT_OPTS, including the --ansi that renders fd's `--color=always`
                 output in the picker).
@@ -44,10 +50,12 @@ function Enable-Fd {
         and eza.
 
     .PARAMETER IntegrateFzf
-        When set (and fzf.exe is on PATH), wires fzf to use fd as its file source by setting
-        $env:FZF_DEFAULT_COMMAND (the command a bare `fzf` runs). Off by default. Initialize-PwshProfile
-        passes this when fzf is not skipped; the inner Get-Command fzf.exe guard means it is a no-op
-        when fzf isn't installed.
+        When set (and fzf.exe is on PATH), wires fzf to use fd as its source by setting two env vars:
+        $env:FZF_DEFAULT_COMMAND (the file listing a bare `fzf` runs, which PSFzf's Ctrl+T picker also
+        prefers over its own fd command) and $env:FZF_ALT_C_COMMAND (the directory listing PSFzf's
+        Alt+C picker runs, which would otherwise fall back to a built-in PSFzf command that matches
+        nothing). Off by default. Initialize-PwshProfile passes this when fzf is enabled; the inner
+        Get-Command fzf.exe guard means it is a no-op when fzf isn't installed.
 
     .EXAMPLE
         Enable-Fd
@@ -57,7 +65,8 @@ function Enable-Fd {
     .EXAMPLE
         Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 
-        Colors fd's output to match the Screw City palette and points fzf at fd as its source.
+        Colors fd's output to match the Screw City palette and points fzf at fd as its source — both
+        the file listing (bare `fzf` and PSFzf's Ctrl+T) and the directory listing (PSFzf's Alt+C).
 
     .NOTES
         Standalone file finder (https://github.com/sharkdp/fd). fd is clap-based, so it ships its own
@@ -90,11 +99,18 @@ function Enable-Fd {
             Invoke-InGlobalScope ((fd --gen-completions powershell) | Out-String)
 
             # When asked, point fzf at fd as its source (only if fzf is actually present). A bare
-            # `fzf` reads $env:FZF_DEFAULT_COMMAND directly; fzf's own palette/--ansi is set by
-            # Enable-Fzf. The Ctrl+T widget is driven by PSFzf's own fd provider (Set-PsFzfOption
-            # -EnableFd), so there's no FZF_CTRL_T_COMMAND to set here.
+            # `fzf` reads $env:FZF_DEFAULT_COMMAND directly, and PSFzf's Ctrl+T widget prefers it over
+            # PSFzf's own fd command, so there's no FZF_CTRL_T_COMMAND to set here. fzf's own
+            # palette/--ansi is set by Enable-Fzf.
             if ($IntegrateFzf -and (Get-Command fzf.exe -ErrorAction SilentlyContinue)) {
                 $env:FZF_DEFAULT_COMMAND = 'fd --ignore-case --type file --color=always --hidden --follow --exclude .git'
+                # Alt+C (PSFzf's set-location picker, bound automatically when PSFzf loads) is the one
+                # path that ignores FZF_DEFAULT_COMMAND: its directory-only branch falls back to
+                # PSFzf's built-in `fd ... --fixed-strings .`, whose literal `.` pattern matches only
+                # paths containing a period, so the picker comes up empty on a typical Windows tree.
+                # FZF_ALT_C_COMMAND takes precedence over that fallback — give it a straight directory
+                # listing (--ignore-case for the same reason as above).
+                $env:FZF_ALT_C_COMMAND = 'fd --ignore-case --type directory --color=always --hidden --follow --exclude .git'
             }
         }
     }

@@ -103,9 +103,13 @@ function Enable-Fzf {
         and PSReadLine may report the keypress under either name.
 
     .PARAMETER UseFd
-        When set, calls Set-PsFzfOption -EnableFd so PSFzf uses fd for its file/directory traversal
-        (Initialize-PwshProfile passes this when fd is in play). Set-PsFzfOption only records the
-        option; fd is invoked later at Ctrl+T-time, by which point the fd step has installed it.
+        When set, calls Set-PsFzfOption -EnableFd so PSFzf uses fd for its own traversal
+        (Initialize-PwshProfile passes this when fd is in play). In practice this governs only PSFzf's
+        directory-only lookup (Alt+C): for file lookups (Ctrl+T) PSFzf prefers $env:FZF_DEFAULT_COMMAND,
+        which Enable-Fd sets. Enable-Fd also sets $env:FZF_ALT_C_COMMAND, which in turn takes
+        precedence over PSFzf's built-in fd command, because that built-in matches almost nothing on
+        Windows. Set-PsFzfOption only records the option; fd is invoked later at key-press time, by
+        which point the fd step has installed it.
 
     .PARAMETER GitKeyBindings
         When set (and git is on PATH), calls Set-PsFzfOption -GitKeyBindings to register PSFzf's
@@ -134,7 +138,8 @@ function Enable-Fzf {
         which is why the key-binding parameters install/import it. fzf owns its own options
         ($env:FZF_DEFAULT_OPTS / $env:FZF_CTRL_T_OPTS, plus $env:_PSFZF_FZF_DEFAULT_OPTS — PSFzf's
         widget-only override, used here to size the pickers via -Height); the "use fd as fzf's source"
-        wiring ($env:FZF_DEFAULT_COMMAND) lives in Enable-Fd. The preview is Ctrl+T-scoped on purpose:
+        wiring ($env:FZF_DEFAULT_COMMAND for files, $env:FZF_ALT_C_COMMAND for directories) lives in
+        Enable-Fd. The preview is Ctrl+T-scoped on purpose:
         zoxide's `cdi`/`zi` reads only FZF_DEFAULT_OPTS, so keeping the preview out of it leaves the
         directory picker clean.
 

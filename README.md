@@ -921,8 +921,11 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `Initialize-PwshProfile` passes the theme blend, `full` style, `~100%` height, the bat preview
   (when bat is in play), `Ctrl+t`/`Ctrl+r`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd` (when fd
   is in play), and `-GitKeyBindings`. fzf
-  owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND`)
-  lives in `Enable-Fd`. zoxide's interactive picker (`cdi` / `zi`) reuses
+  owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND` for
+  files, `$env:FZF_ALT_C_COMMAND` for directories) lives in `Enable-Fd`. Note that importing PSFzf
+  also binds **Alt+C** (a set-location directory picker) on its own, whether or not it was asked for;
+  `Enable-Fd`'s `FZF_ALT_C_COMMAND` is what makes that chord actually return results.
+  zoxide's interactive picker (`cdi` / `zi`) reuses
   fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
   strategy) and completions, and registers a `LocationChangedAction` hook that fires on every
@@ -950,9 +953,13 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `find` alternative that respects `.gitignore`). In Initialize it sets `$env:LS_COLORS` to
   `-LsColors` (so fd's output matches the prompt — `Initialize-PwshProfile` passes the active
   theme's truecolor blend), registers fd's PowerShell completer (`fd --gen-completions powershell`),
-  and — with `-IntegrateFzf`, when `fzf.exe` is present — points a bare `fzf` at fd as its file
-  source via `$env:FZF_DEFAULT_COMMAND` (`fd --ignore-case …`, case-insensitive; the Ctrl+T picker
-  uses PSFzf's own fd provider). **fd is
+  and — with `-IntegrateFzf`, when `fzf.exe` is present — points fzf at fd as its source via two env
+  vars, both `fd --ignore-case …` so matching stays case-insensitive:
+  `$env:FZF_DEFAULT_COMMAND` (files — read by a bare `fzf`, and preferred by PSFzf's **Ctrl+T**
+  picker over PSFzf's own fd command) and `$env:FZF_ALT_C_COMMAND` (directories — read by PSFzf's
+  **Alt+C** picker, the one lookup that skips `FZF_DEFAULT_COMMAND`; without it PSFzf falls back to a
+  built-in `fd … --fixed-strings .` whose literal `.` pattern matches only paths containing a period,
+  leaving the picker empty). **fd is
   standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
   `ls`/`eza`.) Enabled after `Enable-Fzf`
   so `fzf.exe` is on PATH when integration is evaluated.

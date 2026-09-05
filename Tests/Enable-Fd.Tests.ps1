@@ -19,9 +19,11 @@ Describe 'Enable-Fd' {
         $script:savedLs       = $env:LS_COLORS
         $script:savedDefault  = $env:FZF_DEFAULT_COMMAND
         $script:savedCtrlT    = $env:FZF_CTRL_T_COMMAND
+        $script:savedAltC     = $env:FZF_ALT_C_COMMAND
         $env:LS_COLORS           = $null
         $env:FZF_DEFAULT_COMMAND = $null
         $env:FZF_CTRL_T_COMMAND  = $null
+        $env:FZF_ALT_C_COMMAND   = $null
     }
 
     AfterEach {
@@ -29,6 +31,7 @@ Describe 'Enable-Fd' {
         $env:LS_COLORS           = $script:savedLs
         $env:FZF_DEFAULT_COMMAND = $script:savedDefault
         $env:FZF_CTRL_T_COMMAND  = $script:savedCtrlT
+        $env:FZF_ALT_C_COMMAND   = $script:savedAltC
     }
 
     It 'colors fd and points a bare fzf at fd, without setting the dead FZF_CTRL_T_COMMAND' {
@@ -41,9 +44,21 @@ Describe 'Enable-Fd' {
         $env:FZF_CTRL_T_COMMAND  | Should -BeNullOrEmpty
     }
 
-    It 'leaves FZF_DEFAULT_COMMAND unset when -IntegrateFzf is omitted' {
+    It 'points PSFzf''s Alt+C directory picker at fd, case-insensitively' {
+        # Alt+C is the one PSFzf lookup that ignores FZF_DEFAULT_COMMAND and falls back to a built-in
+        # `fd ... --fixed-strings .` that matches almost nothing on Windows, so Enable-Fd overrides it.
+        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -in @('fd.exe', 'fzf.exe') }
+        Enable-Fd -LsColors 'di=0' -IntegrateFzf
+        $env:FZF_ALT_C_COMMAND | Should -Match '--ignore-case'
+        $env:FZF_ALT_C_COMMAND | Should -Match '--type directory'
+        # It must not carry the --fixed-strings fallback shape it exists to replace.
+        $env:FZF_ALT_C_COMMAND | Should -Not -Match '--fixed-strings'
+    }
+
+    It 'leaves both fzf source commands unset when -IntegrateFzf is omitted' {
         Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'fd.exe' }
         Enable-Fd -LsColors 'di=0'
         $env:FZF_DEFAULT_COMMAND | Should -BeNullOrEmpty
+        $env:FZF_ALT_C_COMMAND   | Should -BeNullOrEmpty
     }
 }
