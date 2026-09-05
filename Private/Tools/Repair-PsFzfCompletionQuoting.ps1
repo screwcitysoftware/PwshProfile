@@ -56,7 +56,7 @@ function Repair-PsFzfCompletionQuoting {
             # TrimEnd drops the trailing space some completers append (argcomplete, Cobra, winget);
             # interior spaces survive, so real paths like "Program Files" are still quoted below.
             $str = $str.Replace("`r`n", '').TrimEnd()
-            $isAlreadyQuoted = ($str.StartsWith("'") -and $str.EndsWith("'")) -or `
+            $isAlreadyQuoted = ($str.StartsWith("'") -and $str.EndsWith("'")) -or
                 ($str.StartsWith('"') -and $str.EndsWith('"'))
             if ($isAlreadyQuoted) { return $str }
             if ($AlwaysQuote -or $str.Contains(' ') -or $str.Contains("`t")) { return '"{0}"' -f $str }

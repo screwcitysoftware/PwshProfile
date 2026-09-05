@@ -71,6 +71,7 @@ function Invoke-Step {
           prefixes it.
         - $script:StepWarnings accumulates warnings captured during the live spinner.
     #>
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$Description,

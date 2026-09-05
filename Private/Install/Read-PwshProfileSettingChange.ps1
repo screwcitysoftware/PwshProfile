@@ -59,24 +59,24 @@ function Read-PwshProfileSettingChange {
     if (-not (Get-Command Read-SpectreConfirm -ErrorAction SilentlyContinue)) { return $false }
 
     # Escape a display value; render an empty one as "(none)" (Get-SpectreEscapedTextSafe rejects empty).
-    $fmt = {
-        param($v)
-        if ([string]::IsNullOrEmpty("$v")) { return '(none)' }
-        Get-SpectreEscapedTextSafe -Text "$v"
+    function Format-DisplayValue {
+        param($Value)
+        if ([string]::IsNullOrEmpty("$Value")) { return '(none)' }
+        Get-SpectreEscapedTextSafe -Text "$Value"
     }
 
     # Render a row's value — a colored swatch when the row is flagged as a color, else the escaped text.
-    $render = {
-        param($r, $v)
-        if ($r.Color -and -not [string]::IsNullOrEmpty("$v")) { return Format-PwshProfileColorValue "$v" }
-        & $fmt $v
+    function Format-RowValue {
+        param($Row, $Value)
+        if ($Row.Color -and -not [string]::IsNullOrEmpty("$Value")) { return Format-PwshProfileColorValue "$Value" }
+        Format-DisplayValue $Value
     }
 
     if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) {
         foreach ($r in $Row) {
-            $line = "  [$Accent]•[/] [bold]$($r.Label):[/] $(& $render $r $r.Value)"
+            $line = "  [$Accent]•[/] [bold]$($r.Label):[/] $(Format-RowValue $r $r.Value)"
             if ("$($r.Value)" -ne "$($r.Recommended)") {
-                $line += " [grey](recommended: $(& $render $r $r.Recommended))[/]"
+                $line += " [grey](recommended: $(Format-RowValue $r $r.Recommended))[/]"
             }
             Write-SpectreHost $line
         }

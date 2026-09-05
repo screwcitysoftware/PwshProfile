@@ -41,8 +41,6 @@ function Enable-Git {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command git.exe -ErrorAction SilentlyContinue) {
-            # No-op: git has no PowerShell init script. Having git.exe on PATH is what the rest wants.
-        }
+        # No-op: git has no PowerShell init script. Having git.exe on PATH is what the rest wants.
     }
 }

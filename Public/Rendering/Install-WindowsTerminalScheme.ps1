@@ -52,10 +52,10 @@ function Install-WindowsTerminalScheme {
         [Parameter(Position = 0)]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
-                if ($base) {
-                    Get-ChildItem -Path (Join-Path $base 'Assets' 'Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
-                        ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
+                # Completers run in the caller's scope, so reach the private lister through the module.
+                $module = Get-Module ScrewCitySoftware.PwshProfile
+                if ($module) {
+                    & $module { Get-BundledThemeName } |
                         Where-Object { $_ -like "$wordToComplete*" } |
                         ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
                 }
@@ -71,13 +71,8 @@ function Install-WindowsTerminalScheme {
         [switch]$SetDefault
     )
 
-    if (-not $SettingsPath) {
-        $SettingsPath = Get-WindowsTerminalSettingsPath
-    }
-    if (-not $SettingsPath -or -not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
-        Write-Warning "Install-WindowsTerminalScheme: Windows Terminal settings.json not found. Is Windows Terminal installed and launched at least once? Pass -SettingsPath to override."
-        return
-    }
+    $SettingsPath = Resolve-WindowsTerminalSettingsPath -Path $SettingsPath -CallerName 'Install-WindowsTerminalScheme'
+    if (-not $SettingsPath) { return }
 
     $scheme = (Get-BundledThemeBranding -Name $Theme).TerminalScheme
     $schemeName = $scheme['name']

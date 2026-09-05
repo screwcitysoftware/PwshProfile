@@ -189,10 +189,10 @@ function Initialize-PwshProfile {
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # Completers run in the caller's scope, where Get-BundledThemeName isn't visible.
-                $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
-                if ($base) {
-                    Get-ChildItem -Path (Join-Path -Path $base -ChildPath 'Assets\Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
-                        ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
+                # Completers run in the caller's scope, so reach the private lister through the module.
+                $module = Get-Module ScrewCitySoftware.PwshProfile
+                if ($module) {
+                    & $module { Get-BundledThemeName } |
                         Where-Object { $_ -like "$wordToComplete*" } |
                         ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
                 }
@@ -295,10 +295,14 @@ function Initialize-PwshProfile {
             Write-Warning "-$p was supplied but $($paramTool[$p]) is not enabled; ignoring -$p."
         }
     }
-    # Banner coupling: the banner params are moot under -NoBanner.
-    if ($NoBanner) {
-        foreach ($p in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath') {
-            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied with -NoBanner; ignoring it (no banner is rendered)." }
+    # Banner params are moot when no banner will render — either -NoBanner, or a banner text that
+    # resolved empty (an unset $env:COMPUTERNAME), which is suppressed below rather than thrown.
+    $bannerParam = 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath'
+    $bannerIgnored = if ($NoBanner) { 'with -NoBanner; ignoring it (no banner is rendered)' }
+    elseif ([string]::IsNullOrWhiteSpace($BannerText)) { 'but no banner text resolved (banner suppressed); ignoring it' }
+    if ($bannerIgnored) {
+        foreach ($p in $bannerParam) {
+            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied $bannerIgnored." }
         }
     }
 
@@ -313,13 +317,6 @@ function Initialize-PwshProfile {
         Write-Figlet -Text $BannerText -Color $BannerColor -Alignment $BannerAlignment @bannerFontArgs
         # Write-Figlet emits no trailing blank line, so add the gap before the first step.
         if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
-    }
-    elseif (-not $NoBanner) {
-        # Banner suppressed because the text resolved empty. Warn for any bound banner param so the
-        # silent drop is visible, matching the -NoBanner coupling warnings above.
-        foreach ($p in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath') {
-            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied but no banner text resolved (banner suppressed); ignoring it." }
-        }
     }
 
     # Core always renders. oh-my-posh, git and the `which` alias are always-on (not catalog tokens);
@@ -350,7 +347,7 @@ function Initialize-PwshProfile {
     # Rendered only when a winget tool is enabled, so it is never an empty section. The token set is
     # the catalog's WinGet group (Install -eq 'winget'), not a hardcoded list.
     $wingetTokens = @((Get-PwshProfileToolCatalog)['WinGet'].Token)
-    if (@($enabled | Where-Object { $wingetTokens -contains $_ }).Count) {
+    if ($enabled | Where-Object { $_ -in $wingetTokens }) {
         Invoke-Step "WinGet" -Icon $StepIcon {
             if ($enabled -contains 'Zoxide') { Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand } }
             if ($enabled -contains 'Fzf') {

@@ -34,8 +34,6 @@ function Enable-Lazygit {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command lazygit.exe -ErrorAction SilentlyContinue) {
-            # No-op: lazygit has no PowerShell init script; the exe on PATH launches the TUI.
-        }
+        # No-op: lazygit has no PowerShell init script; the exe on PATH launches the TUI.
     }
 }

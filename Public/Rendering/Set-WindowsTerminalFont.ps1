@@ -49,13 +49,8 @@ function Set-WindowsTerminalFont {
         [string]$SettingsPath
     )
 
-    if (-not $SettingsPath) {
-        $SettingsPath = Get-WindowsTerminalSettingsPath
-    }
-    if (-not $SettingsPath -or -not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
-        Write-Warning "Set-WindowsTerminalFont: Windows Terminal settings.json not found. Is Windows Terminal installed and launched at least once? Pass -SettingsPath to override."
-        return
-    }
+    $SettingsPath = Resolve-WindowsTerminalSettingsPath -Path $SettingsPath -CallerName 'Set-WindowsTerminalFont'
+    if (-not $SettingsPath) { return }
 
     if ($PSCmdlet.ShouldProcess($SettingsPath, "Set Windows Terminal default font to '$FontFace'")) {
         $null = Edit-WindowsTerminalSettings -Path $SettingsPath -FontFace $FontFace

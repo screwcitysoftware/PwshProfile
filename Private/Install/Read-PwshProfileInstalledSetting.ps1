@@ -13,7 +13,7 @@ function Read-PwshProfileInstalledSetting {
           - It AST-parses the embedded Initialize-PwshProfile call
             ([System.Management.Automation.Language.Parser]::ParseInput) and maps the bound parameters
             to a settings hashtable (only the keys that were present): Theme, CustomTheme, BannerText,
-            BannerColor, BannerAlignment, BannerFont, BannerFontPath, StepIcon, ZoxideCommand,
+            BannerColor, BannerAlignment, BannerFont, StepIcon, ZoxideCommand,
             BatTheme, BatStyle, FzfTabChord (strings); Enable (string[]); EnableAll, NoBanner,
             ReplaceCat, ReplaceMore, FzfGitKeyBindings (switches -> $true when present; the last is a
             bare opt-in flag, an explicit -FzfGitKeyBindings:$false is also honored).
@@ -61,7 +61,8 @@ function Read-PwshProfileInstalledSetting {
         }
 
         # Parse the block and find the Initialize-PwshProfile command.
-        $tokens = $null; $errors = $null
+        $tokens = $null
+        $errors = $null
         $ast = [System.Management.Automation.Language.Parser]::ParseInput($block, [ref]$tokens, [ref]$errors)
         $cmd = $ast.FindAll({
                 $args[0] -is [System.Management.Automation.Language.CommandAst] -and
@@ -71,34 +72,34 @@ function Read-PwshProfileInstalledSetting {
 
         # Extract a scalar string from a value AST (constant or expandable string keep their literal
         # text, e.g. '$env:COMPUTERNAME'); fall back to the source text for anything unusual.
-        $scalar = {
-            param($node)
-            if ($node -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
-                $node -is [System.Management.Automation.Language.ExpandableStringExpressionAst]) {
-                return $node.Value
+        function Get-ScalarFromAst {
+            param($Node)
+            if ($Node -is [System.Management.Automation.Language.StringConstantExpressionAst] -or
+                $Node -is [System.Management.Automation.Language.ExpandableStringExpressionAst]) {
+                return $Node.Value
             }
-            try { return [string]$node.SafeGetValue() } catch { return $node.Extent.Text }
+            try { return [string]$Node.SafeGetValue() } catch { return $Node.Extent.Text }
         }
         # Extract a value AST as either a scalar or an array (for -Enable a,b,c / -Enable @()).
-        $value = {
-            param($node)
-            if ($node -is [System.Management.Automation.Language.ArrayLiteralAst]) {
-                return @($node.Elements | ForEach-Object { & $scalar $_ })
+        function Get-ValueFromAst {
+            param($Node)
+            if ($Node -is [System.Management.Automation.Language.ArrayLiteralAst]) {
+                return @($Node.Elements | ForEach-Object { Get-ScalarFromAst $_ })
             }
-            if ($node -is [System.Management.Automation.Language.ArrayExpressionAst]) {
+            if ($Node -is [System.Management.Automation.Language.ArrayExpressionAst]) {
                 # Handles `-Enable @()` (no sub-statements -> empty) and `-Enable @('Zoxide','Bat')`.
                 # Tuned to the shape Build-PwshProfileInitializeCall emits, where every element is a
                 # plain string literal — not a general expression evaluator.
-                $items = @($node.FindAll({
+                $items = @($Node.FindAll({
                             $args[0] -is [System.Management.Automation.Language.StringConstantExpressionAst]
                         }, $true) | ForEach-Object { $_.Value })
                 return $items
             }
-            & $scalar $node
+            Get-ScalarFromAst $Node
         }
 
         $stringParams = @('Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment',
-            'BannerFont', 'BannerFontPath', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle',
+            'BannerFont', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle',
             'FzfTabChord')
         # A bare -FzfGitKeyBindings parses as $true; the switch branch also handles an explicit :$false.
         $switchParams = @('EnableAll', 'NoBanner', 'ReplaceCat', 'ReplaceMore', 'FzfGitKeyBindings')
@@ -128,15 +129,15 @@ function Read-PwshProfileInstalledSetting {
                 # the generic $value stringifies, and [bool]'False' is $true, which would flip it.
                 if ($argNode) {
                     try { $settings[$name] = [bool]$argNode.SafeGetValue() }
-                    catch { $settings[$name] = [bool](& $value $argNode) }
+                    catch { $settings[$name] = [bool](Get-ValueFromAst $argNode) }
                 }
                 else { $settings[$name] = $true }
             }
             elseif ($name -eq 'Enable') {
-                $settings.Enable = @(if ($argNode) { & $value $argNode })
+                $settings.Enable = @(if ($argNode) { Get-ValueFromAst $argNode })
             }
             elseif ($argNode) {
-                $settings[$name] = [string](& $value $argNode)
+                $settings[$name] = [string](Get-ValueFromAst $argNode)
             }
         }
 

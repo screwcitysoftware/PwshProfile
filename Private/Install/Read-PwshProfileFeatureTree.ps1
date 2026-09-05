@@ -75,11 +75,11 @@ function Read-PwshProfileFeatureTree {
     foreach ($f in $allFeatures) { $labelToToken[$f.Label] = $f.Token }
 
     # Opt-in: a token is checked only when the caller marked it enabled.
-    $isEnabled = { param($token) [bool]($Enabled.ContainsKey($token) -and $Enabled[$token]) }
+    function Test-TokenEnabled { param($Token) [bool]($Enabled.ContainsKey($Token) -and $Enabled[$Token]) }
 
     # Non-interactive: return only the already-enabled tokens, matching the opt-in model.
     if (-not ('Spectre.Console.MultiSelectionPrompt`1' -as [type])) {
-        return @($allTokens | Where-Object { & $isEnabled $_ })
+        return @($allTokens | Where-Object { Test-TokenEnabled $_ })
     }
 
     # Per-feature legend above the tree — Spectre trees can't carry per-item descriptions. oh-my-posh
@@ -88,20 +88,11 @@ function Read-PwshProfileFeatureTree {
     $legend = @(
         '**oh-my-posh** is always enabled — it draws the prompt and has no checkbox.'
         '**Core** features are checked by default; the **WinGet** group is unchecked — checking one installs that tool via `winget`.'
-        '**PSReadLine** config — nicer command-line editing: history search, syntax colors, prediction.'
-        '**Terminal-Icons** — file-type icons in directory listings (`ls` / `Get-ChildItem`).'
-        '**posh-git** — git branch and status shown right in the prompt.'
-        '**zoxide** (smart `cd`) — a cd that learns your most-used dirs so you can jump by partial name.'
-        '**fzf** (fuzzy finder) — a fast command-line fuzzy picker (full UI style; via PSFzf adds `Ctrl+T` file picker with a `bat` preview, `Ctrl+R` fuzzy history, and `Ctrl+G` git pickers); when on PATH, zoxide uses it for its interactive `cdi`/`zi` jump.'
-        '**fnm** (Fast Node Manager) — install and switch between Node.js versions per project.'
-        '**xh** (HTTP client) — a fast, friendly `curl`/HTTPie-style tool for making HTTP requests.'
-        '**jq** (JSON processor) — a lightweight command-line JSON query and transformation tool.'
-        '**bat** (cat replacement) — a `cat` with syntax highlighting and git integration; its theme blends with the prompt. You can replace the built-in `cat` with it.'
-        '**fd** (file finder) — a fast, friendly `find` alternative that respects `.gitignore`; its colors blend with the prompt and, with fzf, drive fzf''s file search. Standalone — it does not replace `Get-ChildItem`.'
-        '**less** (pager) — a full-featured pager (color, search, backward scroll) that replaces the limited `more.com`; it is what lets `bat` page with color. You can route `help`/`more` and color CLIs through it.'
-        '**Shell completions** — Tab completion for `winget`, `tailscale`, `docker`, and `op`.'
+        foreach ($section in $sections.Values) {
+            foreach ($feature in $section) { $feature.Help }
+        }
     )
-    if ($newSet.Count) {
+    if ($newSet.Count -gt 0) {
         $legend += 'Items tagged **(new)** were added to the module since your last setup — they start unchecked.'
     }
     Write-PwshProfilePromptHelp $legend -Accent $accent -Code $CodeColor
@@ -123,7 +114,7 @@ function Read-PwshProfileFeatureTree {
     # at first render. A partially-enabled section is left alone so it correctly shows as partial.
     foreach ($key in $sections.Keys) {
         $children = @($sections[$key])
-        $enabledChildren = @($children | Where-Object { & $isEnabled $_.Token })
+        $enabledChildren = @($children | Where-Object { Test-TokenEnabled $_.Token })
         if ($enabledChildren.Count -eq $children.Count) {
             $prompt = [Spectre.Console.MultiSelectionPromptExtensions]::Select($prompt, $key)
         }

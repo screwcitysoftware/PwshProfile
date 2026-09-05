@@ -79,19 +79,18 @@ function Import-ModuleSafe {
         Import-Module $Name -ErrorAction Stop
     }
     catch {
+        $importError = $_
         if ($Repair) {
             # Best-effort recovery, then one retry; only warn if the retry also fails.
             & $Repair
             try {
                 Import-Module $Name -ErrorAction Stop
+                $importError = $null
             }
-            catch {
-                Write-Warning "Import-ModuleSafe: could not import '$Name': $($_.Exception.Message)"
-                return
-            }
+            catch { $importError = $_ }
         }
-        else {
-            Write-Warning "Import-ModuleSafe: could not import '$Name': $($_.Exception.Message)"
+        if ($importError) {
+            Write-Warning "Import-ModuleSafe: could not import '$Name': $($importError.Exception.Message)"
             return
         }
     }

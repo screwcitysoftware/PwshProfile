@@ -46,10 +46,6 @@ function Invoke-PwshProfileWizard {
         Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and warns
         that an interactive session is required when they are not.
 
-    .PARAMETER Reconfiguring
-        The target profile already contains a managed block, so the intro says "updating" rather than
-        "creating". Purely cosmetic.
-
     .PARAMETER PriorSetting
         On a re-run, the settings parsed from the existing block via Read-PwshProfileInstalledSetting,
         used to seed every prompt with last time's choice.
@@ -65,9 +61,6 @@ function Invoke-PwshProfileWizard {
     #>
     [CmdletBinding()]
     param(
-        [Parameter()]
-        [switch]$Reconfiguring,
-
         [Parameter()]
         [hashtable]$PriorSetting,
 
@@ -106,10 +99,10 @@ function Invoke-PwshProfileWizard {
     $state = @{ Settings = $settings; Def = $def; Accent = '#c9aaff'; Code = '#5fd7ff' }
 
     # Escape a dynamic value for safe inclusion in Spectre markup (banner text, paths, …).
-    $esc = {
-        param($text)
-        if ([string]::IsNullOrEmpty("$text")) { return '' }
-        Get-SpectreEscapedTextSafe -Text "$text"
+    function ConvertTo-EscapedText {
+        param($Text)
+        if ([string]::IsNullOrEmpty("$Text")) { return '' }
+        Get-SpectreEscapedTextSafe -Text "$Text"
     }
 
     # --- Step: Theme ------------------------------------------------------------------------
@@ -421,8 +414,8 @@ function Invoke-PwshProfileWizard {
         Write-PwshProfilePromptAnswer $s.Settings.WingetScope -Accent $s.Accent
 
         # Progress bar style — float the current value first.
-        Write-PwshProfilePromptHelp 'The bar **winget** shows while downloading/installing: `rainbow` is a cycling gradient, `accent` a solid accent-color bar, `retro` a plain ASCII bar, `disabled` none.' -Accent $s.Accent -Code $s.Code
-        $bars = @('accent', 'rainbow', 'retro', 'disabled')
+        Write-PwshProfilePromptHelp 'The bar **winget** shows while downloading/installing: `rainbow` is a cycling gradient, `accent` a solid accent-color bar, `retro` a plain ASCII bar, `sixel` a graphical bar on terminals that support it, `disabled` none.' -Accent $s.Accent -Code $s.Code
+        $bars = @('accent', 'rainbow', 'retro', 'sixel', 'disabled')
         if ($bars -contains $s.Settings.WingetProgressBar) {
             $bars = @($s.Settings.WingetProgressBar) + @($bars | Where-Object { $_ -ne $s.Settings.WingetProgressBar })
         }
@@ -460,7 +453,7 @@ function Invoke-PwshProfileWizard {
     while ($true) {
         $set = $state.Settings
         $themeLine = if ($set.CustomTheme) {
-            "custom: [$code]$(& $esc $set.CustomTheme)[/]"
+            "custom: [$code]$(ConvertTo-EscapedText $set.CustomTheme)[/]"
         }
         else { "[$accent]$($set.Theme)[/]" }
         $bannerOff = [bool]$set.NoBanner
@@ -468,14 +461,14 @@ function Invoke-PwshProfileWizard {
             '[grey]off[/]'
         }
         else {
-            "'$(& $esc $set.BannerText)' [grey]/[/] $(Format-PwshProfileColorValue $set.BannerColor) [grey]/[/] $($set.BannerAlignment) [grey]/[/] [$code]$($set.BannerFont)[/]"
+            "'$(ConvertTo-EscapedText $set.BannerText)' [grey]/[/] $(Format-PwshProfileColorValue $set.BannerColor) [grey]/[/] $($set.BannerAlignment) [grey]/[/] [$code]$($set.BannerFont)[/]"
         }
         # Feature summary: everything (and future), the chosen set, or nothing.
         $enabledList = @($set.Enable)
         $featuresLine = if ($set.EnableAll) {
             '[grey]all tools + future additions[/]'
         }
-        elseif ($enabledList.Count) {
+        elseif ($enabledList.Count -gt 0) {
             "[$code]$($enabledList -join ', ')[/]"
         }
         else { '[grey]none[/]' }
@@ -492,10 +485,10 @@ function Invoke-PwshProfileWizard {
         if ($fzfOn) {
             if ($set.FzfGitKeyBindings) { $featuresLine += " [grey]·[/] [$code]git chords[/]" }
             if ($set.FzfTabChord -and $set.FzfTabChord -ne 'Ctrl+Spacebar') {
-                $featuresLine += " [grey]·[/] [$code]tab: $(& $esc $set.FzfTabChord)[/]"
+                $featuresLine += " [grey]·[/] [$code]tab: $(ConvertTo-EscapedText $set.FzfTabChord)[/]"
             }
         }
-        $fontsLine = if (@($set.NerdFont).Count) {
+        $fontsLine = if (@($set.NerdFont).Count -gt 0) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }
         else { '[grey]none[/]' }
@@ -512,7 +505,7 @@ function Invoke-PwshProfileWizard {
         $summary = @(
             "[bold]Theme:[/]      $themeLine"
             "[bold]Banner:[/]     $bannerLine"
-            "[bold]Step icon:[/]  [$code]$(& $esc $set.StepIcon)[/]"
+            "[bold]Step icon:[/]  [$code]$(ConvertTo-EscapedText $set.StepIcon)[/]"
             "[bold]Features:[/]   $featuresLine"
             "[bold]Nerd Fonts:[/] $fontsLine"
             "[bold]WT font:[/]    $wtFontLine"

@@ -109,7 +109,7 @@ function Write-PwshProfileBlock {
     if ($changed -and $PSCmdlet.ShouldProcess($Path, "Write ScrewCitySoftware.PwshProfile bootstrap ($action)")) {
         $parent = Split-Path -Path $Path -Parent
         if ($parent -and -not (Test-Path -LiteralPath $parent)) {
-            New-Item -ItemType Directory -Path $parent -Force | Out-Null
+            $null = New-Item -ItemType Directory -Path $parent -Force
         }
         Set-Content -LiteralPath $Path -Value $new -Encoding utf8 -NoNewline
     }

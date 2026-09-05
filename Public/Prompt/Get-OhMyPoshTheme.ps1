@@ -41,10 +41,10 @@ function Get-OhMyPoshTheme {
         [Parameter(Position = 0)]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
-                if ($base) {
-                    Get-ChildItem -Path (Join-Path $base 'Assets' 'Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
-                        ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
+                # Completers run in the caller's scope, so reach the private lister through the module.
+                $module = Get-Module ScrewCitySoftware.PwshProfile
+                if ($module) {
+                    & $module { Get-BundledThemeName } |
                         Where-Object { $_ -like "$wordToComplete*" } |
                         ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
                 }

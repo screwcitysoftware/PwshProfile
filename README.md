@@ -418,6 +418,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-BundledFontPath.ps1      # resolves Assets/Fonts/<name>.flf
 │   │   ├── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
 │   │   ├── Get-WindowsTerminalSettingsPath.ps1 # locates WT settings.json (stable/preview/unpackaged)
+│   │   ├── Resolve-WindowsTerminalSettingsPath.ps1 # resolves + validates it, warning when absent
 │   │   └── Edit-WindowsTerminalSettings.ps1    # shared read/backup/write engine for the scheme install/uninstall
 │   └── Core/
 │       └── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed

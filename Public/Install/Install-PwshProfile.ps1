@@ -115,8 +115,8 @@ function Install-PwshProfile {
         if ($prior) {
             $priorSettings = $prior.Settings
             $snapshot = @($prior.ToolSnapshot)
-            if ($snapshot.Count) {
-                $newTools = @(Get-PwshProfileToolCatalog -Token | Where-Object { $snapshot -notcontains $_ })
+            if ($snapshot.Count -gt 0) {
+                $newTools = @(Get-PwshProfileToolCatalog -Token | Where-Object { $_ -notin $snapshot })
             }
         }
     }
@@ -133,7 +133,7 @@ function Install-PwshProfile {
     Format-PwshProfileHelpMarkup -Text $intro -Accent $accent -Code $code -Body default |
         Format-SpectrePanel -Header '◆ Profile setup' -Border Rounded -Color $accent -Expand | Out-Host
 
-    $settings = Invoke-PwshProfileWizard -Reconfiguring:$reconfiguring -PriorSetting $priorSettings -NewTool $newTools
+    $settings = Invoke-PwshProfileWizard -PriorSetting $priorSettings -NewTool $newTools
 
     # The wizard returns $null when the user cancels at the review screen — write nothing.
     if ($null -eq $settings) {
@@ -198,7 +198,7 @@ function Install-PwshProfile {
     # Display-only, so it runs under -WhatIf, and every run — users need to point their terminal at a
     # Nerd Font even if they declined the install. -Font names the installed families when there are any.
     $fontSetupArgs = @{}
-    if ($fonts.Count) { $fontSetupArgs.Font = $fonts }
+    if ($fonts.Count -gt 0) { $fontSetupArgs.Font = $fonts }
     Show-NerdFontSetup @fontSetupArgs
 
     $call = Build-PwshProfileInitializeCall -Setting $settings

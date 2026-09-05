@@ -28,10 +28,6 @@ function Build-PwshProfileInitializeCall {
         The settings hashtable, keyed as Get-PwshProfileDefault and the wizard produce it. Absent keys
         fall back to the default and are not emitted.
 
-    .PARAMETER Default
-        The baseline to compare against. Resolved from the setting's selected theme when omitted;
-        exposed mainly for testing.
-
     .EXAMPLE
         Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault)
 
@@ -66,41 +62,38 @@ function Build-PwshProfileInitializeCall {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory, Position = 0)]
-        [hashtable]$Setting,
-
-        [Parameter(Position = 1)]
-        [hashtable]$Default
+        [hashtable]$Setting
     )
 
     # The selected theme drives both the -Theme/-CustomTheme tokens and the banner comparison
     # baseline; 'screwcity' is the global default, so it is never emitted as -Theme.
     $theme = if ($Setting.ContainsKey('Theme') -and $Setting.Theme) { $Setting.Theme } else { 'screwcity' }
     $customTheme = if ($Setting.ContainsKey('CustomTheme')) { $Setting.CustomTheme } else { '' }
-    if (-not $PSBoundParameters.ContainsKey('Default')) { $Default = Get-PwshProfileDefault -Theme $theme }
+    $Default = Get-PwshProfileDefault -Theme $theme
 
     # Single-quote a value for safe inclusion in the generated command, doubling embedded quotes.
-    $quote = { param($value) "'" + ($value -replace "'", "''") + "'" }
+    function ConvertTo-QuotedValue { param($Text) "'" + ($Text -replace "'", "''") + "'" }
 
     # Double-quote a value so PowerShell interpolation (e.g. $env:COMPUTERNAME) happens at startup.
     # Escape backticks first, then double quotes; $ is left intact deliberately so it interpolates.
-    $quoteDouble = { param($value) '"' + ($value -replace '`', '``' -replace '"', '`"') + '"' }
+    function ConvertTo-InterpolatedValue { param($Text) '"' + ($Text -replace '`', '``' -replace '"', '`"') + '"' }
 
     # Resolve a key from the supplied settings, falling back to the default when absent.
-    $value = { param($key) if ($Setting.ContainsKey($key)) { $Setting[$key] } else { $Default[$key] } }
+    function Get-SettingValue { param($Key) if ($Setting.ContainsKey($Key)) { $Setting[$Key] } else { $Default[$Key] } }
 
     $parts = [System.Collections.Generic.List[string]]::new()
 
     # Resolve the tool selection up front: -EnableAll covers the whole catalog, otherwise the explicit
     # Enable list. It gates which tool-specific params are emitted, so a disabled tool's flags never are.
-    $enableAll = [bool](& $value 'EnableAll')
-    $enableList = @(& $value 'Enable')
+    $enableAll = [bool](Get-SettingValue 'EnableAll')
+    $enableList = @(Get-SettingValue 'Enable')
     $enabledSet = if ($enableAll) { Get-PwshProfileToolCatalog -Token } else { $enableList }
-    $noBanner = [bool](& $value 'NoBanner')
+    $noBanner = [bool](Get-SettingValue 'NoBanner')
 
     # Theme selection: a custom theme path takes precedence (and is mutually exclusive with a bundled
     # -Theme); a bundled theme is emitted only when it isn't the screwcity default.
     if ($customTheme) {
-        $parts.Add("-CustomTheme $(& $quote $customTheme)")
+        $parts.Add("-CustomTheme $(ConvertTo-QuotedValue $customTheme)")
     }
     elseif ($theme -ne 'screwcity') {
         $parts.Add("-Theme $theme")
@@ -116,27 +109,21 @@ function Build-PwshProfileInitializeCall {
     foreach ($key in @($bannerKeys + @('StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'FzfTabChord'))) {
         if ($noBanner -and $bannerKeys -contains $key) { continue }
         if ($keyTool.ContainsKey($key) -and $enabledSet -notcontains $keyTool[$key]) { continue }
-        $v = & $value $key
+        $v = Get-SettingValue $key
         if ($v -ne $Default[$key]) {
-            $rendered = if ($key -eq 'BannerText') { & $quoteDouble $v } else { & $quote $v }
+            $rendered = if ($key -eq 'BannerText') { ConvertTo-InterpolatedValue $v } else { ConvertTo-QuotedValue $v }
             $parts.Add("-$key $rendered")
         }
     }
 
-    # Boolean switches: emitted as bare flags only when set, differing from the default ($false), and
-    # the owning tool is enabled (the flag is a no-op otherwise).
-    $replaceCat = & $value 'ReplaceCat'
-    if ([bool]$replaceCat -ne [bool]$Default['ReplaceCat'] -and $replaceCat -and $enabledSet -contains 'Bat') {
-        $parts.Add('-ReplaceCat')
-    }
-    $replaceMore = & $value 'ReplaceMore'
-    if ([bool]$replaceMore -ne [bool]$Default['ReplaceMore'] -and $replaceMore -and $enabledSet -contains 'Less') {
-        $parts.Add('-ReplaceMore')
-    }
-    # Opt-in, so emit the bare flag only when it is ON and fzf is enabled — like -ReplaceCat above.
-    $fzfGit = & $value 'FzfGitKeyBindings'
-    if ([bool]$fzfGit -ne [bool]$Default['FzfGitKeyBindings'] -and $fzfGit -and $enabledSet -contains 'Fzf') {
-        $parts.Add('-FzfGitKeyBindings')
+    # Boolean switches: a bare flag, emitted only when it is ON, differs from the default, and its
+    # owning tool is enabled — the flag is a no-op otherwise.
+    $switchTool = [ordered]@{ ReplaceCat = 'Bat'; ReplaceMore = 'Less'; FzfGitKeyBindings = 'Fzf' }
+    foreach ($switch in $switchTool.GetEnumerator()) {
+        $v = Get-SettingValue $switch.Key
+        if ([bool]$v -ne [bool]$Default[$switch.Key] -and $v -and $enabledSet -contains $switch.Value) {
+            $parts.Add("-$($switch.Key)")
+        }
     }
 
     # Always emitted explicitly — that is what pins the set against future-tool drift. -EnableAll for

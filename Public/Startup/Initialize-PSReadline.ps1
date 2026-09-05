@@ -50,10 +50,12 @@ function Initialize-PSReadline {
 
     # Park a half-typed command in history without running it, then clear the line. RevertLine resets
     # the undo stack, though redo still reconstructs the command line.
-    Set-PSReadLineKeyHandler -Key Alt+w `
-        -BriefDescription SaveInHistory `
-        -LongDescription "Save current line in history but do not execute" `
-        -ScriptBlock {
+    $saveInHistory = @{
+        Key              = 'Alt+w'
+        BriefDescription = 'SaveInHistory'
+        LongDescription  = 'Save current line in history but do not execute'
+    }
+    Set-PSReadLineKeyHandler @saveInHistory -ScriptBlock {
         param($key, $arg)
 
         $line = $null
@@ -64,10 +66,12 @@ function Initialize-PSReadline {
     }
 
     # Wrap the current selection — or the whole line when nothing is selected — in parens.
-    Set-PSReadLineKeyHandler -Key 'Alt+(' `
-        -BriefDescription ParenthesizeSelection `
-        -LongDescription "Put parenthesis around the selection or entire line and move the cursor to after the closing parenthesis" `
-        -ScriptBlock {
+    $parenthesizeSelection = @{
+        Key              = 'Alt+('
+        BriefDescription = 'ParenthesizeSelection'
+        LongDescription  = 'Put parenthesis around the selection or entire line and move the cursor to after the closing parenthesis'
+    }
+    Set-PSReadLineKeyHandler @parenthesizeSelection -ScriptBlock {
         param($key, $arg)
 
         $selectionStart = $null

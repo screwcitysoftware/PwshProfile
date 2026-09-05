@@ -58,27 +58,24 @@ function Format-PwshProfileHelpMarkup {
         [string]$Body = 'grey'
     )
 
-    # Escape a plain run for Spectre markup (prefer the real escaper; fall back to doubling brackets).
-    $escape = { param($s) Get-SpectreEscapedTextSafe -Text "$s" }
-
     # Match **brand** or `code`, non-greedily, so adjacent tokens don't run together.
     $rx = [regex]'(?:\*\*(?<brand>.+?)\*\*)|(?:`(?<code>[^`]+?)`)'
     $sb = [System.Text.StringBuilder]::new()
     $pos = 0
     foreach ($m in $rx.Matches($Text)) {
         if ($m.Index -gt $pos) {
-            [void]$sb.Append((& $escape $Text.Substring($pos, $m.Index - $pos)))
+            [void]$sb.Append((Get-SpectreEscapedTextSafe -Text $Text.Substring($pos, $m.Index - $pos)))
         }
         if ($m.Groups['brand'].Success) {
-            [void]$sb.Append("[$Accent]$(& $escape $m.Groups['brand'].Value)[/]")
+            [void]$sb.Append("[$Accent]$(Get-SpectreEscapedTextSafe -Text $m.Groups['brand'].Value)[/]")
         }
         else {
-            [void]$sb.Append("[$Code]$(& $escape $m.Groups['code'].Value)[/]")
+            [void]$sb.Append("[$Code]$(Get-SpectreEscapedTextSafe -Text $m.Groups['code'].Value)[/]")
         }
         $pos = $m.Index + $m.Length
     }
     if ($pos -lt $Text.Length) {
-        [void]$sb.Append((& $escape $Text.Substring($pos)))
+        [void]$sb.Append((Get-SpectreEscapedTextSafe -Text $Text.Substring($pos)))
     }
 
     $inner = $sb.ToString()

@@ -77,29 +77,29 @@ function Set-WingetSetting {
             $current['$schema'] = 'https://aka.ms/winget-settings.schema.json'
         }
 
-        # Return (creating if needed) the nested dictionary at $key under $parent.
-        $ensureNode = {
-            param($parent, $key)
-            if ($parent[$key] -isnot [System.Collections.IDictionary]) { $parent[$key] = @{} }
-            $parent[$key]
+        # Return (creating if needed) the nested dictionary at $Key under $Parent.
+        function Resolve-SettingNode {
+            param($Parent, $Key)
+            if ($Parent[$Key] -isnot [System.Collections.IDictionary]) { $Parent[$Key] = @{} }
+            $Parent[$Key]
         }
 
         if ($PSBoundParameters.ContainsKey('Scope')) {
-            $prefs = & $ensureNode (& $ensureNode $current 'installBehavior') 'preferences'
+            $prefs = Resolve-SettingNode (Resolve-SettingNode $current 'installBehavior') 'preferences'
             $prefs['scope'] = $Scope
         }
         if ($PSBoundParameters.ContainsKey('DisableInstallNote')) {
-            (& $ensureNode $current 'installBehavior')['disableInstallNotes'] = $DisableInstallNote
+            (Resolve-SettingNode $current 'installBehavior')['disableInstallNotes'] = $DisableInstallNote
         }
         if ($PSBoundParameters.ContainsKey('ProgressBar')) {
-            (& $ensureNode $current 'visual')['progressBar'] = $ProgressBar
+            (Resolve-SettingNode $current 'visual')['progressBar'] = $ProgressBar
         }
         if ($PSBoundParameters.ContainsKey('AnonymizePath')) {
-            (& $ensureNode $current 'visual')['anonymizeDisplayedPaths'] = $AnonymizePath
+            (Resolve-SettingNode $current 'visual')['anonymizeDisplayedPaths'] = $AnonymizePath
         }
 
         if ($PSCmdlet.ShouldProcess('winget user settings', 'Update')) {
-            Set-WinGetUserSetting -UserSettings $current | Out-Null
+            $null = Set-WinGetUserSetting -UserSettings $current
         }
     }
     catch {

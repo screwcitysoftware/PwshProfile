@@ -34,8 +34,6 @@ function Enable-Jq {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command jq.exe -ErrorAction SilentlyContinue) {
-            # No-op: jq has no PowerShell init script; the exe on PATH is enough for CLI use.
-        }
+        # No-op: jq has no PowerShell init script; the exe on PATH is enough for CLI use.
     }
 }

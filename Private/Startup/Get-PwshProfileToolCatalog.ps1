@@ -60,19 +60,32 @@ function Get-PwshProfileToolCatalog {
     # run order. A feature's group is DERIVED from its Install kind, so the "WinGet = winget installs"
     # rule can't drift. oh-my-posh, git and the `which` alias are absent (always-on, not tokens).
     $entries = @(
-        [pscustomobject]@{ Label = 'PSReadLine config'; Token = 'PSReadLine'; Install = 'none' }
-        [pscustomobject]@{ Label = 'Terminal-Icons'; Token = 'TerminalIcons'; Install = 'module' }
-        [pscustomobject]@{ Label = 'posh-git'; Token = 'PoshGit'; Install = 'module' }
-        [pscustomobject]@{ Label = 'Shell completions'; Token = 'Completions'; Install = 'none' }
-        [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Token = 'Fzf'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'fnm (Fast Node Manager)'; Token = 'Fnm'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'xh (HTTP client)'; Token = 'Xh'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'jq (JSON processor)'; Token = 'Jq'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'bat (cat replacement)'; Token = 'Bat'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'fd (file finder)'; Token = 'Fd'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'less (pager)'; Token = 'Less'; Install = 'winget' }
-        [pscustomobject]@{ Label = 'lazygit (git TUI)'; Token = 'Lazygit'; Install = 'winget' }
+        [pscustomobject]@{ Label = 'PSReadLine config'; Token = 'PSReadLine'; Install = 'none'
+            Help = '**PSReadLine** config — nicer command-line editing: history search, syntax colors, prediction.' }
+        [pscustomobject]@{ Label = 'Terminal-Icons'; Token = 'TerminalIcons'; Install = 'module'
+            Help = '**Terminal-Icons** — file-type icons in directory listings (`ls` / `Get-ChildItem`).' }
+        [pscustomobject]@{ Label = 'posh-git'; Token = 'PoshGit'; Install = 'module'
+            Help = '**posh-git** — git branch and status shown right in the prompt.' }
+        [pscustomobject]@{ Label = 'Shell completions'; Token = 'Completions'; Install = 'none'
+            Help = '**Shell completions** — Tab completion for `winget`, `az`, `tailscale`, `docker`, `op`, and `gh`.' }
+        [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; Install = 'winget'
+            Help = '**zoxide** (smart `cd`) — a cd that learns your most-used dirs so you can jump by partial name.' }
+        [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Token = 'Fzf'; Install = 'winget'
+            Help = '**fzf** (fuzzy finder) — a fast command-line fuzzy picker (full UI style; via PSFzf adds `Ctrl+T` file picker with a `bat` preview, `Ctrl+R` fuzzy history, and `Ctrl+G` git pickers); when on PATH, zoxide uses it for its interactive `cdi`/`zi` jump.' }
+        [pscustomobject]@{ Label = 'fnm (Fast Node Manager)'; Token = 'Fnm'; Install = 'winget'
+            Help = '**fnm** (Fast Node Manager) — install and switch between Node.js versions per project.' }
+        [pscustomobject]@{ Label = 'xh (HTTP client)'; Token = 'Xh'; Install = 'winget'
+            Help = '**xh** (HTTP client) — a fast, friendly `curl`/HTTPie-style tool for making HTTP requests.' }
+        [pscustomobject]@{ Label = 'jq (JSON processor)'; Token = 'Jq'; Install = 'winget'
+            Help = '**jq** (JSON processor) — a lightweight command-line JSON query and transformation tool.' }
+        [pscustomobject]@{ Label = 'bat (cat replacement)'; Token = 'Bat'; Install = 'winget'
+            Help = '**bat** (cat replacement) — a `cat` with syntax highlighting and git integration; its theme blends with the prompt. You can replace the built-in `cat` with it.' }
+        [pscustomobject]@{ Label = 'fd (file finder)'; Token = 'Fd'; Install = 'winget'
+            Help = '**fd** (file finder) — a fast, friendly `find` alternative that respects `.gitignore`; its colors blend with the prompt and, with fzf, drive fzf''s file search. Standalone — it does not replace `Get-ChildItem`.' }
+        [pscustomobject]@{ Label = 'less (pager)'; Token = 'Less'; Install = 'winget'
+            Help = '**less** (pager) — a full-featured pager (color, search, backward scroll) that replaces the limited `more.com`; it is what lets `bat` page with color. You can route `help`/`more` and color CLIs through it.' }
+        [pscustomobject]@{ Label = 'lazygit (git TUI)'; Token = 'Lazygit'; Install = 'winget'
+            Help = '**lazygit** (git TUI) — a full-screen terminal UI for git: stage hunks, branch, rebase, and stash without leaving the shell.' }
     )
 
     if ($Token) {

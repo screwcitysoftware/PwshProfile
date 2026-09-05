@@ -121,15 +121,15 @@ function Select-Fzf {
 
         # Resolve a property name or scriptblock ($_ = item) against an item. A $null selector means
         # no projection: display falls back to the item's string form, value to the item itself.
-        $resolve = {
-            param($item, $selector, $forDisplay)
-            if ($null -eq $selector) {
-                if ($forDisplay) { return "$item" } else { return $item }
+        function Resolve-Selector {
+            param($Item, $Selector, $ForDisplay)
+            if ($null -eq $Selector) {
+                if ($ForDisplay) { return "$Item" } else { return $Item }
             }
-            if ($selector -is [scriptblock]) {
-                return $item | ForEach-Object $selector
+            if ($Selector -is [scriptblock]) {
+                return $Item | ForEach-Object $Selector
             }
-            return $item.$selector
+            return $Item.$Selector
         }
 
         # Join a hidden index and the display text with ASCII Unit Separator (0x1f) — a non-printable
@@ -137,7 +137,7 @@ function Select-Fzf {
         # collapsed, since one would split an item across multiple fzf lines.
         $delim = [char]0x1f
         $lines = for ($i = 0; $i -lt $items.Count; $i++) {
-            $text = "$(& $resolve $items[$i] $Display $true)" -replace "[`r`n$delim]", ' '
+            $text = "$(Resolve-Selector $items[$i] $Display $true)" -replace "[`r`n$delim]", ' '
             "$i$delim$text"
         }
 
@@ -161,7 +161,7 @@ function Select-Fzf {
             # Recover the hidden leading index and map back to the original object.
             $idx = ($line -split [regex]::Escape($delim), 2)[0] -as [int]
             if ($null -eq $idx -or $idx -lt 0 -or $idx -ge $items.Count) { continue }
-            & $resolve $items[$idx] $Value $false
+            Resolve-Selector $items[$idx] $Value $false
         }
 
         # Under -Multiple always hand back an array, as the help and README promise. The unary comma is

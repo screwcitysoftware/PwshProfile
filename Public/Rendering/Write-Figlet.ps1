@@ -21,7 +21,8 @@ function Write-Figlet {
         The text to render as figlet. Required.
 
     .PARAMETER Color
-        Any Spectre color name or hex. Defaults to '#c9aaff', the bundled theme's signature purple.
+        Any Spectre color name or hex. Defaults to '#c9aaff', the module's signature purple.
+        Initialize-PwshProfile overrides it with the selected theme's BannerColor.
 
     .PARAMETER Alignment
         'Left' (default), 'Center', or 'Right'.

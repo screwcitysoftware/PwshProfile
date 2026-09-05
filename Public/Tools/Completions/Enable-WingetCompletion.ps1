@@ -31,9 +31,9 @@ function Enable-WingetCompletion {
     Register-ArgumentCompleter -Native -CommandName winget -ScriptBlock {
         param($wordToComplete, $commandAst, $cursorPosition)
         # No encoding reset here — the .psm1 sets UTF-8 at import.
-        $Local:word = $wordToComplete.Replace('"', '""')
-        $Local:ast = $commandAst.ToString().Replace('"', '""')
-        winget complete --word="$Local:word" --commandline "$Local:ast" --position $cursorPosition | ForEach-Object {
+        $word = $wordToComplete.Replace('"', '""')
+        $ast = $commandAst.ToString().Replace('"', '""')
+        winget complete --word="$word" --commandline "$ast" --position $cursorPosition | ForEach-Object {
             [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_)
         }
     }
