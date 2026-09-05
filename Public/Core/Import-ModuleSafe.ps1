@@ -65,7 +65,10 @@ function Import-ModuleSafe {
         [string]$Repository = 'PSGallery'
     )
 
-    if (-not (Get-Module -ListAvailable -Name $Name)) {
+    # Test-ModuleAvailable rather than Get-Module -ListAvailable: the latter parses every manifest on
+    # PSModulePath (~50ms) to answer a question two cheap checks settle in ~0.3ms, and this runs about
+    # five times per shell start.
+    if (-not (Test-ModuleAvailable -Name $Name)) {
         try {
             Install-PSResource -Name $Name -Repository $Repository -Scope $Scope -TrustRepository -ErrorAction Stop
         }

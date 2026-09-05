@@ -421,7 +421,8 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Resolve-WindowsTerminalSettingsPath.ps1 # resolves + validates it, warning when absent
 │   │   └── Edit-WindowsTerminalSettings.ps1    # shared read/backup/write engine for the scheme install/uninstall
 │   └── Core/
-│       └── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
+│       ├── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
+│       └── Test-ModuleAvailable.ps1     # cheap loaded/installed probe (avoids -ListAvailable)
 ├── Assets/                              # bundled assets
 │   ├── Themes/
 │   │   ├── screwcity.omp.json   # default oh-my-posh theme — Screw City (purple/blue)
