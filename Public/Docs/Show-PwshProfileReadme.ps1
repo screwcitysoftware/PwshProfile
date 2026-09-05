@@ -28,7 +28,8 @@ function Show-PwshProfileReadme {
         Opens README.md in your system's default Markdown application.
 
     .NOTES
-        $PSScriptRoot here is Public/Docs/, so '..\..' reaches the module root where README.md lives.
+        The path hangs off $script:ModuleRoot (set once in the .psm1) rather than $PSScriptRoot, so it
+        holds whether the module is dot-sourced per file or shipped as one merged .psm1.
     #>
     [CmdletBinding()]
     param(
@@ -36,7 +37,7 @@ function Show-PwshProfileReadme {
         [switch]$Open
     )
 
-    $readmePath = Join-Path $PSScriptRoot '..' '..' 'README.md'
+    $readmePath = Join-Path $script:ModuleRoot 'README.md'
     if (-not (Test-Path -Path $readmePath)) {
         throw "Show-PwshProfileReadme: README not found at '$readmePath'."
     }

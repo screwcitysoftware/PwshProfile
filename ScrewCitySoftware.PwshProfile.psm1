@@ -13,6 +13,11 @@ catch {
     Write-Warning "ScrewCitySoftware.PwshProfile: could not set UTF-8 console encoding ($($_.Exception.Message)). Non-ASCII glyphs may render incorrectly."
 }
 
+# The module root, resolved once. Every bundled-asset path (Assets/, README.md) hangs off this
+# rather than a per-file $PSScriptRoot, so the same code works whether the module is dot-sourced
+# file-by-file in the repo or shipped as a single merged .psm1 (see build.ps1 -Task Build).
+$script:ModuleRoot = $PSScriptRoot
+
 # Loader: dot-source every function file and export the public ones.
 # Public/  — exported functions, one per file, file named after the function.
 # Private/ — internal helpers (not exported); the folder is optional and may not exist.

@@ -1201,9 +1201,18 @@ pwsh -NoProfile -NoLogo -Command "& .\build.ps1"                      # Bootstra
 pwsh -NoProfile -NoLogo -Command "& .\build.ps1 -Task Analyze, Test"  # what CI runs on pull requests
 ```
 
-`Build` stages **only** the shippable files (`.psd1`, `.psm1`, `Public/`, `Private/`, `Assets/`,
-`README.md`, `LICENSE`) into `Output/ScrewCitySoftware.PwshProfile/`, so `Tests/`, `CLAUDE.md`,
-and `.github/` never reach the gallery package.
+`Build` stages **only** the shippable files (`.psd1`, `Assets/`, `README.md`, `LICENSE`) into
+`Output/ScrewCitySoftware.PwshProfile/`, so `Tests/`, `CLAUDE.md`, and `.github/` never reach the
+gallery package. `Public/` and `Private/` are not copied: every function file is **merged into the
+staged `.psm1`** in the dev loader's order (Private first, then Public). One function per file is
+right for editing, but each dot-source costs roughly 9 ms of fixed overhead at import — about 650 ms
+across the tree, on every shell start. Merging collapses that to a single parse: measured **924 ms
+to 406 ms** for a full import. Bundled-asset paths hang off `$script:ModuleRoot` (set once in the
+`.psm1`) rather than a per-file `$PSScriptRoot` precisely so they survive the merge.
+
+Because the Pester suite imports the repo tree rather than the staged copy, `Build` finishes by
+importing the staged module in a clean child process and asserting it exports exactly what the
+manifest declares — so the merged artifact is never published untested.
 
 CI runs lint + tests on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Publishing to the PowerShell Gallery is
