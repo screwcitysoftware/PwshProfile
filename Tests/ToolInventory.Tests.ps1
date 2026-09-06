@@ -18,10 +18,20 @@ Describe 'Get-PwshProfileToolInventory' {
         InModuleScope $script:Module {
             foreach ($row in Get-PwshProfileToolInventory) {
                 @($row.PSObject.Properties.Name) | Sort-Object |
-                    Should -Be @('Exe', 'Installed', 'Label', 'PackageId', 'PathDir', 'Scope', 'Token')
+                    Should -Be @('Exe', 'Installed', 'Label', 'PackageId', 'PathDir', 'Scope', 'Token', 'Url')
                 $row.Label | Should -Not -BeNullOrEmpty
                 $row.PackageId | Should -Not -BeNullOrEmpty
                 $row.Exe | Should -Not -BeNullOrEmpty
+            }
+        }
+    }
+
+    It 'passes Url through untouched from the catalog' {
+        InModuleScope $script:Module {
+            $inventory = @(Get-PwshProfileToolInventory)
+            foreach ($tool in (Get-PwshProfileToolCatalog)['WinGet']) {
+                $row = $inventory | Where-Object { $_.Token -eq $tool.Token }
+                "$($row.Url)" | Should -Be "$($tool.Url)"
             }
         }
     }
@@ -94,6 +104,62 @@ Describe 'Show-PwshProfileInventory' {
             Set-StrictMode -Version Latest
             Mock Write-SpectreHost { }
             { Show-PwshProfileInventory -Row $R } | Should -Not -Throw
+        }
+    }
+
+    It 'reads rows that carry no Url property at all' {
+        # $script:Rows deliberately omits Url too, exercising the same StrictMode-safe optional read.
+        InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
+            param($R)
+            Set-StrictMode -Version Latest
+            Mock Write-SpectreHost { }
+            { Show-PwshProfileInventory -Row $R } | Should -Not -Throw
+        }
+    }
+
+    It 'wraps the label in a hyperlink when the row carries a Url' {
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            $row = [pscustomobject]@{ Label = 'zoxide (smart cd)'; Installed = $true; Url = 'https://github.com/ajeetdsouza/zoxide' }
+            Show-PwshProfileInventory -Row @($row)
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly `
+                -ParameterFilter { $Message -like '*[[]link=https://github.com/ajeetdsouza/zoxide[]]zoxide (smart cd)[[]/[]]*' }
+        }
+    }
+
+    It 'pads a linked label with plain spaces outside the span, not inside it' {
+        # Two different label lengths so the shorter row actually needs padding -- a single-row test
+        # can't expose whitespace baked inside the link span, since there'd be nothing to pad.
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            $rows = @(
+                [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Installed = $true; Url = 'https://github.com/junegunn/fzf' }
+                [pscustomobject]@{ Label = 'jq (JSON processor)'; Installed = $true; Url = 'https://github.com/jqlang/jq' }
+            )
+            Show-PwshProfileInventory -Row $rows
+            # The closing tag must sit immediately after the label text -- padding spaces belong AFTER
+            # [/], never inside the span, where a terminal renders them as part of the clickable link.
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly `
+                -ParameterFilter { $Message -like '*[[]link=https://github.com/junegunn/fzf[]]fzf (fuzzy finder)[[]/[]]  *' }
+        }
+    }
+
+    It 'renders no hyperlink markup when the row carries no Url' {
+        InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
+            param($R)
+            Mock Write-SpectreHost { }
+            Show-PwshProfileInventory -Row $R
+            Should -Invoke Write-SpectreHost -Times 0 -Exactly -ParameterFilter { $Message -like '*link=*' }
+        }
+    }
+
+    It 'appends the raw URL as plain text in the non-Spectre fallback' {
+        InModuleScope $script:Module {
+            Mock Get-Command { $null } -ParameterFilter { $Name -eq 'Write-SpectreHost' }
+            Mock Write-Host { }
+            $row = [pscustomobject]@{ Label = 'zoxide (smart cd)'; Installed = $true; Url = 'https://github.com/ajeetdsouza/zoxide' }
+            Show-PwshProfileInventory -Row @($row)
+            Should -Invoke Write-Host -Times 1 -Exactly -ParameterFilter { $Object -like '*<https://github.com/ajeetdsouza/zoxide>*' }
         }
     }
 

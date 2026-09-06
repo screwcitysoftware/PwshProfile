@@ -34,6 +34,15 @@ function Show-PwshProfileInventory {
         authored help text, where a stray backtick or asterisk is meant as syntax. Detail IS authored
         help text, so it goes the other way and is formatted.
 
+        A row may also carry an optional Url (the project's homepage or repo): when present, the
+        escaped label is wrapped in a Spectre hyperlink span and THEN padded with plain spaces after
+        the closing tag, rather than padded first like the no-link branch -- padding inside the span
+        would put the trailing whitespace inside "[link=...]...[/]", which a real terminal renders as
+        part of the clickable/underlined link. Never escape the assembled link-markup string itself,
+        either: escaping doubles brackets and would corrupt the markup rather than the (already-safe)
+        label text inside it. The plain-text fallback has no markup at all, so it appends the raw URL
+        as visible text instead.
+
         Degrades like Show-NerdFontSetup — a plain Write-Host when Spectre isn't available.
 
     .PARAMETER Row
@@ -72,11 +81,16 @@ function Show-PwshProfileInventory {
     $rows = @(if ($PSBoundParameters.ContainsKey('Row')) { $Row } else { Get-PwshProfileToolInventory })
     if ($rows.Count -eq 0) { return }
 
-    # A row's Detail is optional, so read it through PSObject.Properties -- a missing property throws
-    # under Set-StrictMode -Version Latest, and the tool rows deliberately don't carry the column.
+    # A row's Detail/Url are optional, so read them through PSObject.Properties -- a missing property
+    # throws under Set-StrictMode -Version Latest, and hand-built test rows deliberately omit them.
     function Get-RowDetail {
         param($InventoryRow)
         $p = $InventoryRow.PSObject.Properties['Detail']
+        if ($p) { "$($p.Value)" } else { '' }
+    }
+    function Get-RowUrl {
+        param($InventoryRow)
+        $p = $InventoryRow.PSObject.Properties['Url']
         if ($p) { "$($p.Value)" } else { '' }
     }
 
@@ -98,9 +112,20 @@ function Show-PwshProfileInventory {
 
     if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) {
         foreach ($r in $rows) {
-            # Pad BEFORE escaping: escaping can lengthen the string (a '[' doubles), so padding
-            # afterwards would count escape characters and misalign the state column.
-            $label = Get-SpectreEscapedTextSafe -Text ("$($r.Label)".PadRight($width))
+            $rawLabel = "$($r.Label)"
+            $url = Get-RowUrl $r
+            if ($url) {
+                # Pad OUTSIDE the link span with plain spaces, keyed to the unescaped label's length --
+                # padding the label before wrapping (as the no-link branch does) would put the trailing
+                # whitespace INSIDE "[link=...]...[/]", and a real terminal renders that whitespace as
+                # part of the clickable/underlined link.
+                $label = "[link=$url]$(Get-SpectreEscapedTextSafe -Text $rawLabel)[/]" + (' ' * ($width - $rawLabel.Length))
+            }
+            else {
+                # Pad BEFORE escaping: escaping can lengthen the string (a '[' doubles), so padding
+                # afterwards would count escape characters and misalign the state column.
+                $label = Get-SpectreEscapedTextSafe -Text ($rawLabel.PadRight($width))
+            }
             $detail = Get-RowDetail $r
             if ($r.Installed) { Write-SpectreHost "  [$Color]✓[/] $label  [grey]already installed[/]" }
             elseif ($detail) {
@@ -117,8 +142,10 @@ function Show-PwshProfileInventory {
         $plain = @(
             foreach ($r in $rows) {
                 $detail = Get-RowDetail $r
+                $url = Get-RowUrl $r
                 $mark = if ($r.Installed) { '[installed]' } elseif ($detail) { $detail } else { '[will install]' }
-                "  $("$($r.Label)".PadRight($width))  $mark"
+                # No markup in this fallback, so the URL rides along as plain visible text instead.
+                "  $("$($r.Label)".PadRight($width))  $mark$(if ($url) { "  <$url>" })"
             }
             "  $count"
             ''

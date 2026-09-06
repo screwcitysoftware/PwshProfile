@@ -151,6 +151,21 @@ Describe 'Get-PwshProfileToolCatalog' {
         $omp.Scope | Should -Be 'user'
     }
 
+    It 'carries a well-formed Url on every row except Completions' {
+        # Completions bundles six unrelated CLIs' own tab-completers, so there is no single project to
+        # link -- every other row names one real tool or module and should link to it.
+        $sections = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog }
+        $rows = @(foreach ($k in $sections.Keys) { $sections[$k] })
+        foreach ($row in $rows) {
+            if ($row.Token -eq 'Completions') {
+                $row.Url | Should -BeNullOrEmpty
+            }
+            else {
+                $row.Url | Should -Match '^https://' -Because "'$($row.Token)' should link to its project"
+            }
+        }
+    }
+
     It 'matches the package each Enable-* actually installs (anti-drift)' {
         # Install-PwshProfile installs from the catalog while startup installs from the enabler, so a
         # disagreement would have setup install one package and the first shell install another. This

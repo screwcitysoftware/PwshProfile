@@ -535,6 +535,7 @@ The wizard walks one forward pass, then lets you revise anything before committi
 2. **Winget** — first, **what winget is about to install**: a check for each tool already on this
    machine, a down-arrow for each one setup will fetch, and a count. This is the *full* list — git
    and oh-my-posh are on it too, rather than appearing unannounced at first startup as they used to.
+   Each name is a clickable link to its project in a terminal that supports it.
 
    ```text
      ✓ git (version control)    already installed
@@ -555,7 +556,8 @@ The wizard walks one forward pass, then lets you revise anything before committi
 3. **Modules** — the other half of what lands on your machine: the PowerShell Gallery modules the
    profile leans on, each installed for your user only (`CurrentUser` scope, no admin) the first time
    it is actually needed. Nothing to answer — the step exists so nothing installs unannounced, and a
-   module that is only fetched under some condition says so instead of promising an install:
+   module that is only fetched under some condition says so instead of promising an install. Each name
+   is a clickable link to its project too:
 
    ```text
      ✓ PwshSpectreConsole (console UI)            already installed

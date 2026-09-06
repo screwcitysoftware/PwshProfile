@@ -35,15 +35,16 @@ BeforeAll {
 }
 
 Describe 'Get-PwshProfileModuleCatalog' {
-    It 'gives every module a name, a label, and a declared Detail' {
+    It 'gives every module a name, a label, a declared Detail, and a Url' {
         InModuleScope $script:Module {
             foreach ($row in Get-PwshProfileModuleCatalog) {
-                @($row.PSObject.Properties.Name) | Sort-Object | Should -Be @('Detail', 'Label', 'Name')
+                @($row.PSObject.Properties.Name) | Sort-Object | Should -Be @('Detail', 'Label', 'Name', 'Url')
                 $row.Name | Should -Not -BeNullOrEmpty
                 $row.Label | Should -Not -BeNullOrEmpty
                 # Detail may be $null, but the property must exist: the suite runs under
                 # Set-StrictMode -Version Latest, where reading an omitted property throws.
                 $row.Label | Should -BeLike "$($row.Name)*" -Because 'the label should lead with the module name'
+                $row.Url | Should -Match '^https://' -Because "'$($row.Name)' should link to its project"
             }
         }
     }
@@ -77,8 +78,14 @@ Describe 'Get-PwshProfileModuleInventory' {
         InModuleScope $script:Module {
             foreach ($row in Get-PwshProfileModuleInventory) {
                 @($row.PSObject.Properties.Name) | Sort-Object |
-                    Should -Be @('Detail', 'Installed', 'Label', 'Name')
+                    Should -Be @('Detail', 'Installed', 'Label', 'Name', 'Url')
             }
+        }
+    }
+
+    It 'passes Url through untouched from the catalog' {
+        InModuleScope $script:Module {
+            @((Get-PwshProfileModuleInventory).Url) | Should -Be @((Get-PwshProfileModuleCatalog).Url)
         }
     }
 

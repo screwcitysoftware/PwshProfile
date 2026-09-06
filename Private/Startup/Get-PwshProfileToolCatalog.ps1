@@ -41,8 +41,10 @@ function Get-PwshProfileToolCatalog {
         By default returns an ordered map of group name -> feature rows, each carrying Label (a
         human-readable name), Token (the tool's identifier), Install (the kind), PackageId and Exe
         (the winget package and its executable, $null for a non-winget row), PathDir and Scope (the
-        install-location overrides, $null to take Install-WingetPackageSafe's defaults), and Help (a
-        one-line description).
+        install-location overrides, $null to take Install-WingetPackageSafe's defaults), Help (a
+        one-line description), and Url (the project's homepage or repo, for the wizard's clickable
+        inventory rows; $null only for Completions, which bundles six unrelated CLIs rather than
+        naming one project).
 
     .PARAMETER Token
         Return the flat ordered token list instead — Core features first, then the winget CLIs in
@@ -72,56 +74,76 @@ function Get-PwshProfileToolCatalog {
     $entries = @(
         [pscustomobject]@{ Label = 'PSReadLine config'; Token = 'PSReadLine'; Install = 'none'
             PackageId = $null; Exe = $null; PathDir = $null; Scope = $null
+            Url = 'https://github.com/PowerShell/PSReadLine'
             Help = '**PSReadLine** config — nicer command-line editing: history search, syntax colors, prediction.' }
         [pscustomobject]@{ Label = 'Terminal-Icons'; Token = 'TerminalIcons'; Install = 'module'
             PackageId = $null; Exe = $null; PathDir = $null; Scope = $null
+            Url = 'https://github.com/devblackops/Terminal-Icons'
             Help = '**Terminal-Icons** — file-type icons in directory listings (`ls` / `Get-ChildItem`).' }
         [pscustomobject]@{ Label = 'posh-git'; Token = 'PoshGit'; Install = 'module'
             PackageId = $null; Exe = $null; PathDir = $null; Scope = $null
+            Url = 'https://github.com/dahlbyk/posh-git'
             Help = '**posh-git** — git branch and status shown right in the prompt.' }
         [pscustomobject]@{ Label = 'Shell completions'; Token = 'Completions'; Install = 'none'
             PackageId = $null; Exe = $null; PathDir = $null; Scope = $null
+            # No single project to link -- this row bundles six unrelated CLIs' own completers.
+            Url = $null
             Help = '**Shell completions** — Tab completion for `winget`, `az`, `tailscale`, `docker`, `op`, and `gh`.' }
         [pscustomobject]@{ Label = 'git (version control)'; Token = 'Git'; Install = 'winget'
             PackageId = 'Git.Git'; Exe = 'git.exe'
             PathDir = (Join-Path $env:ProgramFiles 'Git\cmd'); Scope = $null
+            Url = 'https://git-scm.com/'
             Help = '**git** — version control, and the foundation **posh-git**, **lazygit**, and fzf''s git pickers all build on. Installed first so it is on PATH for them.' }
         [pscustomobject]@{ Label = 'oh-my-posh (prompt)'; Token = 'OhMyPosh'; Install = 'winget'
             PackageId = 'JanDeDobbeleer.OhMyPosh'; Exe = 'oh-my-posh.exe'
             PathDir = (Join-Path $env:LOCALAPPDATA 'Programs\oh-my-posh\bin'); Scope = 'user'
+            Url = 'https://ohmyposh.dev'
             Help = '**oh-my-posh** — the prompt engine that renders the theme you pick, with git status, timings, and OS glyphs.' }
         [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; Install = 'winget'
             PackageId = 'ajeetdsouza.zoxide'; Exe = 'zoxide.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/ajeetdsouza/zoxide'
             Help = '**zoxide** (smart `cd`) — a cd that learns your most-used dirs so you can jump by partial name.' }
         [pscustomobject]@{ Label = 'fzf (fuzzy finder)'; Token = 'Fzf'; Install = 'winget'
             PackageId = 'junegunn.fzf'; Exe = 'fzf.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/junegunn/fzf'
             Help = '**fzf** (fuzzy finder) — a fast command-line fuzzy picker (full UI style; via PSFzf adds `Ctrl+T` file picker with a `bat` preview, `Ctrl+R` fuzzy history, and `Ctrl+G` git pickers); when on PATH, zoxide uses it for its interactive `cdi`/`zi` jump.' }
         [pscustomobject]@{ Label = 'fnm (Fast Node Manager)'; Token = 'Fnm'; Install = 'winget'
             PackageId = 'Schniz.fnm'; Exe = 'fnm.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/Schniz/fnm'
             Help = '**fnm** (Fast Node Manager) — install and switch between Node.js versions per project.' }
         [pscustomobject]@{ Label = 'xh (HTTP client)'; Token = 'Xh'; Install = 'winget'
             PackageId = 'ducaale.xh'; Exe = 'xh.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/ducaale/xh'
             Help = '**xh** (HTTP client) — a fast, friendly `curl`/HTTPie-style tool for making HTTP requests.' }
         [pscustomobject]@{ Label = 'jq (JSON processor)'; Token = 'Jq'; Install = 'winget'
             PackageId = 'jqlang.jq'; Exe = 'jq.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/jqlang/jq'
             Help = '**jq** (JSON processor) — a lightweight command-line JSON query and transformation tool.' }
         [pscustomobject]@{ Label = 'bat (cat replacement)'; Token = 'Bat'; Install = 'winget'
             PackageId = 'sharkdp.bat'; Exe = 'bat.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/sharkdp/bat'
             Help = '**bat** (cat replacement) — a `cat` with syntax highlighting and git integration; its theme blends with the prompt. You can replace the built-in `cat` with it.' }
         [pscustomobject]@{ Label = 'fd (file finder)'; Token = 'Fd'; Install = 'winget'
             PackageId = 'sharkdp.fd'; Exe = 'fd.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/sharkdp/fd'
             Help = '**fd** (file finder) — a fast, friendly `find` alternative that respects `.gitignore`; its colors blend with the prompt and, with fzf, drive fzf''s file search. Standalone — it does not replace `Get-ChildItem`.' }
         [pscustomobject]@{ Label = 'ripgrep (fast grep)'; Token = 'Ripgrep'; Install = 'winget'
             PackageId = 'BurntSushi.ripgrep.MSVC'; Exe = 'rg.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/BurntSushi/ripgrep'
             Help = '**ripgrep** (fast grep) — a very fast recursive search of file *contents* that respects `.gitignore` — the content-search counterpart to fd. Standalone — it does not replace `Select-String`.' }
         [pscustomobject]@{ Label = 'less (pager)'; Token = 'Less'; Install = 'winget'
             PackageId = 'jftuga.less'; Exe = 'less.exe'; PathDir = $null; Scope = $null
+            # GNU's own page, not the jftuga/less-Windows repackaging winget actually installs -- the
+            # GNU page is the authoritative usage docs, which is the point of linking at all.
+            Url = 'https://www.gnu.org/software/less/'
             Help = '**less** (pager) — a full-featured pager (color, search, backward scroll) that replaces the limited `more.com`; it is what lets `bat` page with color. You can route `help`/`more` and color CLIs through it.' }
         [pscustomobject]@{ Label = 'lazygit (git TUI)'; Token = 'Lazygit'; Install = 'winget'
             PackageId = 'JesseDuffield.lazygit'; Exe = 'lazygit.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/jesseduffield/lazygit'
             Help = '**lazygit** (git TUI) — a full-screen terminal UI for git: stage hunks, branch, rebase, and stash without leaving the shell.' }
         [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; Install = 'winget'
             PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; PathDir = $null; Scope = $null
+            Url = 'https://github.com/astral-sh/uv'
             Help = '**uv** (Python toolchain) — one fast binary for Python packages, virtualenvs, and interpreters; `uvx` runs a tool without installing it.' }
     )
 

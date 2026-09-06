@@ -17,6 +17,7 @@ function Get-PwshProfileModuleCatalog {
           Detail — $null when the module is always installed; otherwise the condition under which it
                    is fetched, shown INSTEAD of a flat "will install" so the list never promises an
                    install that may not happen (DockerCompletion on a machine with no docker, say).
+          Url    — the project's homepage or repo, for the wizard's clickable inventory rows.
 
         Rows are in the order the profile reaches them: PwshSpectreConsole at module import, then the
         startup modules, then the three conditional ones.
@@ -43,18 +44,20 @@ function Get-PwshProfileModuleCatalog {
     # Latest, where reading a property a row omitted throws rather than returning $null.
     @(
         [pscustomobject]@{ Name = 'PwshSpectreConsole'; Label = 'PwshSpectreConsole (console UI)'
-            Detail = $null }
+            Detail = $null; Url = 'https://github.com/ShaunLawrie/PwshSpectreConsole' }
         [pscustomobject]@{ Name = 'Terminal-Icons'; Label = 'Terminal-Icons (file icons)'
-            Detail = $null }
+            Detail = $null; Url = 'https://github.com/devblackops/Terminal-Icons' }
         [pscustomobject]@{ Name = 'posh-git'; Label = 'posh-git (git in the prompt)'
-            Detail = $null }
+            Detail = $null; Url = 'https://github.com/dahlbyk/posh-git' }
         [pscustomobject]@{ Name = 'PSFzf'; Label = 'PSFzf (fzf key bindings)'
-            Detail = $null }
+            Detail = $null; Url = 'https://github.com/kelleyma49/PSFzf' }
         [pscustomobject]@{ Name = 'Microsoft.WinGet.Client'; Label = 'Microsoft.WinGet.Client (winget installs)'
-            Detail = 'only when a winget install or setting needs it' }
+            Detail = 'only when a winget install or setting needs it'
+            Url = 'https://github.com/microsoft/winget-cli' }
         [pscustomobject]@{ Name = 'NerdFonts'; Label = 'NerdFonts (font downloads)'
-            Detail = 'only if you opt into Nerd Fonts' }
+            Detail = 'only if you opt into Nerd Fonts'; Url = 'https://github.com/PSModule/NerdFonts' }
         [pscustomobject]@{ Name = 'DockerCompletion'; Label = 'DockerCompletion (docker completion)'
-            Detail = 'only when `docker` is on PATH' }
+            Detail = 'only when `docker` is on PATH'
+            Url = 'https://github.com/matt9ucci/DockerCompletion' }
     )
 }

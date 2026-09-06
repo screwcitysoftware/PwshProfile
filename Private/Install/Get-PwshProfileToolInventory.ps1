@@ -36,6 +36,9 @@ function Get-PwshProfileToolInventory {
         PathDir and Scope are carried through untouched so Install-PwshProfile can forward them. They
         are $null for a portable; dropping them would send git and oh-my-posh to the shared Links
         directory, so the install would land elsewhere and the post-install PATH re-check would warn.
+
+        Url is carried through untouched too — Show-PwshProfileInventory renders it as a clickable
+        link on the row's label.
     #>
     [CmdletBinding()]
     param()
@@ -48,6 +51,7 @@ function Get-PwshProfileToolInventory {
             Exe       = $tool.Exe
             PathDir   = $tool.PathDir
             Scope     = $tool.Scope
+            Url       = $tool.Url
             Installed = [bool](Test-CommandAvailable -Name $tool.Exe)
         }
     }

@@ -16,7 +16,8 @@ function Get-PwshProfileModuleInventory {
         continue path, which is the same answer both would have given before.
 
         Detail is carried through untouched: it is what the renderer shows in place of "will install"
-        for a module that is only fetched under some condition.
+        for a module that is only fetched under some condition. Url is carried through untouched too —
+        Show-PwshProfileInventory renders it as a clickable link on the row's label.
 
     .EXAMPLE
         Get-PwshProfileModuleInventory
@@ -36,6 +37,7 @@ function Get-PwshProfileModuleInventory {
             Name      = $module.Name
             Label     = $module.Label
             Detail    = $module.Detail
+            Url       = $module.Url
             Installed = [bool](Test-ModuleAvailable -Name $module.Name)
         }
     }
