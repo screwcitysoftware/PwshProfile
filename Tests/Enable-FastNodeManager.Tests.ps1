@@ -30,7 +30,7 @@ Describe 'Enable-FastNodeManager' {
         $script:savedLoc = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
         $script:savedPwd = $PWD
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $null
-        Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_file -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_stamp -Scope Global -ErrorAction SilentlyContinue
 
         # An isolated temp tree with two real directories to move between: one IS a Node project
         # (carries a .node-version file), one is not. The hook only spawns fnm when the resolved
@@ -52,7 +52,7 @@ Describe 'Enable-FastNodeManager' {
         # shim can't leak into a later test file if a test throws — a leaked Out-Host reading the
         # cleared $global:OutHostHits breaks every later test under StrictMode (how CI runs).
         Remove-Item Function:fnm, Function:Out-Host -ErrorAction SilentlyContinue
-        Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan, __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_file -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan, __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_stamp -Scope Global -ErrorAction SilentlyContinue
     }
 
     It 'registers a location hook even when zoxide is absent' {
@@ -95,6 +95,25 @@ Describe 'Enable-FastNodeManager' {
         New-Item -ItemType Directory -Path $deep -Force | Out-Null
         Set-Location $deep
         $global:FnmUseCalls | Should -Be 0
+    }
+
+    It 'runs fnm again when a version file is edited, even without leaving the project' {
+        # The stamp carries each version file's write time, not just its path. Without that, bumping
+        # .node-version and cd-ing to a subdirectory would silently keep the old node version until
+        # you left the project and came back.
+        Enable-FastNodeManager
+        Set-Location $script:nodeDir
+        $global:FnmUseCalls = 0
+
+        $versionFile = Join-Path $script:nodeDir '.node-version'
+        Set-Content -LiteralPath $versionFile -Value 'v22.0.0'
+        # Stamp an explicit time rather than relying on filesystem clock granularity.
+        [System.IO.File]::SetLastWriteTimeUtc($versionFile, (Get-Date).ToUniversalTime().AddMinutes(1))
+
+        $deep = Join-Path $script:nodeDir 'src'
+        New-Item -ItemType Directory -Path $deep -Force | Out-Null
+        Set-Location $deep
+        $global:FnmUseCalls | Should -Be 1
     }
 
     It 'chains a pre-existing LocationChangedAction' {

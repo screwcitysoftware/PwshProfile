@@ -18,14 +18,18 @@ function Enable-FastNodeManager {
         after *any* location change — `cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..` —
         so it works whether or not zoxide is enabled and regardless of zoxide's jump command.
         Spawning fnm costs roughly 41ms, and paying that on every `cd` is latency you feel, so the
-        hook first walks up for the files fnm itself reads — `.nvmrc`, `.node-version`,
-        `package.json` — at about 3ms, and runs `fnm use --silent-if-unchanged` only when the
-        resolved file differs from the last one. Unchanged means fnm would resolve identically.
+        hook first walks up for the files fnm itself reads — `.nvmrc`, `.node-version`, `package.json` —
+        at about 2ms, stamping each with its write time, and runs `fnm use --silent-if-unchanged`
+        only when that stamp changes. Unchanged means fnm would resolve identically.
 
-        The gate compares the resolved file rather than merely checking whether one exists, because
-        fnm reverts to the default version on the way OUT of a project: skipping the call just
-        because the new directory has no version file would strand the project's version after you
-        cd away. Moving deeper inside one project, or between two non-Node directories, is skipped.
+        Three details make the gate correct. It compares the stamp rather than merely checking
+        whether a version file exists, because fnm reverts to the default on the way OUT of a
+        project — skipping there would strand the project's version after you cd away. It includes
+        the write time, so bumping a pinned version is picked up on the next cd rather than only
+        after leaving and re-entering. And it stamps every version file up the chain, since a nearer
+        `package.json` without an `engines.node` field does not stop fnm resolving a `.nvmrc`
+        further up. Moving inside one project without editing, or between two non-Node directories,
+        is skipped.
 
         It chains any pre-existing LocationChangedAction and is guarded against re-registering on
         profile reload.
@@ -67,8 +71,8 @@ if (-not (Get-Variable -Name __fnm_loc_hooked -Scope Global -ErrorAction Silentl
     $global:__fnm_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
     $global:__fnm_loc_hooked = $true
 }
-if (-not (Get-Variable -Name __fnm_last_version_file -Scope Global -ErrorAction SilentlyContinue)) {
-    $global:__fnm_last_version_file = $null
+if (-not (Get-Variable -Name __fnm_last_version_stamp -Scope Global -ErrorAction SilentlyContinue)) {
+    $global:__fnm_last_version_stamp = $null
 }
 $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     param($source, $eventArgs)
@@ -79,28 +83,37 @@ $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     $new = $eventArgs.NewPath
     if (-not $new -or $new.Provider.Name -ne 'FileSystem') { return }
 
-    # Resolve the version file fnm would find, walking up as its recursive strategy does. Spawning
-    # fnm costs ~41ms on EVERY directory change; this walk costs ~3ms. The file list must cover at
-    # least what fnm reads -- verified as .nvmrc, .node-version and package.json (engines.node).
-    # Erring wide only costs a redundant spawn; erring narrow leaves the wrong node version active.
-    $found = $null
+    # Stamp what fnm would see, walking up as its recursive strategy does. Spawning fnm costs ~41ms on
+    # EVERY directory change; this walk costs ~2ms. The file list must cover at least what fnm reads --
+    # verified as .nvmrc, .node-version and package.json (engines.node). Erring wide only costs a
+    # redundant spawn; erring narrow leaves the wrong node version active.
+    #
+    # Every version file up the chain is stamped, not just the nearest: a closer package.json without
+    # an engines.node field does not stop fnm resolving a .nvmrc further up, so tracking only the first
+    # match would miss an edit to the file actually in effect. The write time is part of the stamp so
+    # bumping a pinned version is picked up on the next cd, rather than only after leaving and
+    # re-entering the project.
+    $parts = [System.Collections.Generic.List[string]]::new()
     $dir = $new.ProviderPath
     while ($dir) {
         foreach ($name in '.nvmrc', '.node-version', 'package.json') {
-            if ([System.IO.File]::Exists((Join-Path $dir $name))) { $found = Join-Path $dir $name; break }
+            $candidate = Join-Path $dir $name
+            if ([System.IO.File]::Exists($candidate)) {
+                $parts.Add($candidate + '|' + [System.IO.File]::GetLastWriteTimeUtc($candidate).Ticks)
+            }
         }
-        if ($found) { break }
         $parent = Split-Path $dir -Parent
         if (-not $parent -or $parent -eq $dir) { break }
         $dir = $parent
     }
+    $stamp = $parts -join "`n"
 
-    # Only call fnm when the resolved file changes. Unchanged means fnm would resolve identically, so
-    # the spawn is pure cost. Crucially this still fires on the way OUT of a project (path -> $null),
-    # which is what reverts to the default version -- a naive "skip when no version file" would leave
-    # the project's version active after you cd away.
-    if ($found -ne $global:__fnm_last_version_file) {
-        $global:__fnm_last_version_file = $found
+    # Only call fnm when that stamp changes. Unchanged means fnm would resolve identically, so the
+    # spawn is pure cost. Crucially an empty stamp still differs from a non-empty one, so this fires on
+    # the way OUT of a project -- the transition that reverts to the default version. A naive "skip
+    # when no version file" would leave the project's version active after you cd away.
+    if ($stamp -ne $global:__fnm_last_version_stamp) {
+        $global:__fnm_last_version_stamp = $stamp
         fnm use --silent-if-unchanged | Out-Host
     }
 }

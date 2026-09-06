@@ -948,10 +948,11 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   strategy) and completions, and registers a `LocationChangedAction` hook that fires on every
   directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). Spawning fnm costs
   ~41ms, so rather than pay that on every `cd` the hook walks up for the files fnm reads (`.nvmrc`,
-  `.node-version`, `package.json`, ~3ms) and runs `fnm use --silent-if-unchanged` only when the
-  resolved file **changes** — which still fires on the way *out* of a project, the transition that
-  reverts to the default version. Moving deeper inside one project, or between two non-Node
-  directories, spawns nothing. It fires with or without zoxide and regardless of zoxide's jump command — chaining
+  `.node-version`, `package.json`, ~2ms), stamps each with its write time, and runs
+  `fnm use --silent-if-unchanged` only when that stamp **changes** — which still fires on the way
+  *out* of a project (the transition that reverts to the default) and when a version file is edited
+  in place. Moving inside one project without editing, or between two non-Node directories, spawns
+  nothing. It fires with or without zoxide and regardless of zoxide's jump command — chaining
   any existing `LocationChangedAction` (including zoxide's, which is registered the same way) and not
   re-registering on reload — so there's no ordering requirement relative to `Enable-Zoxide`.
 - **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
