@@ -955,11 +955,14 @@ Describe 'Install-PwshProfile' {
         Mock -ModuleName $script:Module Format-SpectrePanel { } -RemoveParameterType 'Color'
         Mock -ModuleName $script:Module Write-SpectreHost { }
         Mock -ModuleName $script:Module Show-NerdFontSetup { }
+        # The installer now installs the tool CLIs itself. Stub the shared winget helper so the suite
+        # never touches winget -- without this every run would attempt the whole catalog.
+        Mock -ModuleName $script:Module Install-WingetPackageSafe { }
         Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
             }
         }
     }
@@ -1007,7 +1010,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = @('Meslo', 'CascadiaCode')
+                NoBanner = $false; NerdFont = @('Meslo', 'CascadiaCode')
             }
         }
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
@@ -1027,7 +1030,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = @('Meslo')
+                NoBanner = $false; NerdFont = @('Meslo')
             }
         }
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
@@ -1047,7 +1050,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 WingetScope = 'user'; WingetProgressBar = 'retro'
                 WingetAnonymizePath = $true; WingetDisableInstallNote = $false
             }
@@ -1068,7 +1071,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 WingetScope = 'user'; WingetProgressBar = 'rainbow'
                 WingetAnonymizePath = $true; WingetDisableInstallNote = $false
             }
@@ -1080,12 +1083,58 @@ Describe 'Install-PwshProfile' {
         Should -Invoke -ModuleName $script:Module Set-WingetSetting -Times 0 -Exactly
     }
 
+    It 'installs every winget tool in the catalog, from the catalog metadata' {
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        $expected = & (Get-Module $script:Module) { @((Get-PwshProfileToolCatalog)['WinGet']) }
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe `
+            -Times $expected.Count -Exactly
+        foreach ($tool in $expected) {
+            Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 1 -Exactly `
+                -ParameterFilter { $Id -eq $tool.PackageId -and $Exe -eq $tool.Exe }
+        }
+        # Install-time chrome is a gear, independent of the runtime step icon being configured.
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+            -ParameterFilter { $Description -like 'Tools (*packages)' -and $Icon -eq ':gear:' }
+    }
+
+    It 'installs no tools under -WhatIf' {
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 0 -Exactly
+    }
+
+    It 'installs the tools after the winget settings are applied' {
+        # Scope and progress-bar preferences must be in place before installing through winget, so the
+        # ordering is load-bearing rather than incidental.
+        Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
+            @{
+                BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
+                BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
+                NoBanner = $false; NerdFont = $null
+                WingetScope = 'user'; WingetProgressBar = 'rainbow'
+                WingetAnonymizePath = $true; WingetDisableInstallNote = $false
+            }
+        }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        $script:Order = [System.Collections.Generic.List[string]]::new()
+        Mock -ModuleName $script:Module Set-WingetSetting { $script:Order.Add('settings') }
+        Mock -ModuleName $script:Module Install-WingetPackageSafe { $script:Order.Add('install') }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        $script:Order[0] | Should -Be 'settings'
+        $script:Order | Should -Contain 'install'
+    }
+
     It 'sets the Windows Terminal font via Set-WindowsTerminalFont when opted in' {
         Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 SetTerminalFont = $true
             }
         }
@@ -1105,7 +1154,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 SetTerminalFont = $false
             }
         }
@@ -1121,7 +1170,7 @@ Describe 'Install-PwshProfile' {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 SetTerminalFont = $true
             }
         }
@@ -1138,7 +1187,7 @@ Describe 'Install-PwshProfile' {
                 Theme = 'forestcity'; CustomTheme = ''
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 InstallTerminalScheme = $true; SetSchemeDefault = $true
             }
         }
@@ -1159,7 +1208,7 @@ Describe 'Install-PwshProfile' {
                 Theme = 'screwcity'; CustomTheme = ''
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 InstallTerminalScheme = $true; SetSchemeDefault = $false
             }
         }
@@ -1177,7 +1226,7 @@ Describe 'Install-PwshProfile' {
                 Theme = 'screwcity'; CustomTheme = ''
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 InstallTerminalScheme = $false; SetSchemeDefault = $false
             }
         }
@@ -1194,7 +1243,7 @@ Describe 'Install-PwshProfile' {
                 Theme = 'screwcity'; CustomTheme = ''
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
                 BannerFont = 'ANSIShadow'; StepIcon = ':nut_and_bolt:'; ZoxideCommand = 'cd'
-                Enable = @(); EnableAll = $false; NoBanner = $false; NerdFont = $null
+                NoBanner = $false; NerdFont = $null
                 InstallTerminalScheme = $true; SetSchemeDefault = $true
             }
         }

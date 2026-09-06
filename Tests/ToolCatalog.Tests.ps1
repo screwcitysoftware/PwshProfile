@@ -57,6 +57,42 @@ Describe 'Get-PwshProfileToolCatalog' {
         $p.ContainsKey('EnableAll') | Should -BeFalse
     }
 
+    It 'carries PackageId and Exe on exactly the winget rows' {
+        $sections = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog }
+        $rows = @(foreach ($k in $sections.Keys) { $sections[$k] })
+        foreach ($row in $rows) {
+            if ($row.Install -eq 'winget') {
+                $row.PackageId | Should -Not -BeNullOrEmpty -Because "'$($row.Token)' is a winget install"
+                $row.Exe | Should -Not -BeNullOrEmpty -Because "'$($row.Token)' is a winget install"
+            }
+            else {
+                $row.PackageId | Should -BeNullOrEmpty -Because "'$($row.Token)' is not a winget install"
+                $row.Exe | Should -BeNullOrEmpty -Because "'$($row.Token)' is not a winget install"
+            }
+        }
+    }
+
+    It 'matches the package each Enable-* actually installs (anti-drift)' {
+        # Install-PwshProfile installs from the catalog while startup installs from the enabler, so a
+        # disagreement would have setup install one package and the first shell install another. This
+        # replaces the catalog<->ValidateSet check that went away with -Enable.
+        #
+        # Token -> function is by convention (Enable-<Token>) with one deliberate exception: Fnm's
+        # enabler is spelled out as Enable-FastNodeManager.
+        $override = @{ Fnm = 'Enable-FastNodeManager' }
+        $toolsDir = Join-Path $PSScriptRoot '..' 'Public' 'Tools'
+        $sections = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog }
+        foreach ($row in $sections['WinGet']) {
+            $fn = if ($override.ContainsKey($row.Token)) { $override[$row.Token] } else { "Enable-$($row.Token)" }
+            $path = Join-Path $toolsDir "$fn.ps1"
+            Test-Path -LiteralPath $path |
+                Should -BeTrue -Because "the catalog row '$($row.Token)' should map to $fn.ps1"
+            $src = Get-Content -LiteralPath $path -Raw
+            $src | Should -BeLike "*'$($row.PackageId)'*" -Because "$fn should install '$($row.PackageId)'"
+            $src | Should -BeLike "*'$($row.Exe)'*" -Because "$fn should probe for '$($row.Exe)'"
+        }
+    }
+
     It 'gives every token a unique, non-empty label' {
         $sections = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog }
         $rows = @(foreach ($k in $sections.Keys) { $sections[$k] })

@@ -481,11 +481,16 @@ them.
 ### `Install-PwshProfile`
 
 A one-time, re-runnable setup wizard (built on PwshSpectreConsole) that writes the module's
-bootstrap — a tools snapshot comment plus a tailored `Initialize-PwshProfile` call (no `Import-Module`
+bootstrap — a guidance comment plus a tailored `Initialize-PwshProfile` call (no `Import-Module`
 line; the call auto-loads the module) — into a profile file, wrapped in managed marker comments. By
-default it targets `$PROFILE`. On a re-run it reads the existing block to pre-fill your prior choices
-and flag tools added since. It **wires the module into your profile file**; it does not install the
+default it targets `$PROFILE`. On a re-run it reads the existing block to pre-fill your prior choices.
+It **wires the module into your profile file**; it does not install the
 module itself from the gallery (use `Install-PSResource ScrewCitySoftware.PwshProfile` for that).
+
+It also **installs the tool CLIs**, so the first shell after setup starts fast — every `Enable-*`
+install step then short-circuits on `Get-Command`. The packages come from the tool catalog rather than
+from calling the `Enable-*` functions, which would also *wire* the setup session (aliasing `cat`,
+rebinding `cd`) halfway through the wizard.
 
 Each step opens with a rounded header panel — its title, a `step N of 6` progress counter, and a
 short description — and secondary prompts carry an indented hint line beneath them (the feature step
@@ -539,6 +544,12 @@ The wizard walks one forward pass, then lets you revise anything before committi
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
+
+On submit it applies the one-time machine actions — the Nerd Font install, the winget client settings,
+**the tool CLIs** (one timed step per package, after the winget settings so your scope and progress-bar
+preferences are already in place), and the Windows Terminal font/scheme — then writes the bootstrap.
+None of them are part of the block, so re-running re-applies them, and `-WhatIf` previews the whole run
+without installing or writing anything.
 
 Your existing profile is never destroyed:
 

@@ -16,10 +16,15 @@ function Install-PwshProfile {
         writing. On a re-run it parses the existing block to default each prompt to your previous
         choices.
 
-        The Nerd Font install (NerdFonts module, CurrentUser scope, no admin), the winget settings, and
-        the Windows Terminal font/scheme are one-time machine actions applied at the end of the run,
-        not part of the bootstrap block — so re-running re-applies them, and -WhatIf previews without
-        touching anything.
+        The Nerd Font install (NerdFonts module, CurrentUser scope, no admin), the winget settings, the
+        tool CLIs, and the Windows Terminal font/scheme are one-time machine actions applied at the end
+        of the run, not part of the bootstrap block — so re-running re-applies them, and -WhatIf
+        previews without touching anything.
+
+        Installing the tools here rather than at startup is what keeps the first shell fast: every
+        Enable-* Install substep then short-circuits on Get-Command. The packages come from
+        Get-PwshProfileToolCatalog's winget rows, not from calling the Enable-* functions, which would
+        also wire this session — aliasing cat, rebinding cd — in the middle of setup.
 
         Your existing profile code is never destroyed:
           - A new file (and its parent directory) is created if needed.
@@ -70,7 +75,7 @@ function Install-PwshProfile {
         managed block is rewritten in place.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '',
-        Justification = 'SupportsShouldProcess is declared so -WhatIf/-Confirm are accepted and flow via $WhatIfPreference into the gated writer Write-PwshProfileBlock (and the -not $WhatIfPreference guards on the font/winget steps); this function intentionally delegates rather than calling ShouldProcess itself. Covered by the -WhatIf tests.')]
+        Justification = 'SupportsShouldProcess is declared so -WhatIf/-Confirm are accepted and flow via $WhatIfPreference into the gated writer Write-PwshProfileBlock (and the -not $WhatIfPreference guards on the font, winget-settings, tool-install and Windows Terminal steps); this function intentionally delegates rather than calling ShouldProcess itself. Covered by the -WhatIf tests.')]
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Position = 0)]
@@ -162,6 +167,30 @@ function Install-PwshProfile {
         Invoke-Step 'Winget settings' -Icon ':gear:' {
             Set-WingetSetting -Scope $settings.WingetScope -ProgressBar $settings.WingetProgressBar `
                 -AnonymizePath $settings.WingetAnonymizePath -DisableInstallNote $settings.WingetDisableInstallNote
+        }
+    }
+
+    # Install the tool CLIs up front, so the first shell after setup finds them already present and
+    # every Enable-* Install substep short-circuits on Get-Command. Deliberately AFTER the winget
+    # settings step -- scope and progress-bar preferences must be in place before installing through
+    # winget -- and deliberately NOT by calling the Enable-* functions, which would also *wire* this
+    # session (aliasing cat, rebinding cd) halfway through the wizard. The package metadata comes
+    # from the catalog instead; Tests/ToolCatalog.Tests.ps1 holds it to what the enablers pass.
+    #
+    # Skipped under -WhatIf. A tool that is already present costs one Get-Command; a failed install
+    # warns from Install-WingetPackageSafe and startup installs it later, so nothing here throws.
+    if (-not $WhatIfPreference) {
+        $wingetTools = @((Get-PwshProfileToolCatalog)['WinGet'])
+        if ($wingetTools.Count -gt 0) {
+            Invoke-Step "Tools ($($wingetTools.Count) packages)" -Icon ':gear:' {
+                foreach ($tool in $wingetTools) {
+                    # Nested step per package, so a slow first-time install is attributable.
+                    Invoke-Step $tool.Token {
+                        Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
+                            -CallerName 'Install-PwshProfile'
+                    }
+                }
+            }
         }
     }
 
