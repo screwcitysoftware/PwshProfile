@@ -25,19 +25,22 @@ BeforeAll {
 }
 
 Describe 'Build-PwshProfileInitializeCall' {
-    It 'pins an empty -Enable for default settings (nothing selected yet)' {
+    It 'emits a bare call when nothing differs from the defaults' {
+        # Every tool runs, so there is no tool pin to emit and a default install carries no arguments
+        # at all. Guards the join: interpolating an empty part list would leave a trailing space.
         InModuleScope $script:Module {
-            Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault) |
-                Should -Be 'Initialize-PwshProfile -Enable @()'
+            $call = Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault)
+            $call | Should -Be 'Initialize-PwshProfile'
+            $call | Should -Not -Match '\s$'
         }
     }
 
-    It 'emits only changed scalar parameters, single-quoted (plus the always-emitted -Enable)' {
+    It 'emits only changed scalar parameters, single-quoted' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.BannerColor = '#00d7ff'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff' -Enable @()"
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
         }
     }
 
@@ -47,7 +50,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s.BannerFont = 'ANSIShadow'   # the default — should be omitted
             $s.BannerColor = '#00d7ff'     # a non-default dimension
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff' -Enable @()"
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
         }
     }
 
@@ -56,25 +59,18 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.BannerFont = 'Doom'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerFont 'Doom' -Enable @()"
+                Should -Be "Initialize-PwshProfile -BannerFont 'Doom'"
         }
     }
 
-    It 'emits -Enable as comma-joined tokens for a chosen set' {
+    It 'ignores stray keys a caller left in the settings hashtable' {
+        # Build projects from the schema, so a key that is not a settable parameter (a leftover from
+        # an older profile, say) is simply not emitted rather than rendered as a bogus argument.
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.Enable = @('Zoxide', 'Bat')
-            Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -Enable Zoxide,Bat'
-        }
-    }
-
-    It 'emits -EnableAll (and no -Enable) when set' {
-        InModuleScope $script:Module {
-            $s = Get-PwshProfileDefault
             $s.EnableAll = $true
-            Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -EnableAll'
+            Build-PwshProfileInitializeCall -Setting $s | Should -Be 'Initialize-PwshProfile'
         }
     }
 
@@ -83,7 +79,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.StepIcon = ":o'clock:"
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -StepIcon ':o''clock:' -Enable @()"
+                Should -Be "Initialize-PwshProfile -StepIcon ':o''clock:'"
         }
     }
 
@@ -94,7 +90,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.BannerText = '$env:USERNAME'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -BannerText "$env:USERNAME" -Enable @()'
+                Should -Be 'Initialize-PwshProfile -BannerText "$env:USERNAME"'
         }
     }
 
@@ -103,7 +99,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.BannerText = 'Say "hi"'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -BannerText "Say `"hi`"" -Enable @()'
+                Should -Be 'Initialize-PwshProfile -BannerText "Say `"hi`""'
         }
     }
 
@@ -113,14 +109,14 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s.NoBanner = $true
             $s.BannerColor = '#00d7ff'   # would be emitted, but is moot under -NoBanner
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -NoBanner -Enable @()'
+                Should -Be 'Initialize-PwshProfile -NoBanner'
         }
     }
 
     It 'emits only -Theme for a forestcity default (its branding is the themed baseline)' {
         InModuleScope $script:Module {
             Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity) |
-                Should -Be 'Initialize-PwshProfile -Theme forestcity -Enable @()'
+                Should -Be 'Initialize-PwshProfile -Theme forestcity'
         }
     }
 
@@ -129,7 +125,7 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault -Theme forestcity
             $s.BannerColor = '#00d7ff'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -Theme forestcity -BannerColor '#00d7ff' -Enable @()"
+                Should -Be "Initialize-PwshProfile -Theme forestcity -BannerColor '#00d7ff'"
         }
     }
 
@@ -138,37 +134,25 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s = Get-PwshProfileDefault
             $s.CustomTheme = '~/my.omp.json'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -CustomTheme '~/my.omp.json' -Enable @()"
+                Should -Be "Initialize-PwshProfile -CustomTheme '~/my.omp.json'"
         }
     }
 
-    It 'emits -ReplaceCat when opted in and bat is enabled' {
+    It 'emits -ReplaceCat when opted in' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.ReplaceCat = $true
-            $s.Enable = @('Bat')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -ReplaceCat -Enable Bat'
+                Should -Be 'Initialize-PwshProfile -ReplaceCat'
         }
     }
 
-    It 'omits -ReplaceCat when bat is not enabled (gated)' {
-        InModuleScope $script:Module {
-            $s = Get-PwshProfileDefault
-            $s.ReplaceCat = $true
-            $s.Enable = @('Zoxide')
-            Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -Enable Zoxide'
-        }
-    }
-
-    It 'emits -ReplaceMore when opted in and less is enabled' {
+    It 'emits -ReplaceMore when opted in' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.ReplaceMore = $true
-            $s.Enable = @('Less')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -ReplaceMore -Enable Less'
+                Should -Be 'Initialize-PwshProfile -ReplaceMore'
         }
     }
 
@@ -178,74 +162,59 @@ Describe 'Build-PwshProfileInitializeCall' {
             $s.ReplaceCat = $false
             $s.BannerColor = '#00d7ff'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff' -Enable @()"
+                Should -Be "Initialize-PwshProfile -BannerColor '#00d7ff'"
         }
     }
 
     It 'does not emit the default bat theme/style' {
         InModuleScope $script:Module {
             Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity) |
-                Should -Be 'Initialize-PwshProfile -Theme forestcity -Enable @()'
+                Should -Be 'Initialize-PwshProfile -Theme forestcity'
         }
     }
 
-    It 'emits a non-default -BatTheme and -BatStyle when bat is enabled' {
+    It 'emits a non-default -BatTheme and -BatStyle' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.BatTheme = 'Nord'
             $s.BatStyle = 'plain'
-            $s.Enable = @('Bat')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain' -Enable Bat"
+                Should -Be "Initialize-PwshProfile -BatTheme 'Nord' -BatStyle 'plain'"
         }
     }
 
-    It 'emits a bare -FzfGitKeyBindings only when turned on and fzf is enabled' {
+    It 'emits a bare -FzfGitKeyBindings only when turned on' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.FzfGitKeyBindings = $true
-            $s.Enable = @('Fzf')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -FzfGitKeyBindings -Enable Fzf'
-        }
-    }
-
-    It 'omits -FzfGitKeyBindings when fzf is not enabled (gated)' {
-        InModuleScope $script:Module {
-            $s = Get-PwshProfileDefault
-            $s.FzfGitKeyBindings = $true
-            $s.Enable = @('Zoxide')
-            Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -Enable Zoxide'
+                Should -Be 'Initialize-PwshProfile -FzfGitKeyBindings'
         }
     }
 
     It 'omits -FzfGitKeyBindings at its default (off)' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
-            $s.Enable = @('Fzf')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -Enable Fzf'
+                Should -Be 'Initialize-PwshProfile'
         }
     }
 
-    It 'emits a non-default -FzfTabChord when fzf is enabled, single-quoted' {
+    It 'emits a non-default -FzfTabChord, single-quoted' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
             $s.FzfTabChord = 'Ctrl+j'
-            $s.Enable = @('Fzf')
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be "Initialize-PwshProfile -FzfTabChord 'Ctrl+j' -Enable Fzf"
+                Should -Be "Initialize-PwshProfile -FzfTabChord 'Ctrl+j'"
         }
     }
 
     It 'omits -FzfTabChord at its default (Ctrl+Spacebar)' {
         InModuleScope $script:Module {
             $s = Get-PwshProfileDefault
-            $s.Enable = @('Fzf')
             $s.FzfTabChord = 'Ctrl+Spacebar'
             Build-PwshProfileInitializeCall -Setting $s |
-                Should -Be 'Initialize-PwshProfile -Enable Fzf'
+                Should -Be 'Initialize-PwshProfile'
         }
     }
 
@@ -276,7 +245,6 @@ Describe 'Build-PwshProfileInitializeCall' {
                     $s.ReplaceMore = $true
                     $s.FzfGitKeyBindings = $true
                     $s.FzfTabChord = 'Ctrl+j'
-                    $s.Enable = @('Zoxide', 'Bat', 'Less', 'Fzf')
                     $s
                 }
             }
@@ -290,22 +258,7 @@ Describe 'Build-PwshProfileInitializeCall' {
                     "Initialize-PwshProfile -Theme forestcity -BannerText `"ROUNDTRIP`" " +
                     "-BannerColor '#123456' -BannerAlignment 'Center' -BannerFont 'Small' " +
                     "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
-                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings " +
-                    "-Enable Zoxide,Bat,Less,Fzf")
-            }
-        }
-
-        It 'puts -EnableAll in the tool-selection slot, replacing -Enable' {
-            $s = script:NonDefaultSetting
-            $s.EnableAll = $true
-            InModuleScope $script:Module -Parameters @{ S = $s } {
-                param($S)
-                Build-PwshProfileInitializeCall -Setting $S | Should -Be (
-                    "Initialize-PwshProfile -Theme forestcity -BannerText `"ROUNDTRIP`" " +
-                    "-BannerColor '#123456' -BannerAlignment 'Center' -BannerFont 'Small' " +
-                    "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
-                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings " +
-                    "-EnableAll")
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings")
             }
         }
 
@@ -317,8 +270,7 @@ Describe 'Build-PwshProfileInitializeCall' {
                 Build-PwshProfileInitializeCall -Setting $S | Should -Be (
                     "Initialize-PwshProfile -Theme forestcity -NoBanner " +
                     "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
-                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings " +
-                    "-Enable Zoxide,Bat,Less,Fzf")
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings")
             }
         }
 
@@ -332,7 +284,7 @@ Describe 'Build-PwshProfileInitializeCall' {
                     "-BannerText `"ROUNDTRIP`" -BannerColor '#123456' -BannerAlignment 'Center' " +
                     "-BannerFont 'Small' -StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' " +
                     "-BatStyle 'full' -FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore " +
-                    "-FzfGitKeyBindings -Enable Zoxide,Bat,Less,Fzf")
+                    "-FzfGitKeyBindings")
             }
         }
     }
@@ -518,12 +470,12 @@ Describe 'Write-PwshProfileBlock' {
         $r.Changed | Should -BeTrue
     }
 
-    It 'writes both markers, the tools snapshot, and the call (no Import-Module)' {
+    It 'writes both markers and the call (no Import-Module)' {
         Invoke-Writer -Path $script:Dest | Out-Null
         $c = Get-Content -LiteralPath $script:Dest -Raw
         $c | Should -Match '# >>> ScrewCitySoftware\.PwshProfile bootstrap >>>'
         $c | Should -Match '# <<< ScrewCitySoftware\.PwshProfile bootstrap <<<'
-        $c | Should -Match '# Tools available:'
+
         $c | Should -Match 'Initialize-PwshProfile'
         $c | Should -Not -Match 'Import-Module ScrewCitySoftware\.PwshProfile'
     }
@@ -562,7 +514,7 @@ Describe 'Write-PwshProfileBlock' {
     It 'replaces an existing managed block in place on re-run, preserving surrounding content' {
         New-Item -ItemType Directory -Path $script:Dir | Out-Null
         Set-Content -LiteralPath $script:Dest -Value "# top comment`nWrite-Host 'mine'"
-        Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile -Enable Zoxide' | Out-Null
+        Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile' | Out-Null
         $r2 = Invoke-Writer -Path $script:Dest -Call 'Initialize-PwshProfile -Enable Xh'
         $c = Get-Content -LiteralPath $script:Dest -Raw
         ([regex]::Matches($c, '# >>> ScrewCitySoftware\.PwshProfile bootstrap >>>')).Count | Should -Be 1
@@ -641,62 +593,41 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Default install scope (winget)' }
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Winget progress bar style' }
             # Features: pick-specific mode by default, with the tree returning everything enabled.
-            Mock Read-SpectreSelection { 'Pick specific tools' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'How should startup tools be selected?' }
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Ripgrep', 'Less', 'Lazygit', 'Completions') } -RemoveParameterType 'Color'
             # Hub: submit (the first choice).
             Mock Read-SpectreSelection { $Choices[0] } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'What would you like to do?' }
         }
     }
 
-    It 'enables every tool (and no EnableAll) when the whole tree stays checked' {
+    It 'returns the screwcity defaults when every prompt is left alone' {
         InModuleScope $script:Module {
             $s = Invoke-PwshProfileWizard
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
             $s.BannerColor | Should -Be '#4c81c8'
             $s.StepIcon | Should -Be ':nut_and_bolt:'
-            @($s.Enable) | Should -Be @(Get-PwshProfileToolCatalog -Token)
-            $s.EnableAll | Should -BeFalse
             $s.NoBanner | Should -BeFalse
             $s.NerdFont | Should -BeNullOrEmpty
         }
     }
 
-    It 'maps the checked features to -Enable, in catalog order' {
+    It 'records the selection-prompt answers alongside the tool options' {
         InModuleScope $script:Module {
             Mock Read-SpectreSelection { 'Center' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Banner alignment' }
             Mock Read-SpectreSelection { [pscustomobject]@{ Label = 'x'; Icon = ':gear:' } } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Step marker icon' }
-            # Fnm, Xh and Completions left unchecked; the rest enabled.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Jq', 'Bat', 'Fd', 'Less') } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.StepIcon | Should -Be ':gear:'
             $s.BannerAlignment | Should -Be 'Center'
-            $s.Enable | Should -Contain 'Zoxide'
-            $s.Enable | Should -Contain 'Jq'
-            $s.Enable | Should -Not -Contain 'Fnm'
-            $s.Enable | Should -Not -Contain 'Xh'
-            $s.Enable | Should -Not -Contain 'Completions'
-            $s.EnableAll | Should -BeFalse
             $s.ZoxideCommand | Should -Be 'cd'
         }
     }
 
-    It 'enabling everything sets EnableAll and skips the tree' {
+    It 'returns no tool-selection keys at all' {
+        # Tool selection is gone: the wizard must not resurrect Enable/EnableAll, or Build would start
+        # emitting a pin again and Read would have nothing to parse it back with.
         InModuleScope $script:Module {
-            Mock Read-SpectreSelection { 'Enable everything, including tools added in future updates' } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'How should startup tools be selected?' }
-
             $s = Invoke-PwshProfileWizard
-            $s.EnableAll | Should -BeTrue
-            Should -Invoke Read-PwshProfileFeatureTree -Times 0 -Exactly
-        }
-    }
-
-    It 'prefills the feature tree from prior -Enable on a re-run' {
-        InModuleScope $script:Module {
-            $s = Invoke-PwshProfileWizard -PriorSetting @{ Enable = @('Zoxide', 'Bat') } -NewTool @('Jq')
-            Should -Invoke Read-PwshProfileFeatureTree -Times 1 -Exactly -ParameterFilter {
-                $Enabled['Zoxide'] -and $Enabled['Bat'] -and -not $Enabled['Fnm'] -and ($New -contains 'Jq')
-            }
+            $s.ContainsKey('Enable') | Should -BeFalse
+            $s.ContainsKey('EnableAll') | Should -BeFalse
         }
     }
 
@@ -714,37 +645,12 @@ Describe 'Invoke-PwshProfileWizard' {
             $s.ZoxideCommand | Should -Be 'z'
         }
     }
-    It 'on a clean first run pre-checks Core and leaves WinGet tools unchecked' {
-        InModuleScope $script:Module {
-            # No PriorSetting -> first run: the tree opens with non-winget (Core) tokens checked and
-            # the winget tools unchecked.
-            $s = Invoke-PwshProfileWizard
-            Should -Invoke Read-PwshProfileFeatureTree -Times 1 -Exactly -ParameterFilter {
-                $Enabled['PSReadLine'] -and $Enabled['TerminalIcons'] -and $Enabled['PoshGit'] -and $Enabled['Completions'] -and
-                -not $Enabled['Zoxide'] -and -not $Enabled['Bat'] -and -not $Enabled['Fzf']
-            }
-        }
-    }
-
     It 'sets ReplaceCat when bat stays enabled and the cat-override is confirmed' {
         InModuleScope $script:Module {
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
 
             $s = Invoke-PwshProfileWizard
             $s.ReplaceCat | Should -BeTrue
-            $s.Enable | Should -Contain 'Bat'
-        }
-    }
-
-    It 'leaves ReplaceCat off (and skips the cat prompt) when bat is unchecked' {
-        InModuleScope $script:Module {
-            # bat unchecked; the cat-override prompt must not run.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
-
-            $s = Invoke-PwshProfileWizard
-            $s.Enable | Should -Not -Contain 'Bat'
-            $s.ReplaceCat | Should -BeFalse
-            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
         }
     }
 
@@ -754,7 +660,6 @@ Describe 'Invoke-PwshProfileWizard' {
             Mock Read-SpectreText { 'full' } -ParameterFilter { $Message -eq 'bat style components' }
 
             $s = Invoke-PwshProfileWizard
-            $s.Enable | Should -Contain 'Bat'
             $s.BatTheme | Should -Be 'Nord'
             $s.BatStyle | Should -Be 'full'
         }
@@ -770,52 +675,12 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
-    It 'resets the bat settings (and skips their prompts) when bat is unchecked' {
-        InModuleScope $script:Module {
-            # Deselecting a tool on a re-run must not leave the prior run's values behind: Build gates
-            # -BatTheme on Bat being enabled, so a stale value would sit in the settings invisibly and
-            # reappear the moment bat was re-enabled.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
-
-            $s = Invoke-PwshProfileWizard -PriorSetting @{ BatTheme = 'Nord'; BatStyle = 'full' }
-            $s.Enable | Should -Not -Contain 'Bat'
-            $s.BatTheme | Should -Be 'Dracula'
-            $s.BatStyle | Should -Be 'numbers,changes,header'
-            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'bat syntax theme' }
-            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'bat style components' }
-        }
-    }
-
-    It 'resets the zoxide command (and skips its prompt) when zoxide is unchecked' {
-        InModuleScope $script:Module {
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
-
-            $s = Invoke-PwshProfileWizard -PriorSetting @{ ZoxideCommand = 'z' }
-            $s.Enable | Should -Not -Contain 'Zoxide'
-            $s.ZoxideCommand | Should -Be 'cd'
-            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq "zoxide's jump command (replaces cd)" }
-        }
-    }
-
     It 'sets ReplaceMore when less stays enabled and the pager-override is confirmed' {
         InModuleScope $script:Module {
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
 
             $s = Invoke-PwshProfileWizard
             $s.ReplaceMore | Should -BeTrue
-            $s.Enable | Should -Contain 'Less'
-        }
-    }
-
-    It 'leaves ReplaceMore off (and skips the pager prompt) when less is unchecked' {
-        InModuleScope $script:Module {
-            # less unchecked; the pager-override prompt must not run.
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Completions') } -RemoveParameterType 'Color'
-
-            $s = Invoke-PwshProfileWizard
-            $s.Enable | Should -Not -Contain 'Less'
-            $s.ReplaceMore | Should -BeFalse
-            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
         }
     }
 
@@ -823,7 +688,6 @@ Describe 'Invoke-PwshProfileWizard' {
         InModuleScope $script:Module {
             # BeforeEach: catch-all $false declines the git-chords prompt; Read-SpectreText returns the default.
             $s = Invoke-PwshProfileWizard
-            $s.Enable | Should -Contain 'Fzf'
             $s.FzfGitKeyBindings | Should -BeFalse
             $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
         }
@@ -844,19 +708,6 @@ Describe 'Invoke-PwshProfileWizard' {
 
             $s = Invoke-PwshProfileWizard
             $s.FzfTabChord | Should -Be 'Ctrl+j'
-        }
-    }
-
-    It 'leaves fzf keybinding settings at defaults (and skips the prompts) when fzf is unchecked' {
-        InModuleScope $script:Module {
-            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
-
-            $s = Invoke-PwshProfileWizard
-            $s.Enable | Should -Not -Contain 'Fzf'
-            $s.FzfGitKeyBindings | Should -BeFalse
-            $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
-            Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Enable PSFzf git keybindings (Ctrl+G)?' }
-            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'PSFzf tab-completion picker chord' }
         }
     }
 

@@ -20,9 +20,12 @@ Describe 'Get-PwshProfileSettingSchema' {
         }
 
         It 'uses only known Kind and Emit values' {
+            # 'Array' is deliberately not a valid Kind: Read-PwshProfileInstalledSetting's array
+            # parsing went away with -Enable, so adding an array row must fail here rather than
+            # silently reading back as a scalar.
             foreach ($row in $script:Schema) {
                 $row.Name | Should -Not -BeNullOrEmpty
-                $row.Kind | Should -BeIn @('String', 'Switch', 'Array')
+                $row.Kind | Should -BeIn @('String', 'Switch')
                 $row.Emit | Should -BeIn @('Scalar', 'Interpolated', 'Switch', 'Custom', 'None')
             }
         }
@@ -31,22 +34,15 @@ Describe 'Get-PwshProfileSettingSchema' {
             foreach ($row in $script:Schema | Where-Object Kind -eq 'Switch') {
                 $row.Default | Should -BeOfType [bool] -Because "'$($row.Name)' is a switch"
             }
-            foreach ($row in $script:Schema | Where-Object Kind -eq 'Array') {
-                , $row.Default | Should -BeOfType [System.Array] -Because "'$($row.Name)' is an array"
-            }
         }
 
         It 'returns fresh rows on every call' {
-            # Enable's default is an empty array. A memoized schema would hand every caller the same
-            # mutable instance, and Get-PwshProfileDefault promises a hashtable callers may mutate.
-            # Compare the row objects rather than the Default itself: an empty array returned through
-            # the pipeline unrolls to $null, so comparing those would compare $null to $null.
+            # Get-PwshProfileDefault promises a hashtable callers may freely mutate, and the wizard
+            # calls .Clone() on it. A memoized schema would hand every caller the same row instances,
+            # so a future reference-typed default would be shared state rather than a per-call copy.
             $first = & (Get-Module $script:Module) { Get-PwshProfileSettingSchema }
             $second = & (Get-Module $script:Module) { Get-PwshProfileSettingSchema }
             [object]::ReferenceEquals($first[0], $second[0]) | Should -BeFalse
-            [object]::ReferenceEquals(
-                ($first | Where-Object Name -eq 'Enable').Default,
-                ($second | Where-Object Name -eq 'Enable').Default) | Should -BeFalse
         }
     }
 
@@ -57,7 +53,7 @@ Describe 'Get-PwshProfileSettingSchema' {
             # when a value silently fails to round-trip.
             @($script:WizardSchema.Name) | Sort-Object | Should -Be (@(
                     'BannerAlignment', 'BannerColor', 'BannerFont', 'BannerText', 'BatStyle', 'BatTheme',
-                    'CustomTheme', 'Enable', 'EnableAll', 'FzfGitKeyBindings', 'FzfTabChord', 'NoBanner',
+                    'CustomTheme', 'FzfGitKeyBindings', 'FzfTabChord', 'NoBanner',
                     'ReplaceCat', 'ReplaceMore', 'StepIcon', 'Theme', 'ZoxideCommand'
                 ) | Sort-Object)
         }
@@ -74,18 +70,18 @@ Describe 'Get-PwshProfileSettingSchema' {
         }
 
         It 'reserves Emit Custom for the keys Build places by hand' {
-            # Mutually exclusive Theme/CustomTheme, NoBanner's fixed slot, and the always-emitted tool
-            # pin. Tagging them is what stops a new key silently inheriting a rendering strategy.
+            # Mutually exclusive Theme/CustomTheme, and NoBanner's fixed slot ahead of the scalars it
+            # suppresses. Tagging them is what stops a new key silently inheriting a rendering strategy.
             @(($script:Schema | Where-Object Emit -eq 'Custom').Name) |
-                Should -Be @('Theme', 'CustomTheme', 'NoBanner', 'Enable', 'EnableAll')
+                Should -Be @('Theme', 'CustomTheme', 'NoBanner')
         }
     }
 
     Context 'cross-references to the other sources of truth' {
-        It 'names only real -Enable tokens in Tool' {
+        It 'names only real catalog tokens in Tool' {
             $tokens = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog -Token }
             foreach ($row in $script:Schema | Where-Object Tool) {
-                $row.Tool | Should -BeIn $tokens -Because "'$($row.Name)' claims to be gated by it"
+                $row.Tool | Should -BeIn $tokens -Because "'$($row.Name)' claims to belong to it"
             }
         }
 
@@ -112,7 +108,7 @@ Describe 'Get-PwshProfileSettingSchema' {
 
         It 'names only real Initialize-PwshProfile parameters, with matching types' {
             $params = (Get-Command Initialize-PwshProfile).Parameters
-            $expected = @{ String = [string]; Switch = [switch]; Array = [string[]] }
+            $expected = @{ String = [string]; Switch = [switch] }
             foreach ($row in $script:Schema) {
                 $params.ContainsKey($row.Name) |
                     Should -BeTrue -Because "the schema claims '$($row.Name)' is a settable parameter"

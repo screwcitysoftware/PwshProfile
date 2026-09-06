@@ -18,12 +18,10 @@ BeforeAll {
         } $script:Dest $Mutate $Argument
     }
 
-    $script:CatalogTokens = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog -Token }
-
     # A non-default value for every settings key, so nothing is legitimately omitted from the
-    # generated call. Three keys cannot share this shape and are covered by their own cases below:
-    # CustomTheme is mutually exclusive with Theme, EnableAll with Enable, and NoBanner deliberately
-    # suppresses the banner keys.
+    # generated call. Two keys cannot share this shape and are covered by their own cases below:
+    # CustomTheme is mutually exclusive with Theme, and NoBanner deliberately suppresses the banner
+    # keys.
     $script:NonDefault = [ordered]@{
         Theme             = 'forestcity'
         BannerText        = 'ROUNDTRIP'
@@ -38,9 +36,8 @@ BeforeAll {
         ReplaceMore       = $true
         FzfGitKeyBindings = $true
         FzfTabChord       = 'Ctrl+j'
-        Enable            = @('Zoxide', 'Bat', 'Less', 'Fzf')
     }
-    $script:CoveredSeparately = 'CustomTheme', 'EnableAll', 'NoBanner'
+    $script:CoveredSeparately = 'CustomTheme', 'NoBanner'
 }
 
 Describe 'Read-PwshProfileInstalledSetting' {
@@ -48,23 +45,21 @@ Describe 'Read-PwshProfileInstalledSetting' {
         Remove-Item -LiteralPath $script:Dest -ErrorAction SilentlyContinue
     }
 
-    It 'round-trips a generated -Enable block back into settings + snapshot' {
+    It 'round-trips a generated block back into settings' {
         $parsed = script:ParseBuilt {
             param($s)
-            $s.Theme = 'forestcity'; $s.Enable = @('Zoxide', 'Bat'); $s.ReplaceCat = $true; $s.NoBanner = $true
+            $s.Theme = 'forestcity'; $s.ReplaceCat = $true; $s.NoBanner = $true
         }
         $parsed | Should -Not -BeNullOrEmpty
         $parsed.Settings.Theme | Should -Be 'forestcity'
         $parsed.Settings.NoBanner | Should -BeTrue
         $parsed.Settings.ReplaceCat | Should -BeTrue
-        @($parsed.Settings.Enable) | Should -Be @('Zoxide', 'Bat')
-        @($parsed.ToolSnapshot) | Should -Be @($script:CatalogTokens)
     }
 
     It 'round-trips fzf keybinding tuning (a bare -FzfGitKeyBindings and a custom -FzfTabChord)' {
         $parsed = script:ParseBuilt {
             param($s)
-            $s.Enable = @('Fzf'); $s.FzfGitKeyBindings = $true; $s.FzfTabChord = 'Ctrl+j'
+            $s.FzfGitKeyBindings = $true; $s.FzfTabChord = 'Ctrl+j'
         }
         # The bare opt-in flag must parse back to $true.
         $parsed.Settings.FzfGitKeyBindings | Should -BeTrue
@@ -72,20 +67,18 @@ Describe 'Read-PwshProfileInstalledSetting' {
     }
 
     It 'omits the fzf keybinding keys when left at defaults (git chords off)' {
-        $parsed = script:ParseBuilt { param($s) $s.Enable = @('Fzf') }
+        $parsed = script:ParseBuilt { param($s) $s.FzfTabChord = $s.FzfTabChord }
         $parsed.Settings.ContainsKey('FzfGitKeyBindings') | Should -BeFalse
         $parsed.Settings.ContainsKey('FzfTabChord') | Should -BeFalse
     }
 
-    It 'round-trips an -EnableAll block (no Enable key, EnableAll set)' {
-        $parsed = script:ParseBuilt { param($s) $s.EnableAll = $true }
-        $parsed.Settings.EnableAll | Should -BeTrue
-        $parsed.Settings.ContainsKey('Enable') | Should -BeFalse
-    }
-
-    It 'parses an empty -Enable @() block as an empty selection' {
-        $parsed = script:ParseBuilt { param($s) $s.Enable = @() }
-        @($parsed.Settings.Enable).Count | Should -Be 0
+    It 'reads a bare Initialize-PwshProfile call as a successful, empty result' {
+        # An install that customized nothing emits no parameters at all. That is a genuine read, not a
+        # failure -- and it is why the return keeps its @{ Settings = ... } wrapper: a bare hashtable
+        # would be falsy here and the caller's `if ($prior)` would treat it as unparseable.
+        $parsed = script:ParseBuilt { param($s) }
+        $parsed | Should -Not -BeNullOrEmpty
+        @($parsed.Settings.Keys).Count | Should -Be 0
     }
 
 
@@ -151,7 +144,7 @@ Describe 'Read-PwshProfileInstalledSetting' {
         # The flip side of the round-trip: Build only emits what differs from the themed default, and
         # the wizard seeds from those defaults before overlaying what it parsed. An absent key means
         # "keep the default", not "lost".
-        $parsed = script:ParseBuilt { param($s) $s.Enable = @('Zoxide') }
+        $parsed = script:ParseBuilt { param($s) $s.ZoxideCommand = 'z' }
         foreach ($key in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'StepIcon', 'BatTheme') {
             $parsed.Settings.ContainsKey($key) |
                 Should -BeFalse -Because "'$key' was left at its default and should not be emitted"

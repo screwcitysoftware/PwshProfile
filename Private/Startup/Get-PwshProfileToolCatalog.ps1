@@ -1,14 +1,13 @@
 function Get-PwshProfileToolCatalog {
     <#
     .SYNOPSIS
-        Returns the catalog of opt-in startup features — grouped Core / WinGet — as the single source of
-        truth for the tool set, its install kinds, and the clean-install defaults.
+        Returns the catalog of startup features — grouped Core / WinGet — as the single source of
+        truth for the tool set and its install kinds.
 
     .DESCRIPTION
-        The one place the toggleable startup features are defined, so the wizard's feature tree, the
-        wizard's seeding, the orchestrator's section rendering, and the opt-in resolution all agree.
-        Initialize-PwshProfile's -Enable [ValidateSet] mirrors this list, and Tests/ToolCatalog.Tests.ps1
-        asserts the literal stays in sync.
+        The one place the startup features are defined, so everything that needs to enumerate the
+        tool set agrees on it. Every tool runs at startup; this catalog is what says which ones are
+        winget CLIs (and so what setup has to install) versus PowerShell modules or plain config.
 
         Each feature carries an Install kind:
           winget — installed as a CLI binary via Install-WingetPackageSafe.
@@ -18,19 +17,15 @@ function Get-PwshProfileToolCatalog {
         The grouping is DERIVED from that kind rather than hard-coded by name: the WinGet group is
         exactly the 'winget' entries, everything else is Core. A future feature just declares its kind
         and lands in the right group. oh-my-posh, git and the `which` alias are deliberately absent —
-        they are always-on, not opt-in tokens.
+        they are always-on and not part of this catalog.
 
-        By default returns an ordered map of group name -> feature rows, each carrying Label (shown in
-        the wizard tree), Token (the -Enable token), and Install (the kind).
+        By default returns an ordered map of group name -> feature rows, each carrying Label (a
+        human-readable name), Token (the tool's identifier), Install (the kind), and Help (a one-line
+        description).
 
     .PARAMETER Token
-        Return the flat ordered token list instead — the order -Enable lists them and the ValidateSet
-        declares them.
-
-    .PARAMETER DefaultEnabled
-        Return the tokens checked on a clean first-run install: everything that is not a winget
-        install. This centralizes the "Core checked, WinGet unchecked" rule. Mutually exclusive
-        with -Token.
+        Return the flat ordered token list instead — the tools in the order the orchestrator runs
+        them.
 
     .EXAMPLE
         Get-PwshProfileToolCatalog
@@ -41,24 +36,16 @@ function Get-PwshProfileToolCatalog {
         Get-PwshProfileToolCatalog -Token
 
         Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Ripgrep','Less','Lazygit').
-
-    .EXAMPLE
-        Get-PwshProfileToolCatalog -DefaultEnabled
-
-        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions') — the non-winget tokens.
     #>
     [CmdletBinding(DefaultParameterSetName = 'Grouped')]
     param(
         [Parameter(ParameterSetName = 'Token')]
-        [switch]$Token,
-
-        [Parameter(ParameterSetName = 'DefaultEnabled')]
-        [switch]$DefaultEnabled
+        [switch]$Token
     )
 
     # Flat feature list in display/run order: Core first, then the WinGet tools in the orchestrator's
     # run order. A feature's group is DERIVED from its Install kind, so the "WinGet = winget installs"
-    # rule can't drift. oh-my-posh, git and the `which` alias are absent (always-on, not tokens).
+    # rule can't drift. oh-my-posh, git and the `which` alias are absent (always-on, outside this catalog).
     $entries = @(
         [pscustomobject]@{ Label = 'PSReadLine config'; Token = 'PSReadLine'; Install = 'none'
             Help = '**PSReadLine** config — nicer command-line editing: history search, syntax colors, prediction.' }
@@ -92,9 +79,6 @@ function Get-PwshProfileToolCatalog {
 
     if ($Token) {
         return @($entries.Token)
-    }
-    if ($DefaultEnabled) {
-        return @(($entries | Where-Object { $_.Install -ne 'winget' }).Token)
     }
 
     # Group: WinGet = winget installs, Core = everything else (preserving entry order within each).

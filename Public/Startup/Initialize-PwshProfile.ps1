@@ -9,19 +9,19 @@ function Initialize-PwshProfile {
           2. "Core" (always renders): the `which` alias, git, PSReadLine, oh-my-posh, Terminal-Icons,
              posh-git, and the shell completions (winget, Azure CLI, Tailscale, Docker, 1Password,
              GitHub CLI — registration only; they detect external CLIs and install nothing).
-          3. "WinGet" (only when at least one winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat,
-             fd, ripgrep, less, and lazygit. Order matters twice — git leads Core so it is on PATH for posh-git
-             and lazygit, and fd follows fzf so it can wire fzf to use fd as its file source.
+          3. "WinGet": zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, and lazygit. Order matters
+             twice — git leads Core so it is on PATH for posh-git and lazygit, and fd follows fzf so
+             it can wire fzf to use fd as its file source.
 
         The two groups mirror the install model: WinGet = the CLIs installed via WinGet, Core =
         everything else. Each is its own top-level Invoke-Step (status spinner + summary line). A step
         whose tool is missing degrades silently, so this never throws out of profile startup.
 
-        Tool selection is opt-in. -Enable lists the tools to run; -EnableAll takes every current tool
-        and auto-adopts future additions; a bare call asks first when interactive and enables nothing
-        when not. -Enable wins if both are passed (a warning notes -EnableAll was ignored). git,
-        oh-my-posh and the `which` alias always run and are not tokens. A tool-specific parameter for a
-        tool that isn't enabled is warned about and ignored, never thrown.
+        Every tool runs — there is no tool selection. Install-PwshProfile installs the CLIs during
+        setup, so at startup each Enable-* Install substep short-circuits on Get-Command and costs
+        almost nothing; a tool that is genuinely missing (a fresh machine, or one added by a later
+        module version) is installed here instead. What the wizard configures is how each tool is
+        *wired* — which builtins it replaces, which chords it binds — not whether it is present.
 
         The theme drives more than the prompt. Unless set explicitly, it also supplies the banner color,
         the step icon, bat's syntax theme, fd's LS_COLORS palette, and fzf's picker palette, so every
@@ -95,23 +95,13 @@ function Initialize-PwshProfile {
 
     .PARAMETER FzfGitKeyBindings
         Bind PSFzf's Ctrl+G git chords (fzf pickers for branches, commits, files). Off by default,
-        since lazygit already covers git workflows. Only applies when Fzf is enabled (a warning notes
-        it otherwise), and Enable-Fzf drops the chords anyway when git isn't on PATH.
+        since lazygit already covers git workflows. Enable-Fzf drops the chords when git isn't on
+        PATH.
 
     .PARAMETER FzfTabChord
         The PSReadLine chord for PSFzf's fuzzy tab-completion picker; Tab itself stays MenuComplete.
         Defaults to 'Ctrl+Spacebar', and Enable-Fzf also binds 'Ctrl+@' to the same picker (many
-        terminals emit the same byte for both). Only applies when Fzf is enabled.
-
-    .PARAMETER Enable
-        The tools to enable, from the Get-PwshProfileToolCatalog set: 'PSReadLine', 'TerminalIcons',
-        'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Ripgrep', 'Less', 'Lazygit'.
-        Only the listed tools run, so a tool added in a later module version never installs until you
-        add it here. Pass -Enable @() to enable nothing.
-
-    .PARAMETER EnableAll
-        Enable every tool in the catalog, including any added in future module versions. Convenient,
-        but it opts into installing future tools with no prompt. -Enable wins if both are passed.
+        terminals emit the same byte for both).
 
     .PARAMETER NoBanner
         Render no startup banner. Use this rather than clearing -BannerText, which rejects empty.
@@ -120,8 +110,9 @@ function Initialize-PwshProfile {
     .EXAMPLE
         Initialize-PwshProfile
 
-        A bare call has no tool selection: interactively it asks whether to enable all tools;
-        non-interactively it enables none. Generated profiles always pass -Enable/-EnableAll.
+        The whole startup with every default: the screwcity theme, a machine-name banner, and every
+        tool wired with its default behavior. This is what a generated profile calls when nothing was
+        customized.
 
     .EXAMPLE
         Initialize-PwshProfile -BannerText 'HELLO' -BannerColor Green -BannerAlignment Center
@@ -139,14 +130,14 @@ function Initialize-PwshProfile {
         Uses the bundled Forest City theme, with the banner and step marker branded to match.
 
     .EXAMPLE
-        Initialize-PwshProfile -Enable Zoxide,Bat,Fd
+        Initialize-PwshProfile -ReplaceCat -ZoxideCommand 'z'
 
-        Enables only zoxide, bat, and fd (plus the always-on prompt, git, and `which`).
+        Aliases cat -> bat, and binds zoxide's jump to `z` so the built-in cd is left alone.
 
     .EXAMPLE
-        Initialize-PwshProfile -CustomTheme '~/.config/themes/custom.omp.json' -EnableAll -NoBanner
+        Initialize-PwshProfile -CustomTheme '~/.config/themes/custom.omp.json' -NoBanner
 
-        Uses a custom oh-my-posh theme, enables every tool (and future additions), and shows no banner.
+        Uses a custom oh-my-posh theme and shows no banner.
 
     .NOTES
         Call from $PROFILE right after Import-Module of the manifest. The Completions step uses the
@@ -232,22 +223,13 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$StepIcon,
 
-        # Opt-in: lazygit already covers git. Only applies when Fzf is enabled.
+        # Opt-in: lazygit already covers git.
         [Parameter()]
         [switch]$FzfGitKeyBindings,
 
         # Tab stays MenuComplete. Enable-Fzf also binds Ctrl+@ (same byte on many terminals).
         [Parameter()]
         [string]$FzfTabChord = 'Ctrl+Spacebar',
-
-        # ValidateSet mirrors Get-PwshProfileToolCatalog -Token; Tests/ToolCatalog.Tests.ps1 keeps them
-        # in sync. No default, so PSBoundParameters separates "passed empty" from "not passed".
-        [Parameter()]
-        [ValidateSet('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Ripgrep', 'Less', 'Lazygit')]
-        [string[]]$Enable,
-
-        [Parameter()]
-        [switch]$EnableAll,
 
         [Parameter()]
         [switch]$NoBanner
@@ -272,35 +254,12 @@ function Initialize-PwshProfile {
     if (-not $PSBoundParameters.ContainsKey('FdColors'))    { $FdColors    = $branding.LsColors }
     if (-not $PSBoundParameters.ContainsKey('FzfColors'))   { $FzfColors   = $branding.FzfColors }
 
-    # -Enable wins over -EnableAll (the explicit list is the safer choice); a bare call asks first.
-    # Runs before any Invoke-Step, so warnings land in scrollback instead of tearing a live spinner.
-    $catalog = Get-PwshProfileToolCatalog -Token
-    $hasEnable = $PSBoundParameters.ContainsKey('Enable')
-    if ($hasEnable -and $EnableAll) {
-        Write-Warning '-Enable and -EnableAll were both supplied; -EnableAll is ignored in favor of the explicit -Enable list.'
-    }
-    $enabled = if ($hasEnable) { @($Enable) }
-               elseif ($EnableAll) { @($catalog) }
-               else { if (Confirm-PwshProfileEnableAll -Catalog $catalog) { @($catalog) } else { @() } }
-
-    # A flag for a tool that isn't enabled is a no-op, so warn rather than throw or silently ignore.
-    # Build-PwshProfileInitializeCall only emits these for enabled tools, so only hand-edits trip it.
-    #
-    # The param -> tool coupling is the schema's Tool column, the same one gating what Build emits, so
-    # the two cannot disagree about which tool owns a parameter. Note this reads the FULL schema, not
-    # -Wizard: FdColors and FzfColors are runtime-only (never written to a profile) but are still
-    # tool-owned parameters worth warning about.
-    $settingSchema = Get-PwshProfileSettingSchema
-    foreach ($row in $settingSchema | Where-Object Tool) {
-        if ($PSBoundParameters.ContainsKey($row.Name) -and $enabled -notcontains $row.Tool) {
-            Write-Warning "-$($row.Name) was supplied but $($row.Tool) is not enabled; ignoring -$($row.Name)."
-        }
-    }
     # Banner params are moot when no banner will render — either -NoBanner, or a banner text that
     # resolved empty (an unset $env:COMPUTERNAME), which is suppressed below rather than thrown.
     # Includes BannerFontPath, which Build never emits — the schema's Banner column covers every
-    # banner parameter, and the Emit column is what separates the ones a profile can carry.
-    $bannerParam = @(($settingSchema | Where-Object Banner).Name)
+    # banner parameter, and the Emit column is what separates the ones a profile can carry. Reads the
+    # FULL schema, not -Wizard, so the runtime-only BannerFontPath is covered.
+    $bannerParam = @((Get-PwshProfileSettingSchema | Where-Object Banner).Name)
     $bannerIgnored = if ($NoBanner) { 'with -NoBanner; ignoring it (no banner is rendered)' }
     elseif ([string]::IsNullOrWhiteSpace($BannerText)) { 'but no banner text resolved (banner suppressed); ignoring it' }
     if ($bannerIgnored) {
@@ -331,53 +290,44 @@ function Initialize-PwshProfile {
         }
         # Always-on, and first in Core so git is on PATH for posh-git and the WinGet-section tools.
         Invoke-Step "Git" { Enable-Git }
-        if ($enabled -contains 'PSReadLine') { Invoke-Step "PSReadLine" { Initialize-PSReadline } }
+        Invoke-Step "PSReadLine" { Initialize-PSReadline }
         Invoke-Step "Oh-My-Posh" { Enable-OhMyPosh -Configuration $resolvedTheme }
-        if ($enabled -contains 'TerminalIcons') { Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } } }
-        if ($enabled -contains 'PoshGit') { Invoke-Step "Posh-Git" { Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true } } }
-        if ($enabled -contains 'Completions') {
-            Invoke-Step "Completions" {
-                Invoke-Step "Winget Completions"    { Enable-WingetCompletion }
-                Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
-                Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
-                Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
-                Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
-                Invoke-Step "GitHub CLI Completions" { Enable-GithubCliCompletion }
-            }
+        Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } }
+        Invoke-Step "Posh-Git" { Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true } }
+        Invoke-Step "Completions" {
+            Invoke-Step "Winget Completions"    { Enable-WingetCompletion }
+            Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
+            Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
+            Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
+            Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
+            Invoke-Step "GitHub CLI Completions" { Enable-GithubCliCompletion }
         }
     }
 
-    # Rendered only when a winget tool is enabled, so it is never an empty section. The token set is
-    # the catalog's WinGet group (Install -eq 'winget'), not a hardcoded list.
-    $wingetTokens = @((Get-PwshProfileToolCatalog)['WinGet'].Token)
-    if ($enabled | Where-Object { $_ -in $wingetTokens }) {
-        Invoke-Step "WinGet" -Icon $StepIcon {
-            if ($enabled -contains 'Zoxide') { Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand } }
-            if ($enabled -contains 'Fzf') {
-                Invoke-Step "fzf" {
-                    # Preview with bat only when bat is enabled; it inherits $env:BAT_THEME.
-                    $fzfPreview = if ($enabled -contains 'Bat') { 'bat --color=always --style=numbers {}' } else { '' }
-                    # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell) and
-                    # uses fd for traversal. -GitKeyBindings is opt-in (lazygit covers git); Enable-Fzf
-                    # drops it when git isn't on PATH. -Height overrides PSFzf's inline 40% default with
-                    # an adaptive one. -TabExpansionChord leaves Tab as MenuComplete.
-                    Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' -PreviewCommand $fzfPreview `
-                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord $FzfTabChord `
-                        -UseFd:($enabled -contains 'Fd') -GitKeyBindings:$FzfGitKeyBindings
-                }
-            }
-            if ($enabled -contains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
-            if ($enabled -contains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
-            if ($enabled -contains 'Jq')     { Invoke-Step "jq" { Enable-Jq } }
-            if ($enabled -contains 'Bat')    { Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat } }
-            # After fzf so fzf.exe is on PATH when -IntegrateFzf is evaluated.
-            if ($enabled -contains 'Fd')     { Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf:($enabled -contains 'Fzf') } }
-            # fd's content-search counterpart; no init-time dependency, so its position is free.
-            if ($enabled -contains 'Ripgrep') { Invoke-Step "ripgrep" { Enable-Ripgrep } }
-            # No init-time dependency on the other tools, so its position is free.
-            if ($enabled -contains 'Less')   { Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore } }
-            # Standalone git TUI: no shell init, no completion, no dependencies — kept last.
-            if ($enabled -contains 'Lazygit') { Invoke-Step "lazygit" { Enable-Lazygit } }
+    Invoke-Step "WinGet" -Icon $StepIcon {
+        Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand }
+        Invoke-Step "fzf" {
+            # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell) and uses fd
+            # for traversal. -GitKeyBindings is opt-in (lazygit covers git); Enable-Fzf drops it when
+            # git isn't on PATH. -Height overrides PSFzf's inline 40% default with an adaptive one.
+            # -TabExpansionChord leaves Tab as MenuComplete. The Ctrl+T preview is scoped to
+            # $env:FZF_CTRL_T_OPTS by Enable-Fzf and inherits $env:BAT_THEME.
+            Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' `
+                -PreviewCommand 'bat --color=always --style=numbers {}' `
+                -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord $FzfTabChord `
+                -UseFd -GitKeyBindings:$FzfGitKeyBindings
         }
+        Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager }
+        Invoke-Step "xh" { Enable-Xh }
+        Invoke-Step "jq" { Enable-Jq }
+        Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat }
+        # After fzf so fzf.exe is on PATH when -IntegrateFzf is evaluated.
+        Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf }
+        # fd's content-search counterpart; no init-time dependency, so its position is free.
+        Invoke-Step "ripgrep" { Enable-Ripgrep }
+        # No init-time dependency on the other tools, so its position is free.
+        Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore }
+        # Standalone git TUI: no shell init, no completion, no dependencies — kept last.
+        Invoke-Step "lazygit" { Enable-Lazygit }
     }
 }

@@ -45,14 +45,11 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-DockerCompletion { }
         Mock -ModuleName $script:Module Enable-1PasswordCompletion { }
         Mock -ModuleName $script:Module Enable-GithubCliCompletion { }
-        # Deterministic bare-call resolution: a bare Initialize-PwshProfile enables nothing unless a
-        # test overrides this mock to return $true.
-        Mock -ModuleName $script:Module Confirm-PwshProfileEnableAll { $false }
     }
 
-    Context '-EnableAll runs the full startup' {
+    Context 'runs the full startup' {
         It 'shows the banner and enables every tool with default arguments' {
-            Initialize-PwshProfile -EnableAll
+            Initialize-PwshProfile
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly
             # git is always-on (installed in Core, not a token).
             Should -Invoke -ModuleName $script:Module Enable-Git -Times 1 -Exactly
@@ -91,43 +88,43 @@ Describe 'Initialize-PwshProfile' {
 
     Context 'pass-through parameters' {
         It 'forwards -CustomTheme to Enable-OhMyPosh as -Configuration' {
-            Initialize-PwshProfile -CustomTheme $script:ThemePath -EnableAll
+            Initialize-PwshProfile -CustomTheme $script:ThemePath
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly `
                 -ParameterFilter { $Configuration -eq $ThemePath }
         }
 
         It 'forwards -ZoxideCommand to Enable-Zoxide as -Command' {
-            Initialize-PwshProfile -EnableAll -ZoxideCommand 'z'
+            Initialize-PwshProfile -ZoxideCommand 'z'
             Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly `
                 -ParameterFilter { $Command -eq 'z' }
         }
 
         It 'forwards -ReplaceCat and -BatStyle to Enable-Bat' {
-            Initialize-PwshProfile -EnableAll -ReplaceCat -BatStyle 'plain'
+            Initialize-PwshProfile -ReplaceCat -BatStyle 'plain'
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
                 -ParameterFilter { $ReplaceCat -and $Style -eq 'plain' }
         }
 
         It 'forwards -ReplaceMore to Enable-Less' {
-            Initialize-PwshProfile -EnableAll -ReplaceMore
+            Initialize-PwshProfile -ReplaceMore
             Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
                 -ParameterFilter { $ReplaceMore }
         }
 
         It 'forwards an explicit -BatTheme, overriding the theme blend' {
-            Initialize-PwshProfile -EnableAll -BatTheme 'Nord'
+            Initialize-PwshProfile -BatTheme 'Nord'
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
                 -ParameterFilter { $Theme -eq 'Nord' }
         }
 
         It 'blends bat with the forestcity theme by default' {
-            Initialize-PwshProfile -Theme forestcity -EnableAll
+            Initialize-PwshProfile -Theme forestcity
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
                 -ParameterFilter { $Theme -eq 'gruvbox-dark' }
         }
 
         It 'blends fd and fzf with the forestcity palette by default' {
-            Initialize-PwshProfile -Theme forestcity -EnableAll
+            Initialize-PwshProfile -Theme forestcity
             Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
                 -ParameterFilter { $LsColors -like '*di=1;38;2;143;206;114*' }
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
@@ -135,7 +132,7 @@ Describe 'Initialize-PwshProfile' {
         }
 
         It 'forwards explicit -FdColors and -FzfColors, overriding the theme blend' {
-            Initialize-PwshProfile -EnableAll -FdColors 'di=0' -FzfColors 'pointer:#ff0000'
+            Initialize-PwshProfile -FdColors 'di=0' -FzfColors 'pointer:#ff0000'
             Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
                 -ParameterFilter { $LsColors -eq 'di=0' }
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
@@ -143,167 +140,107 @@ Describe 'Initialize-PwshProfile' {
         }
 
         It 'leaves fzf git chords unbound by default and forwards the default tab chord' {
-            Initialize-PwshProfile -EnableAll
+            Initialize-PwshProfile
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { -not $GitKeyBindings -and $TabExpansionChord -eq 'Ctrl+Spacebar' }
         }
 
         It 'binds fzf git chords when -FzfGitKeyBindings is passed' {
-            Initialize-PwshProfile -EnableAll -FzfGitKeyBindings
+            Initialize-PwshProfile -FzfGitKeyBindings
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { $GitKeyBindings }
         }
 
         It 'forwards -FzfTabChord to Enable-Fzf as -TabExpansionChord' {
-            Initialize-PwshProfile -EnableAll -FzfTabChord 'Ctrl+j'
+            Initialize-PwshProfile -FzfTabChord 'Ctrl+j'
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { $TabExpansionChord -eq 'Ctrl+j' }
         }
 
         It 'forwards -StepIcon to the top-level Invoke-Step calls' {
-            Initialize-PwshProfile -EnableAll -StepIcon '🚀'
+            Initialize-PwshProfile -StepIcon '🚀'
             Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
                 -ParameterFilter { $Description -eq 'Core' -and $Icon -eq '🚀' }
         }
 
         It 'forwards -BannerFont to Write-Figlet as -Font' {
-            Initialize-PwshProfile -EnableAll -BannerFont ANSIShadow
+            Initialize-PwshProfile -BannerFont ANSIShadow
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
                 -ParameterFilter { $Font -eq 'ANSIShadow' }
         }
 
         It 'forwards -BannerFontPath to Write-Figlet as -FontPath' {
-            Initialize-PwshProfile -EnableAll -BannerFontPath $script:FontPath
+            Initialize-PwshProfile -BannerFontPath $script:FontPath
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
                 -ParameterFilter { $FontPath -eq $script:FontPath }
         }
 
         It 'passes neither -Font nor -FontPath when no banner font is requested' {
-            Initialize-PwshProfile -EnableAll
+            Initialize-PwshProfile
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
                 -ParameterFilter { -not $PSBoundParameters.ContainsKey('Font') -and -not $PSBoundParameters.ContainsKey('FontPath') }
         }
     }
 
-    Context '-Enable opts in to individual tools' {
-        It 'enables only the listed tool, leaving siblings off (oh-my-posh always runs)' {
-            Initialize-PwshProfile -Enable Zoxide
-            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 0 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 0 -Exactly
+    Context 'every tool runs unconditionally' {
+        It 'renders both the Core and WinGet sections' {
+            Initialize-PwshProfile
+            Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+                -ParameterFilter { $Description -eq 'Core' }
+            # The WinGet section no longer depends on a selection, so it always renders.
+            Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+                -ParameterFilter { $Description -eq 'WinGet' }
         }
 
-        It 'honors Jq via -Enable' {
-            Initialize-PwshProfile -Enable Jq
-            Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
+        It 'runs every catalog tool exactly once' {
+            # The invariant that replaced the -Enable guards: no tool can be skipped, so each enabler
+            # is invoked once per startup.
+            Initialize-PwshProfile
+            foreach ($fn in 'Enable-Zoxide', 'Enable-Fzf', 'Enable-FastNodeManager', 'Enable-Xh',
+                'Enable-Jq', 'Enable-Bat', 'Enable-Fd', 'Enable-Ripgrep', 'Enable-Less', 'Enable-Lazygit') {
+                Should -Invoke -ModuleName $script:Module $fn -Times 1 -Exactly
+            }
+            Should -Invoke -ModuleName $script:Module Initialize-PSReadline -Times 1 -Exactly
         }
 
-        It 'wires fzf to use fd and a bat preview when fzf, fd, and bat are all enabled' {
-            Initialize-PwshProfile -Enable Fzf, Fd, Bat
+        It 'always wires fzf to fd and a bat preview' {
+            # Formerly derived from co-enablement; now constant, since fd and bat are always present.
+            Initialize-PwshProfile
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { $UseFd -and $PreviewCommand -like 'bat *' }
             Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
                 -ParameterFilter { $IntegrateFzf }
         }
 
-        It 'drops fzf''s -UseFd and bat preview when only fzf is enabled' {
-            Initialize-PwshProfile -Enable Fzf
-            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
-                -ParameterFilter { -not $UseFd -and [string]::IsNullOrEmpty($PreviewCommand) -and $Style -eq 'full' }
-        }
-
-        It 'drops fd''s fzf integration when only fd is enabled' {
-            Initialize-PwshProfile -Enable Fd
-            Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
-                -ParameterFilter { -not $IntegrateFzf }
-        }
-
-        It 'registers completions when -Enable Completions, without other tools' {
-            Initialize-PwshProfile -Enable Completions
+        It 'always registers the shell completions' {
+            Initialize-PwshProfile
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-GithubCliCompletion -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Xh -Times 0 -Exactly
-        }
-
-        It '-Enable @() enables nothing but still runs oh-my-posh and always-on git' {
-            Initialize-PwshProfile -Enable @()
-            Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Git -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 0 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 0 -Exactly
-        }
-
-        It 'renders Core but not WinGet when only a Core token is enabled' {
-            Initialize-PwshProfile -Enable PSReadLine
-            Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
-                -ParameterFilter { $Description -eq 'Core' }
-            Should -Invoke -ModuleName $script:Module Invoke-Step -Times 0 -Exactly `
-                -ParameterFilter { $Description -eq 'WinGet' }
-        }
-
-        It 'renders the WinGet section when a winget tool is enabled' {
-            Initialize-PwshProfile -Enable Jq
-            Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
-                -ParameterFilter { $Description -eq 'WinGet' }
         }
     }
 
-    Context '-EnableAll and -Enable precedence' {
-        It 'lets -Enable win over -EnableAll, with a warning' {
-            Initialize-PwshProfile -Enable Zoxide -EnableAll -WarningVariable warnings -WarningAction SilentlyContinue
-            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
-            $warnings | Should -Not -BeNullOrEmpty
-        }
-    }
-
-    Context 'bare call resolution' {
-        It 'enables nothing when the confirm declines (e.g. non-interactive)' {
-            Initialize-PwshProfile
-            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 0 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
-        }
-
-        It 'enables everything when the confirm accepts' {
-            Mock -ModuleName $script:Module Confirm-PwshProfileEnableAll { $true }
-            Initialize-PwshProfile
-            Should -Invoke -ModuleName $script:Module Enable-Zoxide -Times 1 -Exactly
-            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly
-        }
-    }
-
-    Context 'parameter/tool coupling' {
-        It 'warns and ignores a tool param whose tool is not enabled, without throwing' {
-            { Initialize-PwshProfile -Enable Zoxide -ReplaceCat -WarningVariable warnings -WarningAction SilentlyContinue } |
-                Should -Not -Throw
-            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 0 -Exactly
-        }
-
-        It 'stays quiet when the tool param''s tool is enabled' {
-            Initialize-PwshProfile -Enable Bat -ReplaceCat -WarningVariable warnings -WarningAction SilentlyContinue
-            $couplingWarnings = @($warnings | Where-Object { "$_" -like '*ReplaceCat*' })
-            $couplingWarnings | Should -BeNullOrEmpty
+    Context 'tool-specific parameters never warn' {
+        It 'stays quiet when a tool-owned parameter is supplied' {
+            # There is no longer any such thing as a parameter for a tool that is not enabled, so the
+            # old param/tool coupling warning has nothing to fire on.
+            Initialize-PwshProfile -ReplaceCat -ReplaceMore -FzfTabChord 'Ctrl+j' -FzfGitKeyBindings `
+                -WarningVariable warnings -WarningAction SilentlyContinue
+            $warnings | Should -BeNullOrEmpty
             Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly -ParameterFilter { $ReplaceCat }
-        }
-
-        It 'warns and ignores -FzfTabChord / -FzfGitKeyBindings when fzf is not enabled' {
-            Initialize-PwshProfile -Enable Zoxide -FzfTabChord 'Ctrl+j' -FzfGitKeyBindings -WarningVariable warnings -WarningAction SilentlyContinue
-            $fzfWarnings = @($warnings | Where-Object { "$_" -like '*FzfTabChord*' -or "$_" -like '*FzfGitKeyBindings*' })
-            $fzfWarnings.Count | Should -BeGreaterThan 0
-            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 0 -Exactly
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly -ParameterFilter { $ReplaceMore }
+            Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
+                -ParameterFilter { $GitKeyBindings -and $TabExpansionChord -eq 'Ctrl+j' }
         }
     }
 
     Context 'banner control' {
         It 'renders no banner under -NoBanner' {
-            Initialize-PwshProfile -EnableAll -NoBanner
+            Initialize-PwshProfile -NoBanner
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
         }
 
         It 'warns and ignores banner params passed with -NoBanner' {
-            Initialize-PwshProfile -EnableAll -NoBanner -BannerColor Green -WarningVariable warnings -WarningAction SilentlyContinue
+            Initialize-PwshProfile -NoBanner -BannerColor Green -WarningVariable warnings -WarningAction SilentlyContinue
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
             $warnings | Should -Not -BeNullOrEmpty
         }
@@ -319,7 +256,7 @@ Describe 'Initialize-PwshProfile' {
             $saved = $env:COMPUTERNAME
             try {
                 $env:COMPUTERNAME = ''
-                Initialize-PwshProfile -EnableAll -BannerColor Green -WarningVariable warnings -WarningAction SilentlyContinue
+                Initialize-PwshProfile -BannerColor Green -WarningVariable warnings -WarningAction SilentlyContinue
                 Should -Invoke -ModuleName $script:Module Write-Figlet -Times 0 -Exactly
                 $warnings | Should -Not -BeNullOrEmpty
             }
@@ -329,7 +266,7 @@ Describe 'Initialize-PwshProfile' {
 
     Context 'theme selection and branding' {
         It 'uses the bundled screwcity theme and its branding by default' {
-            Initialize-PwshProfile -EnableAll
+            Initialize-PwshProfile
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly `
                 -ParameterFilter { $Configuration -like '*screwcity.omp.json' }
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
@@ -339,7 +276,7 @@ Describe 'Initialize-PwshProfile' {
         }
 
         It 'resolves -Theme forestcity to its bundled file and Forest City branding' {
-            Initialize-PwshProfile -Theme forestcity -EnableAll
+            Initialize-PwshProfile -Theme forestcity
             Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly `
                 -ParameterFilter { $Configuration -like '*forestcity.omp.json' }
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
@@ -349,23 +286,19 @@ Describe 'Initialize-PwshProfile' {
         }
 
         It 'lets an explicit banner value override the theme branding' {
-            Initialize-PwshProfile -Theme forestcity -BannerColor Red -BannerText 'CUSTOM' -EnableAll
+            Initialize-PwshProfile -Theme forestcity -BannerColor Red -BannerText 'CUSTOM'
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
                 -ParameterFilter { $Text -eq 'CUSTOM' -and $Color -eq 'Red' }
         }
 
         It 'keeps the neutral screwcity branding for a -CustomTheme' {
-            Initialize-PwshProfile -CustomTheme $script:ThemePath -EnableAll
+            Initialize-PwshProfile -CustomTheme $script:ThemePath
             Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
                 -ParameterFilter { $Text -eq $env:COMPUTERNAME -and $Color -eq '#4c81c8' }
         }
     }
 
     Context 'validation' {
-        It 'rejects an unknown -Enable token' {
-            { Initialize-PwshProfile -Enable Nope } | Should -Throw
-        }
-
         It 'rejects a non-existent -CustomTheme path' {
             { Initialize-PwshProfile -CustomTheme 'X:\does\not\exist.omp.json' } | Should -Throw
         }

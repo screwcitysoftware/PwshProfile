@@ -134,27 +134,29 @@ Install-PwshProfile        # interactive wizard; re-run any time to change optio
 Uninstall-PwshProfile      # remove the bootstrap (installed tools/fonts are left in place)
 ```
 
-The bootstrap it writes is a `# Tools available:` snapshot comment plus a call to
+The bootstrap it writes is a short guidance comment plus a call to
 **`Initialize-PwshProfile`** — the orchestrator that runs on every new session. There's no
-`Import-Module` line: invoking `Initialize-PwshProfile` auto-loads the module. Tool selection is
-**opt-in** — you call it with the tools you want:
+`Import-Module` line: invoking `Initialize-PwshProfile` auto-loads the module. **Every tool runs**;
+there is no tool selection, so an install that customized nothing is simply:
 
 ```powershell
-Initialize-PwshProfile -Enable Zoxide,Fzf,Bat,Fd   # only these tools run
+Initialize-PwshProfile
 ```
 
-A few common variations:
+The wizard's job is not *which* tools you get but *how* they are wired into your shell — which
+built-in commands they take over, and how they look. Those choices become arguments:
 
 ```powershell
-Initialize-PwshProfile -Enable Zoxide,Bat -BannerColor Green -BannerAlignment Center
-Initialize-PwshProfile -EnableAll                  # every tool, plus any added in future updates
-Initialize-PwshProfile -EnableAll -NoBanner        # everything, no startup banner
+Initialize-PwshProfile -ReplaceCat -ZoxideCommand 'z'   # cat -> bat; zoxide on `z`, cd untouched
+Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -NoBanner                        # no startup banner
 ```
 
-A **bare** `Initialize-PwshProfile` has no selection: interactively it asks whether to enable all
-tools, and non-interactively it enables none — so prefer `-Enable`/`-EnableAll` (the wizard always
-writes one of them). `Initialize-PwshProfile` takes a handful of other options — banner text/color/font,
-a custom theme — all covered under [Exported functions](#exported-functions).
+`Install-PwshProfile` installs the CLIs during setup, so startup normally finds everything already
+present and each install step costs nothing. A tool that *is* missing — a fresh machine, or one added
+by a later module version — is installed at startup instead. `Initialize-PwshProfile` takes a handful
+of other options — banner text/color/font, a custom theme — all covered under
+[Exported functions](#exported-functions).
 
 Changing the managed block is best done by **re-running `Install-PwshProfile`** rather than editing
 the call by hand — on a re-run the installer reads the call and the tools snapshot to pre-fill your
@@ -280,7 +282,7 @@ fnm list            # show installed versions
 
 ### git — version control
 
-git is **always installed** (like oh-my-posh — it isn't a `-Enable` token). Several profile
+git is **always installed** (like oh-my-posh, it sits outside the tool catalog). Several profile
 features lean on it — posh-git's status prompt, PSFzf's `Ctrl+G` git pickers, lazygit, and the
 GitHub CLI — so the profile installs `Git.Git` via winget if `git` isn't already on PATH (the
 common case short-circuits, and a failed/elevation-blocked install just warns and startup
@@ -385,7 +387,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-OhMyPoshTheme.ps1          # emit the bundled oh-my-posh theme JSON
 │   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
 │   ├── Tools/
-│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (not a -Enable token)
+│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (outside the tool catalog)
 │   │   ├── Enable-Zoxide.ps1
 │   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
@@ -419,13 +421,12 @@ ScrewCitySoftware.PwshProfile/
 │       └── Import-ModuleSafe.ps1
 ├── Private/                             # internal helpers (loaded, not exported)
 │   ├── Install/                         # Install/Uninstall helpers: marker + block builders, the
-│   │   └── *PwshProfile*.ps1       #   wizard, feature tree, file writer, defaults, call builder,
+│   │   └── *PwshProfile*.ps1       #   wizard, file writer, defaults, call builder,
 │   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser), and
 │   │                               #   Get-PwshProfileSettingSchema (source of truth for the
 │   │                               #   settable parameters and their metadata)
-│   ├── Startup/                         # opt-in resolution helpers (shared by startup + the wizard)
-│   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool token set
-│   │   └── Confirm-PwshProfileEnableAll.ps1   # bare-call "enable all?" confirm (guarded, no-hang)
+│   ├── Startup/                         # startup helpers shared with the wizard
+│   │   └── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
@@ -526,22 +527,15 @@ The wizard walks one forward pass, then lets you revise anything before committi
    the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
 5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
    current icon floated to the top and a "custom shortcode" escape.
-6. **Features** (opt-in) — first a **mode** choice: *pick specific tools*, or *enable everything
-   including tools added in future updates* (emits `-EnableAll`). "Specific" shows a grouped tree under
-   two sections — **Core** (PSReadLine, Terminal-Icons, posh-git, shell completions) and **WinGet** (the
-   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit). On a re-run it **pre-checks your prior
-   selection**; on a clean first run **Core is pre-checked and WinGet is left unchecked** (so the
-   light-install Core stuff is on by default, but each winget install is an explicit opt-in). Tools added
-   to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
-   oh-my-posh is always on and isn't listed. If `zoxide` ends up enabled you're prompted for its jump
-   command; if `bat` is enabled, whether to replace the built-in `cat` (**defaulting to Yes**, emitting
-   `-ReplaceCat`) plus its syntax **theme** and **style** components (both pre-filled, the theme from
-   your prompt theme's branding, so Enter keeps them; `bat --list-themes` lists the choices); if
-   `less` is enabled, whether to make it the default pager (**defaulting to Yes**, emitting
-   `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). If `fzf` is enabled you're
-   asked whether to bind the PSFzf `Ctrl+G` git keybindings (**defaulting to No**; lazygit already
-   covers git) and which chord drives the fuzzy tab-completion picker (**default `Ctrl+Spacebar`**);
-   `Ctrl+T`/`Ctrl+R` are bound regardless.
+6. **Tool options** — every tool is installed and enabled, so this asks only how the opinionated ones
+   behave. You're prompted for zoxide's jump command (**default `cd`**, replacing the built-in; pass
+   `z` to leave `cd` alone); whether to replace the built-in `cat` with **bat** (**defaulting to Yes**,
+   emitting `-ReplaceCat`) plus its syntax **theme** and **style** components (both pre-filled, the
+   theme from your prompt theme's branding, so Enter keeps them; `bat --list-themes` lists the
+   choices); whether to make **less** the default pager (**defaulting to Yes**, emitting
+   `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`); whether to bind the PSFzf `Ctrl+G`
+   git keybindings (**defaulting to No**; lazygit already covers git); and which chord drives the
+   fuzzy tab-completion picker (**default `Ctrl+Spacebar`**). `Ctrl+T`/`Ctrl+R` are bound regardless.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -624,15 +618,17 @@ Show-NerdFontSetup -Font Meslo, CascadiaCode
 ### `Initialize-PwshProfile`
 
 The headline entry point: one call that runs the profile startup, so `$PROFILE` shrinks to just this
-call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-EnableAll` (see below).
+call (it auto-loads the module). **Every tool runs** — there is no tool selection; its parameters
+configure how each tool is wired, not whether it is present.
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
 model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
 installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias always run; everything
-else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
-WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias run alongside them,
+outside the tool catalog. Both sections always render. `Install-PwshProfile` installs the CLIs during
+setup, so at startup each install step short-circuits on `Get-Command` and costs almost nothing; a tool
+that is genuinely missing is installed here instead. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
 deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or `aliases.ps1`)
 — those stay in `$PROFILE`.
@@ -675,38 +671,29 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G` git chords (branch/commit/file
   pickers), forwarded to `Enable-Fzf -GitKeyBindings`. **Off by default** (opt-in) — pass
   `-FzfGitKeyBindings` to enable them; they're off because lazygit already covers git workflows.
-  Only applies when `Fzf` is enabled (warned-and-ignored otherwise); `Enable-Fzf` drops the chords
-  anyway if git isn't on PATH.
+  `Enable-Fzf` drops the chords if git isn't on PATH.
 - **`-FzfTabChord`** — the PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (`Tab`
   stays `MenuComplete`), forwarded to `Enable-Fzf -TabExpansionChord`. Default `Ctrl+Spacebar`
-  (which also binds `Ctrl+@`). Only applies when `Fzf` is enabled.
+  (which also binds `Ctrl+@`).
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
-- **`-Enable`** — the tools to enable (opt-in): any of `PSReadLine`, `TerminalIcons`, `PoshGit`,
-  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Ripgrep`, `Less`, `Lazygit`, `Completions`. Only the listed tools run
-  (and the auto-installing ones install), so a tool added in a later module version never installs
-  unless you add it here. `-Enable @()` enables nothing. oh-my-posh and the `which` alias always run
-  and are not tokens.
-- **`-EnableAll`** — enable every tool in the catalog, including any added in future module versions
-  (opts into auto-installing future tools). If both `-EnableAll` and `-Enable` are given, `-Enable`
-  wins (the explicit list is the safer choice) and a warning notes `-EnableAll` was ignored.
 - **`-NoBanner`** — render no startup banner. Use this to suppress the banner rather than clearing
   `-BannerText` (which rejects empty); banner params passed alongside it are warned-and-ignored.
 
-A tool-specific parameter (e.g. `-ReplaceCat`, `-ZoxideCommand`) for a tool that isn't enabled is
-warned about and ignored rather than throwing — and a wizard-generated call only ever emits one for an
-enabled tool.
+Every parameter is optional, and a wizard-generated call carries only the ones you changed — so an
+install that customized nothing writes the bare call.
 
 ```powershell
-Initialize-PwshProfile -Enable Zoxide,Bat,Fd            # Screw City theme; only these tools
-Initialize-PwshProfile -Theme forestcity -EnableAll     # Forest City theme; every tool + future ones
-Initialize-PwshProfile -Enable Zoxide,Bat -BannerColor Green -BannerAlignment Center
-Initialize-PwshProfile -EnableAll -BannerFont ANSIShadow            # large block banner font
-Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Enable Zoxide
-Initialize-PwshProfile -EnableAll -NoBanner             # no startup banner
-Initialize-PwshProfile -Enable Bat -ReplaceCat          # alias cat -> bat (themed syntax highlighting)
-Initialize-PwshProfile -Enable Less -ReplaceMore        # make less the default pager (replace more.com)
+Initialize-PwshProfile                                  # Screw City theme, every tool, all defaults
+Initialize-PwshProfile -Theme forestcity                # Forest City theme and its branding
+Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -BannerFont ANSIShadow           # large block banner font
+Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json
+Initialize-PwshProfile -NoBanner                        # no startup banner
+Initialize-PwshProfile -ReplaceCat                      # alias cat -> bat (themed syntax highlighting)
+Initialize-PwshProfile -ReplaceMore                     # make less the default pager (replace more.com)
+Initialize-PwshProfile -ZoxideCommand 'z'               # zoxide on `z`, leaving the built-in cd alone
 ```
 
 ### `Invoke-Step`
@@ -895,8 +882,8 @@ Set-WindowsTerminalFont -WhatIf                         # preview the change, wr
 ### `Enable-Git`
 
 Installs git (`Git.Git`) with winget if `git.exe` isn't already on PATH, patching the current
-session's PATH so it's usable immediately. Unlike the opt-in tool enablers below, `Enable-Git` is
-**always-on** (it isn't an `-Enable` token) and runs first in the **Core** section — posh-git's
+session's PATH so it's usable immediately. Unlike the tool enablers below, `Enable-Git` is
+**always-on** (it sits outside the tool catalog) and runs first in the **Core** section — posh-git's
 status prompt, PSFzf's `Ctrl+G` git chords, lazygit, and the GitHub CLI all want git on PATH. It's
 install-only (git ships no PowerShell shell-init or completion, so Initialize is a
 `Get-Command`-guarded no-op). `Git.Git` is a full installer (not a winget portable), so it targets

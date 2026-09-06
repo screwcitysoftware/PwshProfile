@@ -20,8 +20,8 @@ function Get-PwshProfileSettingSchema {
           Emit  — how Build-PwshProfileInitializeCall RENDERS it into the generated call.
 
         Emit 'Custom' means Build deliberately owns that key's placement (the mutually exclusive
-        Theme/CustomTheme pair, NoBanner's fixed position, and the always-emitted Enable/EnableAll tool
-        pin). Emit 'None' marks the runtime-only parameters: real Initialize-PwshProfile parameters
+        Theme/CustomTheme pair, and NoBanner's fixed position ahead of the scalars). Emit 'None'
+        marks the runtime-only parameters: real Initialize-PwshProfile parameters
         that the wizard never writes and the parser must never read back. That is one column rather
         than a separate Wizard flag on purpose — a wizard key must be emitted or it is lost on re-run,
         and a runtime-only key must not be, so two columns could only ever disagree.
@@ -44,7 +44,7 @@ function Get-PwshProfileSettingSchema {
         Get-PwshProfileSettingSchema
 
         All settable parameters, including the runtime-only ones — the set Initialize-PwshProfile
-        warns about when a tool-specific parameter is passed for a tool that isn't enabled.
+        reads to find every banner parameter, including the runtime-only BannerFontPath.
 
     .EXAMPLE
         (Get-PwshProfileSettingSchema -Wizard | Where-Object Kind -eq 'Switch').Name
@@ -57,9 +57,13 @@ function Get-PwshProfileSettingSchema {
         The branded keys — the ones the wizard re-seeds when the selected theme changes.
 
     .NOTES
-        Rows are rebuilt on every call rather than cached. Enable's default is an empty array, and a
-        memoized schema would hand every caller the same mutable instance, breaking
-        Get-PwshProfileDefault's contract of returning a hashtable callers may freely mutate.
+        Rows are rebuilt on every call rather than cached, so a caller is always handed its own
+        instances — Get-PwshProfileDefault's contract is that the hashtable it returns may be freely
+        mutated, which a memoized schema with a reference-typed default would silently break.
+
+        The Tool column no longer gates anything (every tool always runs), but it is kept as the
+        record of which tool owns each parameter — it names the enabler a setting is forwarded to,
+        and Tests/SettingSchema.Tests.ps1 holds it to real catalog tokens.
     #>
     [CmdletBinding()]
     param(
@@ -108,10 +112,6 @@ function Get-PwshProfileSettingSchema {
         [pscustomobject]@{ Name = 'FzfGitKeyBindings'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = 'Fzf'; Banner = $false; Emit = 'Switch' }
         [pscustomobject]@{ Name = 'NoBanner'; Kind = 'Switch'; Default = $false
-            BrandingKey = $null; Neutral = $null; Tool = $null; Banner = $false; Emit = 'Custom' }
-        [pscustomobject]@{ Name = 'Enable'; Kind = 'Array'; Default = @()
-            BrandingKey = $null; Neutral = $null; Tool = $null; Banner = $false; Emit = 'Custom' }
-        [pscustomobject]@{ Name = 'EnableAll'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = $null; Banner = $false; Emit = 'Custom' }
     )
 

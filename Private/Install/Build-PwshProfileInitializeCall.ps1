@@ -4,11 +4,9 @@ function Build-PwshProfileInitializeCall {
         Turns a settings hashtable into the Initialize-PwshProfile command line to embed in a profile.
 
     .DESCRIPTION
-        Renders the single line Install-PwshProfile writes into the managed bootstrap block. Most
-        parameters are emitted only when they differ from the defaults, to keep the line tidy. Tool
-        selection is the deliberate exception: it is ALWAYS emitted explicitly (-EnableAll, -Enable with
-        the chosen tokens, or -Enable @() for nothing), because that explicit pin is what stops a tool
-        added in a later module version from auto-installing on the next shell.
+        Renders the single line Install-PwshProfile writes into the managed bootstrap block. Every
+        parameter is emitted only when it differs from the defaults, to keep the line tidy — so an
+        install that customized nothing yields the bare call 'Initialize-PwshProfile'.
 
         The theme sets the comparison baseline. Banner branding is compared against
         Get-PwshProfileDefault for the *selected* theme, so a forestcity install that keeps the Forest
@@ -20,19 +18,17 @@ function Build-PwshProfileInitializeCall {
         verbatim. -BannerText is the exception: it is double-quoted so $env:COMPUTERNAME interpolates at
         startup, with $ deliberately left unescaped.
 
-        Tool-specific params stay consistent with the selection — the bat, less and zoxide flags are
-        emitted only when their tool is enabled, and banner params are omitted under -NoBanner — so a
-        generated call never carries a flag for a disabled feature.
+        Banner params are omitted under -NoBanner, so a generated call never carries a flag for a
+        feature that will not render.
 
         WHICH params to emit, how to render each, and in what order all come from
         Get-PwshProfileSettingSchema: the scalars are emitted in schema row order, then the switches in
-        schema row order, then the tool pin. The gating columns are read from the same rows (Tool for
-        the tool coupling, Banner for -NoBanner suppression), so a new setting cannot be gated here in
-        a way that disagrees with how Initialize-PwshProfile warns about it. The five rows tagged
-        Emit 'Custom' are the exception this function deliberately owns by hand: the mutually exclusive
-        Theme/CustomTheme pair, -NoBanner's fixed slot ahead of the scalars it suppresses, and the
-        always-emitted Enable/EnableAll pin. Reordering the schema reorders every generated profile
-        line, which is why Tests/Install-PwshProfile.Tests.ps1 pins the exact text.
+        schema row order. The Banner column drives -NoBanner suppression, read from the same rows
+        Initialize-PwshProfile reads, so the two cannot disagree about what counts as a banner
+        parameter. The three rows tagged Emit 'Custom' are the exception this function deliberately
+        owns by hand: the mutually exclusive Theme/CustomTheme pair, and -NoBanner's fixed slot ahead
+        of the scalars it suppresses. Reordering the schema reorders every generated profile line,
+        which is why Tests/Install-PwshProfile.Tests.ps1 pins the exact text.
 
     .PARAMETER Setting
         The settings hashtable, keyed as Get-PwshProfileDefault and the wizard produce it. Absent keys
@@ -41,33 +37,26 @@ function Build-PwshProfileInitializeCall {
     .EXAMPLE
         Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault)
 
-        Returns 'Initialize-PwshProfile -Enable @()' — the default selects nothing, so it pins an empty
-        enable list rather than emitting a bare call.
+        Returns the bare 'Initialize-PwshProfile' — nothing differs from the defaults, so nothing is
+        emitted.
 
     .EXAMPLE
-        $s = Get-PwshProfileDefault -Theme forestcity; $s.Enable = @('Zoxide', 'Bat')
-        Build-PwshProfileInitializeCall -Setting $s
+        Build-PwshProfileInitializeCall -Setting (Get-PwshProfileDefault -Theme forestcity)
 
-        Returns 'Initialize-PwshProfile -Theme forestcity -Enable Zoxide,Bat'.
-
-    .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.EnableAll = $true
-        Build-PwshProfileInitializeCall -Setting $s
-
-        Returns 'Initialize-PwshProfile -EnableAll' (every current tool plus future additions).
+        Returns 'Initialize-PwshProfile -Theme forestcity' — the branded banner color, step icon and
+        bat theme all match that theme's baseline, so none of them are re-spelled.
 
     .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.Enable = @('Bat'); $s.ReplaceCat = $true
+        $s = Get-PwshProfileDefault; $s.ReplaceCat = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -ReplaceCat -Enable Bat' — the switch is emitted because bat is
-        enabled.
+        Returns 'Initialize-PwshProfile -ReplaceCat'.
 
     .EXAMPLE
-        $s = Get-PwshProfileDefault; $s.Enable = @('Zoxide'); $s.NoBanner = $true
+        $s = Get-PwshProfileDefault; $s.NoBanner = $true
         Build-PwshProfileInitializeCall -Setting $s
 
-        Returns 'Initialize-PwshProfile -NoBanner -Enable Zoxide' — banner params are omitted.
+        Returns 'Initialize-PwshProfile -NoBanner' — banner params are omitted.
     #>
     [CmdletBinding()]
     param(
@@ -93,11 +82,6 @@ function Build-PwshProfileInitializeCall {
 
     $parts = [System.Collections.Generic.List[string]]::new()
 
-    # Resolve the tool selection up front: -EnableAll covers the whole catalog, otherwise the explicit
-    # Enable list. It gates which tool-specific params are emitted, so a disabled tool's flags never are.
-    $enableAll = [bool](Get-SettingValue 'EnableAll')
-    $enableList = @(Get-SettingValue 'Enable')
-    $enabledSet = if ($enableAll) { Get-PwshProfileToolCatalog -Token } else { $enableList }
     $noBanner = [bool](Get-SettingValue 'NoBanner')
 
     # Theme selection: a custom theme path takes precedence (and is mutually exclusive with a bundled
@@ -115,15 +99,10 @@ function Build-PwshProfileInitializeCall {
     # Scalars: emit only when they differ from the (themed) default. The schema's declaration order IS
     # the emit order, and Where-Object preserves it, so the generated line stays byte-stable. Emit
     # 'Interpolated' is double-quoted so $env:COMPUTERNAME expands at startup; the rest are verbatim.
-    # A banner param is skipped under -NoBanner, and a tool-owned param when its tool is off.
-    #
-    # Gate on $row.Tool being truthy rather than on a map's ContainsKey: an untooled row carries
-    # Tool = $null, and a map built from every row would report ContainsKey true with a $null value,
-    # which -notcontains also matches — silently suppressing -StepIcon and every banner param.
+    # A banner param is skipped under -NoBanner, as it would have no effect.
     $schema = Get-PwshProfileSettingSchema
     foreach ($row in $schema | Where-Object { $_.Emit -in @('Scalar', 'Interpolated') }) {
         if ($noBanner -and $row.Banner) { continue }
-        if ($row.Tool -and $enabledSet -notcontains $row.Tool) { continue }
         $v = Get-SettingValue $row.Name
         if ($v -ne $Default[$row.Name]) {
             $rendered = if ($row.Emit -eq 'Interpolated') { ConvertTo-InterpolatedValue $v }
@@ -132,28 +111,16 @@ function Build-PwshProfileInitializeCall {
         }
     }
 
-    # Boolean switches: a bare flag, emitted only when it is ON, differs from the default, and its
-    # owning tool (if any) is enabled — the flag is a no-op otherwise. The -not $row.Tool clause cannot
-    # change today's output (all three switch rows are tool-owned); it stops a future tool-less switch
-    # from being silently unemittable.
+    # Boolean switches: a bare flag, emitted only when it is ON and differs from the default.
     foreach ($row in $schema | Where-Object { $_.Emit -eq 'Switch' }) {
         $v = Get-SettingValue $row.Name
-        if ([bool]$v -ne [bool]$Default[$row.Name] -and $v -and
-            (-not $row.Tool -or $enabledSet -contains $row.Tool)) {
+        if ([bool]$v -ne [bool]$Default[$row.Name] -and $v) {
             $parts.Add("-$($row.Name)")
         }
     }
-    # Always emitted explicitly — that is what pins the set against future-tool drift. -EnableAll for
-    # "everything + future"; otherwise -Enable with the chosen tokens, or -Enable @() for nothing.
-    if ($enableAll) {
-        $parts.Add('-EnableAll')
-    }
-    elseif ($enableList.Count -gt 0) {
-        $parts.Add("-Enable $($enableList -join ',')")
-    }
-    else {
-        $parts.Add('-Enable @()')
-    }
 
-    return "Initialize-PwshProfile $($parts -join ' ')"
+    # An install that customized nothing emits no parameters at all, so join conditionally rather than
+    # interpolating — "Initialize-PwshProfile $()" would leave a trailing space on the bare call.
+    if ($parts.Count -eq 0) { return 'Initialize-PwshProfile' }
+    "Initialize-PwshProfile $($parts -join ' ')"
 }

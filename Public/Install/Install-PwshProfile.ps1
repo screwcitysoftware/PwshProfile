@@ -5,16 +5,16 @@ function Install-PwshProfile {
 
     .DESCRIPTION
         Walks you through a PwshSpectreConsole wizard and writes a marker-wrapped bootstrap block — a
-        tools snapshot comment plus a tailored Initialize-PwshProfile call — into a profile file
+        guidance comment plus a tailored Initialize-PwshProfile call — into a profile file
         ($PROFILE by default). No import line is needed: invoking Initialize-PwshProfile auto-loads the
         module. This is the one-time setup companion to Initialize-PwshProfile, which then runs every
         session from that block.
 
         The wizard makes one forward pass — an optional Nerd Font install, winget client settings,
-        theme, an optional banner, the step icon, and an opt-in Features tree — then lands on a review
+        theme, an optional banner, the step icon, and the per-tool options — then lands on a review
         screen where any step can be re-edited before submitting, or the whole setup cancelled without
         writing. On a re-run it parses the existing block to default each prompt to your previous
-        choices and to flag tools added since (shown "(new)" and starting unchecked).
+        choices.
 
         The Nerd Font install (NerdFonts module, CurrentUser scope, no admin), the winget settings, and
         the Windows Terminal font/scheme are one-time machine actions applied at the end of the run,
@@ -106,19 +106,12 @@ function Install-PwshProfile {
         return
     }
 
-    # On a re-run, parse the existing block so the wizard defaults to the prior choices and can flag
-    # tools added since. A missing/old snapshot leaves $newTools empty, so nothing is falsely "(new)".
+    # On a re-run, parse the existing block so the wizard defaults to the prior choices. A block that
+    # can't be parsed leaves $priorSettings null and the wizard falls back to first-run defaults.
     $priorSettings = $null
-    $newTools = @()
     if ($reconfiguring) {
         $prior = Read-PwshProfileInstalledSetting -Path $Path
-        if ($prior) {
-            $priorSettings = $prior.Settings
-            $snapshot = @($prior.ToolSnapshot)
-            if ($snapshot.Count -gt 0) {
-                $newTools = @(Get-PwshProfileToolCatalog -Token | Where-Object { $_ -notin $snapshot })
-            }
-        }
+        if ($prior) { $priorSettings = $prior.Settings }
     }
 
     Write-Figlet -Text 'Pwsh Profile' -Color $accent
@@ -133,7 +126,7 @@ function Install-PwshProfile {
     Format-PwshProfileHelpMarkup -Text $intro -Accent $accent -Code $code -Body default |
         Format-SpectrePanel -Header '◆ Profile setup' -Border Rounded -Color $accent -Expand | Out-Host
 
-    $settings = Invoke-PwshProfileWizard -PriorSetting $priorSettings -NewTool $newTools
+    $settings = Invoke-PwshProfileWizard -PriorSetting $priorSettings
 
     # The wizard returns $null when the user cancels at the review screen — write nothing.
     if ($null -eq $settings) {

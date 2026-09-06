@@ -49,17 +49,19 @@ Describe 'Get-PwshProfileToolCatalog' {
         $tokens | Should -Contain 'Lazygit'
     }
 
-    It '-DefaultEnabled returns the non-winget tokens (clean-install default-on set)' {
-        $def = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog -DefaultEnabled }
-        @($def) | Should -Be @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions')
+    It 'has no tool-selection parameters left on Initialize-PwshProfile' {
+        # Every tool always runs. This is a tripwire against reintroducing an opt-in parameter without
+        # also restoring the catalog<->ValidateSet anti-drift check that used to guard it.
+        $p = (Get-Command Initialize-PwshProfile).Parameters
+        $p.ContainsKey('Enable') | Should -BeFalse
+        $p.ContainsKey('EnableAll') | Should -BeFalse
     }
 
-    It 'the -Enable ValidateSet on Initialize-PwshProfile matches the catalog tokens (anti-drift)' {
-        $tokens = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog -Token }
-        $set = (Get-Command Initialize-PwshProfile).Parameters['Enable'].Attributes |
-            Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] } |
-            Select-Object -First 1
-        $set | Should -Not -BeNullOrEmpty
-        @($set.ValidValues) | Should -Be @($tokens)
+    It 'gives every token a unique, non-empty label' {
+        $sections = & (Get-Module $script:Module) { Get-PwshProfileToolCatalog }
+        $rows = @(foreach ($k in $sections.Keys) { $sections[$k] })
+        @($rows.Token | Sort-Object -Unique).Count | Should -Be $rows.Count
+        # Labels key the wizard's selection prompts back to tokens, so they must not collide either.
+        @($rows.Label | Sort-Object -Unique).Count | Should -Be $rows.Count
     }
 }
