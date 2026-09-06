@@ -12,11 +12,12 @@ function Read-PwshProfileInstalledSetting {
           - It locates the managed region between the Get-PwshProfileMarker sentinels.
           - It AST-parses the embedded Initialize-PwshProfile call
             ([System.Management.Automation.Language.Parser]::ParseInput) and maps the bound parameters
-            to a settings hashtable (only the keys that were present): Theme, CustomTheme, BannerText,
-            BannerColor, BannerAlignment, BannerFont, StepIcon, ZoxideCommand,
-            BatTheme, BatStyle, FzfTabChord (strings); Enable (string[]); EnableAll, NoBanner,
-            ReplaceCat, ReplaceMore, FzfGitKeyBindings (switches -> $true when present; the last is a
-            bare opt-in flag, an explicit -FzfGitKeyBindings:$false is also honored).
+            to a settings hashtable, keeping only the keys that were present. Which parameters it
+            recognizes, and how each is parsed, come from Get-PwshProfileSettingSchema -Wizard: a
+            String needs a value or sets no key, an Array is always array-wrapped so a bare -Enable
+            reads as an empty selection, and a Switch is $true when bare with an explicit
+            -Foo:$false honored. Runtime-only parameters are excluded — parsing one back would set a
+            key nothing re-emits, which is how a hand-added -BannerFontPath used to vanish.
           - It reads the `# Tools available: a,b,c` snapshot comment (the full catalog at write time)
             into ToolSnapshot.
 
@@ -98,15 +99,17 @@ function Read-PwshProfileInstalledSetting {
             Get-ScalarFromAst $Node
         }
 
-        $stringParams = @('Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment',
-            'BannerFont', 'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle',
-            'FzfTabChord')
-        # A bare -FzfGitKeyBindings parses as $true; the switch branch also handles an explicit :$false.
-        $switchParams = @('EnableAll', 'NoBanner', 'ReplaceCat', 'ReplaceMore', 'FzfGitKeyBindings')
-
-        # Canonical-case lookup so '-bannertext' etc. still map to the proper key.
+        # Canonical-case lookup so '-bannertext' etc. still map to the proper key, plus each key's
+        # parse kind — both projections of the settings schema, so what this reads back cannot drift
+        # from what Build-PwshProfileInitializeCall emits. -Wizard excludes the runtime-only
+        # parameters: parsing one back would re-create the BannerFontPath bug, where a value was read
+        # into the settings, overlaid by the wizard, then dropped because nothing re-emits it.
         $canon = @{}
-        foreach ($p in $stringParams + $switchParams + 'Enable') { $canon[$p.ToLowerInvariant()] = $p }
+        $kind = @{}
+        foreach ($row in Get-PwshProfileSettingSchema -Wizard) {
+            $canon[$row.Name.ToLowerInvariant()] = $row.Name
+            $kind[$row.Name] = $row.Kind
+        }
 
         $settings = @{}
         $elements = @($cmd.CommandElements)
@@ -124,20 +127,25 @@ function Read-PwshProfileInstalledSetting {
                 $idx++
             }
 
-            if ($switchParams -contains $name) {
-                # Present switch -> $true unless explicitly -Foo:$false. Read the boolean off the AST:
-                # the generic $value stringifies, and [bool]'False' is $true, which would flip it.
-                if ($argNode) {
-                    try { $settings[$name] = [bool]$argNode.SafeGetValue() }
-                    catch { $settings[$name] = [bool](Get-ValueFromAst $argNode) }
+            switch ($kind[$name]) {
+                'Switch' {
+                    # Present switch -> $true unless explicitly -Foo:$false. Read the boolean off the
+                    # AST: the generic value stringifies, and [bool]'False' is $true, which would flip it.
+                    if ($argNode) {
+                        try { $settings[$name] = [bool]$argNode.SafeGetValue() }
+                        catch { $settings[$name] = [bool](Get-ValueFromAst $argNode) }
+                    }
+                    else { $settings[$name] = $true }
                 }
-                else { $settings[$name] = $true }
-            }
-            elseif ($name -eq 'Enable') {
-                $settings.Enable = @(if ($argNode) { Get-ValueFromAst $argNode })
-            }
-            elseif ($argNode) {
-                $settings[$name] = [string](Get-ValueFromAst $argNode)
+                'Array' {
+                    # Always array-wrapped, so a bare -Enable with no value parses as an empty selection
+                    # rather than a missing key.
+                    $settings[$name] = @(if ($argNode) { Get-ValueFromAst $argNode })
+                }
+                'String' {
+                    # A string parameter with no value sets no key at all — absent means "kept the default".
+                    if ($argNode) { $settings[$name] = [string](Get-ValueFromAst $argNode) }
+                }
             }
         }
 
