@@ -87,6 +87,10 @@ Describe 'Uninstall-PwshProfile' {
 
     It 'round-trips: Install then Uninstall restores the original user content' {
         Mock -ModuleName $script:Module Write-Figlet { }
+        # Install-PwshProfile ends by offering to reload the profile; decline it and stub the reload,
+        # or this reaches a real Spectre prompt and dot-sources the temp file into the test session.
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $false } -RemoveParameterType 'Color'
+        Mock -ModuleName $script:Module Invoke-InGlobalScope { }
         Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'

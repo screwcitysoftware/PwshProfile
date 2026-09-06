@@ -1045,6 +1045,12 @@ Describe 'Install-PwshProfile' {
         Mock -ModuleName $script:Module Format-SpectrePanel { } -RemoveParameterType 'Color'
         Mock -ModuleName $script:Module Write-SpectreHost { }
         Mock -ModuleName $script:Module Show-NerdFontSetup { }
+        # The done step now offers to reload the profile. Mocking the wizard bypassed every prompt
+        # until now, so without these two the tests that write a file would hit a real Spectre
+        # prompt -- and the function's own interactivity guard would not save them, since it probes
+        # whether the MODULE exposes Read-SpectreSelection, not whether the host is interactive.
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $false } -RemoveParameterType 'Color'
+        Mock -ModuleName $script:Module Invoke-InGlobalScope { }
         # The installer now installs the tool CLIs itself. Stub the shared winget helper so the suite
         # never touches winget -- without this every run would attempt the whole catalog.
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
@@ -1269,6 +1275,93 @@ Describe 'Install-PwshProfile' {
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
         Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 0 -Exactly
+    }
+
+    It 'offers to reload the profile once the bootstrap is written' {
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 1 -Exactly `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+    }
+
+    It 'dot-sources the written file in global scope when the reload is accepted' {
+        # Global scope is the whole point: run from a module function, a bare `. $path` would load
+        # into THAT function's scope and every alias and function it defines would vanish on return.
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 1 -Exactly `
+            -ParameterFilter { $Expression -eq ". '$script:Dest'" }
+    }
+
+    It 'quotes the path so one containing a quote cannot break out' {
+        $script:Odd = Join-Path $script:Dir "it's here.ps1"
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+
+        Install-PwshProfile -Path $script:Odd | Out-Null
+
+        # Single-quoted with the quote doubled, so the path is data rather than script -- and a path
+        # holding a $ can't interpolate either.
+        Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 1 -Exactly `
+            -ParameterFilter { $Expression -eq ". '$($script:Odd -replace "'", "''")'" }
+    }
+
+    It 'reloads nothing when the offer is declined' {
+        # The BeforeEach mock answers no.
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 0 -Exactly
+    }
+
+    It 'does not offer a reload under -WhatIf' {
+        # Changed is computed BEFORE ShouldProcess, so it is $true here even though nothing was
+        # written -- which is exactly why the gate carries its own -not $WhatIfPreference.
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 0 -Exactly `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+    }
+
+    It 'does not offer a reload when nothing changed' {
+        # A no-op re-run reports AlreadyPresent; there is nothing new to apply.
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 1 -Exactly `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+    }
+
+    It 'warns rather than throwing when the reload fails' {
+        # Against this command's usual "genuine errors throw" rule, deliberately: the install has
+        # already succeeded by this point, and a user's own profile code throwing must not turn a
+        # completed install into a failed one.
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+        Mock -ModuleName $script:Module Invoke-InGlobalScope { throw 'boom' }
+
+        { Install-PwshProfile -Path $script:Dest -WarningAction SilentlyContinue | Out-Null } |
+            Should -Not -Throw
+    }
+
+    It 'names the file and the failure in that warning' {
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+        Mock -ModuleName $script:Module Invoke-InGlobalScope { throw 'boom' }
+
+        Install-PwshProfile -Path $script:Dest -WarningVariable w -WarningAction SilentlyContinue | Out-Null
+
+        "$w" | Should -BeLike '*boom*'
+        "$w" | Should -BeLike '*Restart your shell*'
+    }
+
+    It 'keeps the reload output out of its own pipeline' {
+        # Invoke-InGlobalScope returns whatever the dot-sourced script emits. Unsuppressed, a profile
+        # that prints anything would leak into this command's output and break "returns nothing
+        # without -PassThru" -- so the $null = on that call is load-bearing, not tidiness.
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
+            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+        Mock -ModuleName $script:Module Invoke-InGlobalScope { 'chatty profile output' }
+
+        Install-PwshProfile -Path $script:Dest | Should -BeNullOrEmpty
     }
 
     It 'installs the tools after the winget settings are applied' {

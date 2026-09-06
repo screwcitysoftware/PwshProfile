@@ -636,6 +636,24 @@ preferences are already in place), and the Windows Terminal font/scheme — then
 None of them are part of the block, so re-running re-applies them, and `-WhatIf` previews the whole run
 without installing or writing anything.
 
+Once the block is written it offers to **reload the profile right there** — dot-sourcing the file it
+just wrote, so your prompt and tools apply without opening a new shell. It defaults to yes, so Enter
+finishes the job; declining leaves the file exactly as written and the panel's advice standing.
+
+```text
+  › Runs the block just written in this session, so your prompt and tools apply
+    without opening a new shell.
+Reload your profile now? [Y/n]
+  ✓ Profile reloaded
+```
+
+The offer only appears when something was actually written — a no-op re-run and a `-WhatIf` preview
+both skip it. **One caveat on a re-run:** the wiring switches are one-way in-session. Turning one
+**on** applies on a reload; turning one **off** still needs a new shell, because the enablers only
+ever *set* their alias or environment variable (`cat` stays aliased to `bat`, `$env:PAGER` stays
+set). The prompt says so when it's a re-run. A reload that throws warns rather than failing the
+install, which has already succeeded by then.
+
 Your existing profile is never destroyed:
 
 - A missing file (and its parent directory) is created.
