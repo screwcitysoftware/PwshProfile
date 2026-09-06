@@ -295,9 +295,10 @@ color palettes, and a **Windows Terminal color scheme** (install it with
 
 **The installer's first step is the theme choice.** `Install-PwshProfile` opens with a theme prompt —
 pick a bundled theme or supply a path to a theme of your own — and the rest of the wizard pre-fills
-its color/icon prompts from the chosen theme's branding. For a **custom theme** those prompts start
-from neutral defaults (a neutral color, a generic ⚙️ icon) so you brand it fresh. The banner **text**
-defaults to your machine name (`$env:COMPUTERNAME`) for every theme, custom included.
+its branded prompts (banner color, step icon, **bat** syntax theme) from the chosen theme. For a
+**custom theme** those prompts start from neutral defaults (a neutral color, a generic ⚙️ icon, and
+bat's `ansi` theme, which follows your terminal's own colors) so you brand it fresh. The banner
+**text** defaults to your machine name (`$env:COMPUTERNAME`) for every theme, custom included.
 Whatever you pick is written into the generated bootstrap as `-Theme <name>` (or `-CustomTheme '<path>'`).
 
 Choosing a theme outside the wizard, or by hand in `$PROFILE`:
@@ -492,10 +493,11 @@ The wizard walks one forward pass, then lets you revise anything before committi
    are merged into your `settings.json` via [`Set-WingetSetting`](#set-wingetsetting) when you submit
    (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
 3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
-   your own (see [Themes](#themes)). The choice seeds the banner color and step icon the later prompts
-   are pre-filled with; a custom path seeds neutral color/icon so you brand those fresh. The banner
-   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to
-   install the matching **Windows Terminal color scheme** via
+   your own (see [Themes](#themes)). The choice seeds every branded setting the later prompts are
+   pre-filled with — banner color, step icon, and bat's syntax theme; a custom path seeds neutral
+   ones (`Silver`, `:gear:`, `ansi`) so you brand those fresh. The banner text defaults to your
+   machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to install the
+   matching **Windows Terminal color scheme** via
    [`Install-WindowsTerminalScheme`](#install-windowsterminalscheme-uninstall-windowsterminalscheme)
    (**defaulting to No**) and, only if accepted, whether to set it as the default color scheme
    (**defaulting to Yes**) — applied to `settings.json` when you submit (a one-time
@@ -516,8 +518,10 @@ The wizard walks one forward pass, then lets you revise anything before committi
    to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
    oh-my-posh is always on and isn't listed. If `zoxide` ends up enabled you're prompted for its jump
    command; if `bat` is enabled, whether to replace the built-in `cat` (**defaulting to Yes**, emitting
-   `-ReplaceCat`); if `less` is enabled, whether to make it the default pager (**defaulting to Yes**,
-   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). If `fzf` is enabled you're
+   `-ReplaceCat`) plus its syntax **theme** and **style** components (both pre-filled, the theme from
+   your prompt theme's branding, so Enter keeps them; `bat --list-themes` lists the choices); if
+   `less` is enabled, whether to make it the default pager (**defaulting to Yes**, emitting
+   `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). If `fzf` is enabled you're
    asked whether to bind the PSFzf `Ctrl+G` git keybindings (**defaulting to No**; lazygit already
    covers git) and which chord drives the fuzzy tab-completion picker (**default `Ctrl+Spacebar`**);
    `Ctrl+T`/`Ctrl+R` are bound regardless.

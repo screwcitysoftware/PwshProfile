@@ -24,6 +24,16 @@ function Build-PwshProfileInitializeCall {
         emitted only when their tool is enabled, and banner params are omitted under -NoBanner — so a
         generated call never carries a flag for a disabled feature.
 
+        WHICH params to emit, how to render each, and in what order all come from
+        Get-PwshProfileSettingSchema: the scalars are emitted in schema row order, then the switches in
+        schema row order, then the tool pin. The gating columns are read from the same rows (Tool for
+        the tool coupling, Banner for -NoBanner suppression), so a new setting cannot be gated here in
+        a way that disagrees with how Initialize-PwshProfile warns about it. The five rows tagged
+        Emit 'Custom' are the exception this function deliberately owns by hand: the mutually exclusive
+        Theme/CustomTheme pair, -NoBanner's fixed slot ahead of the scalars it suppresses, and the
+        always-emitted Enable/EnableAll pin. Reordering the schema reorders every generated profile
+        line, which is why Tests/Install-PwshProfile.Tests.ps1 pins the exact text.
+
     .PARAMETER Setting
         The settings hashtable, keyed as Get-PwshProfileDefault and the wizard produce it. Absent keys
         fall back to the default and are not emitted.

@@ -94,9 +94,11 @@ Describe 'Read-PwshProfileInstalledSetting' {
         # silently dropped if this file knows about it, so adding a key to Get-PwshProfileDefault
         # without adding it here fails right at this assertion -- which is the point.
         #
-        # The wizard-settable set lives in several hand-maintained lists (Get-PwshProfileDefault's
-        # defaults, Read's $stringParams/$switchParams, Build's emit tables, the wizard's re-seed
-        # list). Nothing forces them to agree; this suite is what notices when they stop.
+        # The wizard-settable set is now one list -- Get-PwshProfileSettingSchema -Wizard -- that the
+        # defaults, the parser, the call builder and the wizard all project from, so they can no
+        # longer disagree. What this suite still guards is the schema itself: a row added there
+        # reaches every consumer at once, and only a round-trip proves the new key actually survives
+        # Build -> Read rather than merely appearing in all four projections.
         $actual = @(& (Get-Module $script:Module) { @((Get-PwshProfileDefault).Keys) }) | Sort-Object
         $known = @(@($script:NonDefault.Keys) + $script:CoveredSeparately) | Sort-Object
         $actual | Should -Be $known

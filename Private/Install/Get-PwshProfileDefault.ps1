@@ -14,17 +14,19 @@ function Get-PwshProfileDefault {
         BannerText defaults to the literal '$env:COMPUTERNAME' for every theme (it interpolates to the
         machine name at startup) — matching Initialize-PwshProfile's runtime default, so a kept default
         emits no -BannerText. The banner color, step icon, and bat theme are seeded from the selected
-        theme — the schema marks each with the branding member supplying it (a forestcity default carries the green/🌳/gruvbox-dark
-        identity, screwcity the purple/🔩/Dracula one). ReplaceCat, ReplaceMore, and NoBanner default to
-        $false (the baseline), so opting in emits -ReplaceCat / -ReplaceMore / -NoBanner. Tool selection is
-        opt-in: Enable defaults to an empty list (a first-run wizard starts with nothing checked, forcing an
-        explicit per-tool choice) and EnableAll defaults to $false. The remaining values are kept identical
-        to Initialize-PwshProfile's own parameter defaults. A fresh hashtable is returned on every call so
+        theme — the schema marks each with the branding member supplying it, so a forestcity default
+        carries the green/🌳/gruvbox-dark identity and screwcity the purple/🔩/Dracula one.
+        ReplaceCat, ReplaceMore, and NoBanner default to $false (the baseline), so opting in emits
+        -ReplaceCat / -ReplaceMore / -NoBanner. Tool selection is opt-in: Enable defaults to an empty
+        list (a first-run wizard starts with nothing checked, forcing an explicit per-tool choice) and
+        EnableAll defaults to $false. The remaining values are kept identical to
+        Initialize-PwshProfile's own parameter defaults. A fresh hashtable is returned on every call so
         callers can mutate it freely.
 
     .PARAMETER Theme
-        The bundled theme whose branding seeds the banner color/icon defaults. Defaults to 'screwcity'.
-        Unknown names fall back to the screwcity branding (see Get-BundledThemeBranding).
+        The bundled theme whose branding seeds the branded defaults (banner color, step icon, bat
+        theme — whichever rows carry a BrandingKey). Defaults to 'screwcity'; unknown names fall back
+        to the screwcity branding (see Get-BundledThemeBranding).
 
     .EXAMPLE
         Get-PwshProfileDefault
