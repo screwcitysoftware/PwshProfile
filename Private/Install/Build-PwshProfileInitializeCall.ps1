@@ -102,30 +102,37 @@ function Build-PwshProfileInitializeCall {
     # -NoBanner suppresses the banner; the banner params below are then omitted as moot.
     if ($noBanner) { $parts.Add('-NoBanner') }
 
-    # Scalars: emit only when they differ from the (themed) default. BannerText is double-quoted so it
-    # interpolates at startup; the rest are verbatim. Banner params are skipped under -NoBanner.
-    $bannerKeys = @('BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont')
-    $keyTool = @{ ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat'; FzfTabChord = 'Fzf' }
-    foreach ($key in @($bannerKeys + @('StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'FzfTabChord'))) {
-        if ($noBanner -and $bannerKeys -contains $key) { continue }
-        if ($keyTool.ContainsKey($key) -and $enabledSet -notcontains $keyTool[$key]) { continue }
-        $v = Get-SettingValue $key
-        if ($v -ne $Default[$key]) {
-            $rendered = if ($key -eq 'BannerText') { ConvertTo-InterpolatedValue $v } else { ConvertTo-QuotedValue $v }
-            $parts.Add("-$key $rendered")
+    # Scalars: emit only when they differ from the (themed) default. The schema's declaration order IS
+    # the emit order, and Where-Object preserves it, so the generated line stays byte-stable. Emit
+    # 'Interpolated' is double-quoted so $env:COMPUTERNAME expands at startup; the rest are verbatim.
+    # A banner param is skipped under -NoBanner, and a tool-owned param when its tool is off.
+    #
+    # Gate on $row.Tool being truthy rather than on a map's ContainsKey: an untooled row carries
+    # Tool = $null, and a map built from every row would report ContainsKey true with a $null value,
+    # which -notcontains also matches — silently suppressing -StepIcon and every banner param.
+    $schema = Get-PwshProfileSettingSchema
+    foreach ($row in $schema | Where-Object { $_.Emit -in @('Scalar', 'Interpolated') }) {
+        if ($noBanner -and $row.Banner) { continue }
+        if ($row.Tool -and $enabledSet -notcontains $row.Tool) { continue }
+        $v = Get-SettingValue $row.Name
+        if ($v -ne $Default[$row.Name]) {
+            $rendered = if ($row.Emit -eq 'Interpolated') { ConvertTo-InterpolatedValue $v }
+                        else { ConvertTo-QuotedValue $v }
+            $parts.Add("-$($row.Name) $rendered")
         }
     }
 
     # Boolean switches: a bare flag, emitted only when it is ON, differs from the default, and its
-    # owning tool is enabled — the flag is a no-op otherwise.
-    $switchTool = [ordered]@{ ReplaceCat = 'Bat'; ReplaceMore = 'Less'; FzfGitKeyBindings = 'Fzf' }
-    foreach ($switch in $switchTool.GetEnumerator()) {
-        $v = Get-SettingValue $switch.Key
-        if ([bool]$v -ne [bool]$Default[$switch.Key] -and $v -and $enabledSet -contains $switch.Value) {
-            $parts.Add("-$($switch.Key)")
+    # owning tool (if any) is enabled — the flag is a no-op otherwise. The -not $row.Tool clause cannot
+    # change today's output (all three switch rows are tool-owned); it stops a future tool-less switch
+    # from being silently unemittable.
+    foreach ($row in $schema | Where-Object { $_.Emit -eq 'Switch' }) {
+        $v = Get-SettingValue $row.Name
+        if ([bool]$v -ne [bool]$Default[$row.Name] -and $v -and
+            (-not $row.Tool -or $enabledSet -contains $row.Tool)) {
+            $parts.Add("-$($row.Name)")
         }
     }
-
     # Always emitted explicitly — that is what pins the set against future-tool drift. -EnableAll for
     # "everything + future"; otherwise -Enable with the chosen tokens, or -Enable @() for nothing.
     if ($enableAll) {
