@@ -303,6 +303,10 @@ function Initialize-PwshProfile {
         }
     }
 
+    # Fresh slate for the startup-installed notice reported at the end: an earlier call in this
+    # session that threw partway would otherwise leave entries behind for this one to re-report.
+    $script:StartupInstall.Clear()
+
     # Resolve the oh-my-posh config and matching branding. A custom theme has no bundled branding, so
     # it falls back to screwcity ($Theme keeps its default even in the Custom parameter set).
     if ($PSCmdlet.ParameterSetName -eq 'Custom') {
@@ -399,5 +403,15 @@ function Initialize-PwshProfile {
         Invoke-Step "lazygit" { Enable-Lazygit }
         # Standalone Python toolchain; no init-time dependency, so its position is free — kept last.
         Invoke-Step "uv" { Enable-Uv }
+    }
+
+    # Startup normally installs nothing: Install-PwshProfile did it, so every Install substep
+    # short-circuits on Get-Command. When it DID install something -- a fresh machine, or a tool
+    # added by a module update -- say so once, here, rather than per package. This sits after the
+    # WinGet step so the spinner has cleared; a Write-Host inside a step would tear the render, which
+    # is why the notice is a warning at all.
+    if ($script:StartupInstall.Count -gt 0) {
+        Write-Warning ("Installed $($script:StartupInstall -join ', ') during startup — this normally " +
+            'happens during setup. Run Install-PwshProfile to install new tools ahead of time.')
     }
 }

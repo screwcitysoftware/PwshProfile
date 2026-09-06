@@ -1013,6 +1013,10 @@ Describe 'Install-PwshProfile' {
         # The installer now installs the tool CLIs itself. Stub the shared winget helper so the suite
         # never touches winget -- without this every run would attempt the whole catalog.
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
+        # Stub the pre-install inventory panel too: unmocked it renders into the test output and walks
+        # $env:PATH once per catalog tool on every single test. Its own behavior lives in
+        # Tests/ToolInventory.Tests.ps1; the cases below only care that it is called, and when.
+        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { }
         Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
@@ -1136,6 +1140,39 @@ Describe 'Install-PwshProfile' {
 
         Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
         Should -Invoke -ModuleName $script:Module Set-WingetSetting -Times 0 -Exactly
+    }
+
+    It 'shows the tool inventory BEFORE opening the install step' {
+        # Ordering is the whole point. Invoke-Step's nested calls only mutate the live spinner, so
+        # the install collapses to one summary line -- the inventory is what tells you what is about
+        # to happen. It must render outside the step: writing to the host mid-spinner tears it.
+        $script:Order = [System.Collections.Generic.List[string]]::new()
+        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { $script:Order.Add('inventory') }
+        Mock -ModuleName $script:Module Invoke-Step {
+            if ($Description -like 'Tools (*') { $script:Order.Add('step') }
+            & $ScriptBlock
+        }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        $script:Order | Should -Contain 'inventory'
+        $script:Order.IndexOf('inventory') | Should -BeLessThan $script:Order.IndexOf('step')
+    }
+
+    It 'shows no inventory under -WhatIf' {
+        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
+        Should -Invoke -ModuleName $script:Module Show-PwshProfileToolInventory -Times 0 -Exactly
+    }
+
+    It 'installs quietly, so setup does not trip the startup-installed notice' {
+        # Installing IS the expected work here; the notice exists to flag the opposite case.
+        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { }
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Install-PwshProfile -Path $script:Dest | Out-Null
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 0 -Exactly `
+            -ParameterFilter { -not $Quiet }
     }
 
     It 'installs every winget tool in the catalog, from the catalog metadata' {

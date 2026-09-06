@@ -431,6 +431,14 @@ function Invoke-PwshProfileWizard {
         )
         $featuresLine = if ($wiringParts.Count -gt 0) { $wiringParts -join " [grey]·[/] " }
         else { '[grey]nothing taken over[/]' }
+
+        # What the install phase will actually do, so it isn't a surprise after Submit. Probed here
+        # rather than carried in $Settings because the answer can change between passes through the
+        # hub -- a tool could be installed in another window while the wizard is open.
+        $inventory = @(Get-PwshProfileToolInventory)
+        $toInstall = @($inventory | Where-Object { -not $_.Installed })
+        $toolsLine = if ($toInstall.Count -eq 0) { "[grey]all $($inventory.Count) already installed[/]" }
+        else { "[$code]$($toInstall.Count) to install[/] [grey]·[/] [grey]$($inventory.Count - $toInstall.Count) present[/]" }
         $fontsLine = if (@($set.NerdFont).Count -gt 0) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }
@@ -450,6 +458,7 @@ function Invoke-PwshProfileWizard {
             "[bold]Banner:[/]     $bannerLine"
             "[bold]Step icon:[/]  [$code]$(ConvertTo-EscapedText $set.StepIcon)[/]"
             "[bold]Wiring:[/]     $featuresLine"
+            "[bold]Tools:[/]      $toolsLine"
             "[bold]bat:[/]        [$code]$(ConvertTo-EscapedText $set.BatTheme)[/] [grey]/[/] [$code]$(ConvertTo-EscapedText $set.BatStyle)[/]"
             "[bold]less:[/]       [$code]$(ConvertTo-EscapedText $set.LessOptions)[/]"
             "[bold]Nerd Fonts:[/] $fontsLine"

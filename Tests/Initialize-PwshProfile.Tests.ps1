@@ -390,6 +390,45 @@ Describe 'Initialize-PwshProfile' {
         }
     }
 
+    Context 'startup-installed notice' {
+        It 'stays silent when startup installed nothing' {
+            # The overwhelmingly common case: Install-PwshProfile already installed everything, so
+            # every Install substep short-circuits. A notice on every launch would be pure noise.
+            Initialize-PwshProfile -WarningVariable warnings -WarningAction SilentlyContinue
+            $warnings | Should -BeNullOrEmpty
+        }
+
+        It 'reports once, naming what it installed, when a tool had to be installed' {
+            # Recorded DURING the run -- Initialize-PwshProfile clears the list on entry, so anything
+            # seeded beforehand is deliberately wiped.
+            Mock -ModuleName $script:Module Enable-Uv {
+                & (Get-Module $script:Module) { $script:StartupInstall.Add('astral-sh.uv') }
+            }
+            Initialize-PwshProfile -WarningVariable warnings -WarningAction SilentlyContinue
+            @($warnings).Count | Should -Be 1
+            "$warnings" | Should -BeLike '*astral-sh.uv*'
+            "$warnings" | Should -BeLike '*Install-PwshProfile*'
+        }
+
+        It 'names every tool it installed in the one warning' {
+            Mock -ModuleName $script:Module Enable-Uv { & (Get-Module $script:Module) { $script:StartupInstall.Add('astral-sh.uv') } }
+            Mock -ModuleName $script:Module Enable-Ripgrep { & (Get-Module $script:Module) { $script:StartupInstall.Add('BurntSushi.ripgrep.MSVC') } }
+            Initialize-PwshProfile -WarningVariable warnings -WarningAction SilentlyContinue
+            @($warnings).Count | Should -Be 1
+            "$warnings" | Should -BeLike '*astral-sh.uv*'
+            "$warnings" | Should -BeLike '*BurntSushi.ripgrep.MSVC*'
+        }
+
+        It 'clears the record on entry, so a later run does not re-report' {
+            Mock -ModuleName $script:Module Enable-Uv { & (Get-Module $script:Module) { $script:StartupInstall.Add('astral-sh.uv') } }
+            Initialize-PwshProfile -WarningAction SilentlyContinue
+            # Second run installs nothing.
+            Mock -ModuleName $script:Module Enable-Uv { }
+            Initialize-PwshProfile -WarningVariable warnings -WarningAction SilentlyContinue
+            $warnings | Should -BeNullOrEmpty
+        }
+    }
+
     Context 'validation' {
         It 'rejects a non-existent -CustomTheme path' {
             { Initialize-PwshProfile -CustomTheme 'X:\does\not\exist.omp.json' } | Should -Throw

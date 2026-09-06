@@ -578,6 +578,24 @@ The wizard walks one forward pass, then lets you revise anything before committi
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
 
+Before the tools are installed it shows you exactly what that will involve — a check for each tool
+already on this machine, a down-arrow for each one it's about to fetch:
+
+```text
+╭─◆ Tools ──────────────────────────────────────╮
+│  ✓ zoxide (smart cd)        already installed  │
+│  ✓ bat (cat replacement)    already installed  │
+│  ↓ uv (Python toolchain)    will install       │
+│                                                │
+│  8 present · 3 to install                      │
+╰────────────────────────────────────────────────╯
+```
+
+The same counts appear on the review screen, so a first run on a fresh machine doesn't surprise you
+with a long download after you've already committed. The review screen's **Submit**/**Cancel** is the
+gate — there's no separate "install these?" prompt, since declining wouldn't avoid the work anyway
+(startup would just install them later, more slowly and with less to show for it).
+
 On submit it applies the one-time machine actions — the Nerd Font install, the winget client settings,
 **the tool CLIs** (one timed step per package, after the winget settings so your scope and progress-bar
 preferences are already in place), and the Windows Terminal font/scheme — then writes the bootstrap.
@@ -732,6 +750,15 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   No trailing space needed — the separator before the step text is added at render time.
 - **`-NoBanner`** — render no startup banner. Use this to suppress the banner rather than clearing
   `-BannerText` (which rejects empty); banner params passed alongside it are warned-and-ignored.
+
+Startup normally installs nothing — `Install-PwshProfile` already did it, so every install step
+short-circuits on `Get-Command`. On the occasions it *does* have to install something (a fresh
+machine, or a tool added by a module update), it says so once, after the `WinGet` line:
+
+```
+WARNING: Installed astral-sh.uv during startup — this normally happens during setup.
+Run Install-PwshProfile to install new tools ahead of time.
+```
 
 **An argument it doesn't recognize is warned about and ignored, never thrown.** Startup that throws
 leaves you with no prompt, no tools and no completions at all, so an unmatched argument can't be

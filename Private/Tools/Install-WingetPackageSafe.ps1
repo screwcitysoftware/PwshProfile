@@ -1,3 +1,11 @@
+# Packages this session actually installed, as opposed to found already present. Declared at file
+# top outside the function (the Invoke-Step module-state shape) because the writer and the reader are
+# different functions: Initialize-PwshProfile drains this after its WinGet step to report, once, that
+# startup had to install something -- which normally only happens on a fresh machine or after a
+# module update adds a tool. Accumulated rather than warned per package: eleven warnings on a clean
+# install would be noise.
+$script:StartupInstall = [System.Collections.Generic.List[string]]::new()
+
 function Install-WingetPackageSafe {
     <#
     .SYNOPSIS
@@ -38,6 +46,11 @@ function Install-WingetPackageSafe {
         The enabler function's name, used to prefix the diagnostic warning so the failing tool is
         identifiable, e.g. 'Enable-Zoxide'.
 
+    .PARAMETER Quiet
+        Don't record a successful install for the startup notice. Passed by Install-PwshProfile,
+        where installing is the expected work rather than something worth flagging; startup uses the
+        record to say, once, that it had to install a tool itself.
+
     .EXAMPLE
         Install-WingetPackageSafe -Id 'ajeetdsouza.zoxide' -Exe 'zoxide.exe' -CallerName 'Enable-Zoxide'
 
@@ -70,7 +83,10 @@ function Install-WingetPackageSafe {
         [string]$Scope,
 
         [Parameter(Mandatory)]
-        [string]$CallerName
+        [string]$CallerName,
+
+        [Parameter()]
+        [switch]$Quiet
     )
 
     # Short-circuit BEFORE loading the module: an already-installed tool costs nothing at startup.
@@ -117,5 +133,10 @@ function Install-WingetPackageSafe {
     # Ground truth beats the result code: if the exe still isn't resolvable, it didn't take.
     if (-not (Get-Command $Exe -ErrorAction SilentlyContinue)) {
         Write-Warning "${CallerName}: install of $Id did not produce $Exe on PATH. Status=$($result.Status) ErrorCode=$($result.InstallerErrorCode)"
+        return
     }
+
+    # An install genuinely ran and worked. Record it (unless the caller is the installer, where
+    # installing is the whole point) so startup can mention it once, after its spinner has cleared.
+    if (-not $Quiet) { $script:StartupInstall.Add($Id) }
 }

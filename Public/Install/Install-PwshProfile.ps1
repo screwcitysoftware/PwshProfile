@@ -182,12 +182,20 @@ function Install-PwshProfile {
     if (-not $WhatIfPreference) {
         $wingetTools = @((Get-PwshProfileToolCatalog)['WinGet'])
         if ($wingetTools.Count -gt 0) {
+            # Say what is about to happen BEFORE opening the step. Invoke-Step's nested calls only
+            # mutate the live spinner, which Spectre erases, so the install would otherwise collapse
+            # into a single summary line that can hide minutes of downloading. This must stay outside
+            # the step: writing to the host while a spinner is live tears the render.
+            Show-PwshProfileToolInventory -Tool (Get-PwshProfileToolInventory)
+
             Invoke-Step "Tools ($($wingetTools.Count) packages)" -Icon ':gear:' {
                 foreach ($tool in $wingetTools) {
                     # Nested step per package, so a slow first-time install is attributable.
+                    # -Quiet: installing here is the expected thing, so it must not feed the
+                    # startup-installed notice, which exists to flag the opposite.
                     Invoke-Step $tool.Token {
                         Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
-                            -CallerName 'Install-PwshProfile'
+                            -CallerName 'Install-PwshProfile' -Quiet
                     }
                 }
             }
