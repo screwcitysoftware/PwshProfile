@@ -458,6 +458,41 @@ Describe 'Write-PwshProfilePromptAnswer' {
     }
 }
 
+Describe 'Write-PwshProfilePromptHelp' {
+    It 'opens the block with a blank line so prompts do not run together' {
+        # The wizard is a long run of help-then-prompt pairs. Without this the whole step renders as
+        # one wall of text with no visible seam between one question and the next.
+        InModuleScope $script:Module {
+            $script:Written = [System.Collections.Generic.List[string]]::new()
+            Mock Write-SpectreHost { $script:Written.Add("$Message") }
+            Write-PwshProfilePromptHelp 'Some context.'
+            $script:Written[0] | Should -BeExactly ''
+            $script:Written[1] | Should -BeLike '*›*Some context.*'
+        }
+    }
+
+    It 'writes one blank for the whole block, not one per line' {
+        # The blank separates this prompt from the previous answer; the lines within a block are one
+        # continuous thought and stay together.
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            Write-PwshProfilePromptHelp @('First line.', 'Second line.')
+            Should -Invoke Write-SpectreHost -Times 3 -Exactly
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -eq '' }
+        }
+    }
+
+    It 'writes nothing at all for an empty block' {
+        # Callers build the array with a conditional element (the installer's re-run-only reload
+        # caveat), so an empty one is legitimate — and must not leave a stray gap behind.
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            Write-PwshProfilePromptHelp @()
+            Should -Invoke Write-SpectreHost -Times 0 -Exactly
+        }
+    }
+}
+
 Describe 'Write-PwshProfileBlock' {
     BeforeEach {
         $script:Dir = Join-Path ([System.IO.Path]::GetTempPath()) ('sc-prof-' + [guid]::NewGuid())

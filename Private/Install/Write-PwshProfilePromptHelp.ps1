@@ -10,6 +10,11 @@ function Write-PwshProfilePromptHelp {
         who aren't already familiar with the tools, call this helper immediately before a prompt (or to
         carry a step's secondary/inline hints, beneath its header panel) to print a short explanation.
 
+        The block opens with a blank line, so each help-plus-prompt pair reads as its own unit instead
+        of the wizard's questions running together into an undifferentiated wall of text. The blank
+        goes ABOVE rather than below deliberately — below it would divorce the hint from the prompt it
+        explains. Write-PwshProfileStepHeader leads with the same blank, so the two agree.
+
         Each line is prefixed with a dim accent '›' glyph and run through Format-PwshProfileHelpMarkup,
         so the body reads as soft grey while **tool names** are accented and `code literals` are tinted
         — and any literal Spectre markup characters ('[' / ']') in the text are escaped, not
@@ -54,6 +59,16 @@ function Write-PwshProfilePromptHelp {
     )
 
     if (-not (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue)) { return }
+    # No lines, no blank: an empty block would otherwise leave a stray gap. $Line can legitimately be
+    # empty, since a caller may build it with a conditional element (the installer's re-run-only
+    # reload caveat is one).
+    if (-not $Line) { return }
+
+    # One blank line ABOVE the block, never below: it separates this prompt from the previous answer
+    # while keeping the hint welded to the prompt it explains. Without it the wizard's help and its
+    # prompts run together into a wall of text with no visible seam between one question and the
+    # next. Write-PwshProfileStepHeader already leads with the same blank, so this matches it.
+    Write-SpectreHost ''
 
     foreach ($text in $Line) {
         $body = Format-PwshProfileHelpMarkup -Text "$text" -Accent $Accent -Code $Code
