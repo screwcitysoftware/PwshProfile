@@ -10,10 +10,11 @@ function Install-PwshProfile {
         module. This is the one-time setup companion to Initialize-PwshProfile, which then runs every
         session from that block.
 
-        The wizard makes one forward pass — an optional Nerd Font install, winget client settings,
-        theme, an optional banner, the step icon, and the per-tool options — then lands on a review
-        screen where any step can be re-edited before submitting, or the whole setup cancelled without
-        writing. On a re-run it parses the existing block to default each prompt to your previous
+        The wizard makes one forward pass — an optional Nerd Font install, winget client settings
+        (opened by the full list of CLI packages setup will install), a disclosure-only step naming the
+        PowerShell Gallery modules the profile installs on demand, theme, an optional banner, the step
+        icon, and the per-tool options — then lands on a review screen where any step can be re-edited
+        before submitting, or the whole setup cancelled without writing. On a re-run it parses the existing block to default each prompt to your previous
         choices.
 
         The Nerd Font install (NerdFonts module, CurrentUser scope, no admin), the winget settings, the
@@ -23,8 +24,11 @@ function Install-PwshProfile {
 
         Installing the tools here rather than at startup is what keeps the first shell fast: every
         Enable-* Install substep then short-circuits on Get-Command. The packages come from
-        Get-PwshProfileToolCatalog's winget rows, not from calling the Enable-* functions, which would
-        also wire this session — aliasing cat, rebinding cd — in the middle of setup.
+        Get-PwshProfileToolCatalog's winget rows — git and oh-my-posh included, so nothing arrives
+        unannounced at first startup — not from calling the Enable-* functions, which would also wire
+        this session (aliasing cat, rebinding cd) in the middle of setup. Each row's PathDir/Scope is
+        forwarded, which is what puts the two full installers in their own directories rather than the
+        shared portable Links dir.
 
         Your existing profile code is never destroyed:
           - A new file (and its parent directory) is created if needed.
@@ -185,14 +189,34 @@ function Install-PwshProfile {
         $inventory = @(Get-PwshProfileToolInventory)
         $missing = @($inventory | Where-Object { -not $_.Installed })
 
+        # PathDir/Scope are forwarded only when the catalog row carries them, so a portable still
+        # takes the helper's shared-Links default. Not optional: git and oh-my-posh are full
+        # installers with destinations of their own, and omitting these would install the package
+        # correctly but append the wrong directory to $env:Path -- leaving the post-install re-check
+        # to warn about an install that actually worked.
+        function Get-ToolInstallArgument {
+            param($Tool)
+            $argument = @{
+                Id         = $Tool.PackageId
+                Exe        = $Tool.Exe
+                CallerName = 'Install-PwshProfile'
+                # Installing here is the expected work, so it must not feed the startup-installed
+                # notice, which exists to flag the opposite.
+                Quiet      = $true
+            }
+            if ($Tool.PathDir) { $argument['PathDir'] = $Tool.PathDir }
+            if ($Tool.Scope) { $argument['Scope'] = $Tool.Scope }
+            $argument
+        }
+
         if ($inventory.Count -gt 0 -and $missing.Count -eq 0) {
             # Nothing to fetch. One reassuring line rather than silence; the body re-runs the
             # short-circuit for every tool so the line carries a real elapsed time, and so a tool
             # that vanished between the probe and here is still caught.
             Invoke-Step "Tools — all $($inventory.Count) already present" -Icon ':gear:' {
                 foreach ($tool in $inventory) {
-                    Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
-                        -CallerName 'Install-PwshProfile' -Quiet
+                    $installArgument = Get-ToolInstallArgument -Tool $tool
+                    Install-WingetPackageSafe @installArgument
                 }
             }
         }
@@ -201,14 +225,11 @@ function Install-PwshProfile {
             # permanent line with real elapsed time and a slow download is attributable. Nested,
             # these would only mutate the transient spinner and leave nothing behind -- which is the
             # exact problem this replaces. Tools already present get no line at all: the helper
-            # short-circuits on Get-Command, and nine `[ 3ms]` lines would be noise.
-            #
-            # -Quiet: installing here is the expected work, so it must not feed the
-            # startup-installed notice, which exists to flag the opposite.
+            # short-circuits on Get-Command, and a dozen `[ 3ms]` lines would be noise.
             foreach ($tool in $missing) {
+                $installArgument = Get-ToolInstallArgument -Tool $tool
                 Invoke-Step "Installing $($tool.Label)" -Icon ':gear:' {
-                    Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
-                        -CallerName 'Install-PwshProfile' -Quiet
+                    Install-WingetPackageSafe @installArgument
                 }
             }
         }

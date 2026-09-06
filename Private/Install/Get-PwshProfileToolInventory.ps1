@@ -5,7 +5,7 @@ function Get-PwshProfileToolInventory {
 
     .DESCRIPTION
         Projects Get-PwshProfileToolCatalog's winget rows through Test-CommandAvailable, adding an
-        Installed bool to each. Pure data — Show-PwshProfileToolInventory renders it, and splitting
+        Installed bool to each. Pure data — Show-PwshProfileInventory renders it, and splitting
         the two keeps this testable without touching the console.
 
         It probes with the SAME call Install-WingetPackageSafe uses as its already-installed
@@ -28,9 +28,14 @@ function Get-PwshProfileToolInventory {
         How many packages the next install would actually fetch.
 
     .NOTES
-        Only the winget rows are inventoried. The 'module' and 'none' install kinds have no exe to
-        probe — Terminal-Icons and posh-git come from the gallery through Import-ModuleSafe, and the
-        rest is config — so they would have nothing meaningful to report.
+        Only the winget rows are inventoried — which is now every package setup puts on the machine,
+        git and oh-my-posh included since they joined the catalog. The 'module' and 'none' kinds have no
+        exe to probe: the config-only rows install nothing, and the PowerShell modules are covered
+        separately by Get-PwshProfileModuleInventory, which probes with Test-ModuleAvailable instead.
+
+        PathDir and Scope are carried through untouched so Install-PwshProfile can forward them. They
+        are $null for a portable; dropping them would send git and oh-my-posh to the shared Links
+        directory, so the install would land elsewhere and the post-install PATH re-check would warn.
     #>
     [CmdletBinding()]
     param()
@@ -41,6 +46,8 @@ function Get-PwshProfileToolInventory {
             Token     = $tool.Token
             PackageId = $tool.PackageId
             Exe       = $tool.Exe
+            PathDir   = $tool.PathDir
+            Scope     = $tool.Scope
             Installed = [bool](Test-CommandAvailable -Name $tool.Exe)
         }
     }

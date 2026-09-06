@@ -353,9 +353,13 @@ function Initialize-PwshProfile {
         if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
     }
 
-    # Core always renders. oh-my-posh, git and the `which` alias are always-on (not catalog tokens);
-    # the rest are opt-in. PSReadLine runs before oh-my-posh, and PSFzf (WinGet section, after Core)
-    # therefore initializes after it. Completions only register, so their position is free.
+    # Core always renders, and so does every step in it -- there is nothing opt-in left. git and
+    # oh-my-posh run HERE rather than in the WinGet section even though they are winget packages and
+    # catalog rows: git has to be on PATH before posh-git and the git-aware WinGet tools, so the
+    # catalog groups by install model while this orders by dependency. Only the `which` alias is
+    # outside the catalog -- it installs nothing. PSReadLine runs before oh-my-posh, and PSFzf (WinGet
+    # section, after Core) therefore initializes after it. Completions only register, so their
+    # position is free.
     Invoke-Step "Core" -Icon $StepIcon {
         Invoke-Step "Global Aliases" {
             Set-Alias -Name which -Value where.exe -Scope Global

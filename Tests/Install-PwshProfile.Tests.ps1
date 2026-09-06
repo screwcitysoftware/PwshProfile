@@ -910,7 +910,7 @@ Describe 'Invoke-PwshProfileWizard' {
         # also the earliest the plan can be seen, since the install runs after the review screen.
         InModuleScope $script:Module {
             $script:WingetOrder = [System.Collections.Generic.List[string]]::new()
-            Mock Show-PwshProfileToolInventory { $script:WingetOrder.Add('inventory') } -RemoveParameterType 'Color'
+            Mock Show-PwshProfileInventory { $script:WingetOrder.Add('inventory') } -RemoveParameterType 'Color'
             Mock Read-PwshProfileSettingChange {
                 if ($Message -eq 'Change these winget settings?') { $script:WingetOrder.Add('gate') }
                 $false
@@ -920,6 +920,22 @@ Describe 'Invoke-PwshProfileWizard' {
 
             $script:WingetOrder | Should -Contain 'inventory'
             $script:WingetOrder.IndexOf('inventory') | Should -BeLessThan $script:WingetOrder.IndexOf('gate')
+        }
+    }
+
+    It 'discloses the PowerShell modules in a step of its own' {
+        # They install quietly, in the middle of a startup step, so the wizard names them up front.
+        # Nothing is asked here, which is why this only checks that the whole catalog is rendered --
+        # the step's job is disclosure, not a choice.
+        InModuleScope $script:Module {
+            $script:ModuleRows = $null
+            # The Winget step calls the same renderer with no -Row (it defaults to the tool
+            # inventory), so record only the call that passes rows explicitly.
+            Mock Show-PwshProfileInventory { if ($Row) { $script:ModuleRows = $Row } } -RemoveParameterType 'Color'
+
+            $null = Invoke-PwshProfileWizard
+
+            @($script:ModuleRows.Name) | Should -Be @((Get-PwshProfileModuleCatalog).Name)
         }
     }
 
@@ -1172,8 +1188,8 @@ Describe 'Install-PwshProfile' {
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
             @(
-                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; Installed = $false }
-                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; Installed = $true }
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; PathDir = $null; Scope = $null; Installed = $false }
+                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; PathDir = $null; Scope = $null; Installed = $true }
             )
         }
 
@@ -1185,14 +1201,38 @@ Describe 'Install-PwshProfile' {
             -ParameterFilter { $Id -eq 'astral-sh.uv' -and $Exe -eq 'uv.exe' }
     }
 
+    It 'forwards the install location for a package that has one of its own' {
+        # git and oh-my-posh are full installers, not winget portables. Without their PathDir the
+        # package would install correctly and the shared portable Links dir would go on PATH instead,
+        # leaving the post-install re-check to warn about an install that had in fact worked.
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
+            @(
+                [pscustomobject]@{ Label = 'git (version control)'; Token = 'Git'; PackageId = 'Git.Git'; Exe = 'git.exe'; PathDir = 'C:\Program Files\Git\cmd'; Scope = $null; Installed = $false }
+                [pscustomobject]@{ Label = 'oh-my-posh (prompt)'; Token = 'OhMyPosh'; PackageId = 'JanDeDobbeleer.OhMyPosh'; Exe = 'oh-my-posh.exe'; PathDir = 'C:\omp\bin'; Scope = 'user'; Installed = $false }
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; PathDir = $null; Scope = $null; Installed = $false }
+            )
+        }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 1 -Exactly `
+            -ParameterFilter { $Id -eq 'Git.Git' -and $PathDir -eq 'C:\Program Files\Git\cmd' -and -not $Scope }
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 1 -Exactly `
+            -ParameterFilter { $Id -eq 'JanDeDobbeleer.OhMyPosh' -and $PathDir -eq 'C:\omp\bin' -and $Scope -eq 'user' }
+        # A portable passes neither, so Install-WingetPackageSafe applies its shared-Links default.
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 1 -Exactly `
+            -ParameterFilter { $Id -eq 'astral-sh.uv' -and -not $PathDir -and -not $Scope }
+    }
+
     It 'gives an already-present tool no line and no install call' {
         # Nine `[ 3ms]` lines for tools that were already there would be noise, and the helper would
         # short-circuit on Get-Command anyway.
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
             @(
-                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; Installed = $false }
-                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; Installed = $true }
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; PathDir = $null; Scope = $null; Installed = $false }
+                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; PathDir = $null; Scope = $null; Installed = $true }
             )
         }
 
@@ -1210,8 +1250,8 @@ Describe 'Install-PwshProfile' {
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
             @(
-                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; Installed = $true }
-                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; Installed = $true }
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; PathDir = $null; Scope = $null; Installed = $true }
+                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; PathDir = $null; Scope = $null; Installed = $true }
             )
         }
 

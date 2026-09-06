@@ -18,10 +18,24 @@ Describe 'Get-PwshProfileToolInventory' {
         InModuleScope $script:Module {
             foreach ($row in Get-PwshProfileToolInventory) {
                 @($row.PSObject.Properties.Name) | Sort-Object |
-                    Should -Be @('Exe', 'Installed', 'Label', 'PackageId', 'Token')
+                    Should -Be @('Exe', 'Installed', 'Label', 'PackageId', 'PathDir', 'Scope', 'Token')
                 $row.Label | Should -Not -BeNullOrEmpty
                 $row.PackageId | Should -Not -BeNullOrEmpty
                 $row.Exe | Should -Not -BeNullOrEmpty
+            }
+        }
+    }
+
+    It 'passes the install location straight through from the catalog' {
+        # Dropping PathDir/Scope here would have Install-PwshProfile install git and oh-my-posh to the
+        # shared portable Links dir rather than their own: the package would land correctly and the
+        # post-install PATH re-check would then warn about an install that had actually worked.
+        InModuleScope $script:Module {
+            $inventory = @(Get-PwshProfileToolInventory)
+            foreach ($tool in (Get-PwshProfileToolCatalog)['WinGet']) {
+                $row = $inventory | Where-Object { $_.Token -eq $tool.Token }
+                "$($row.PathDir)" | Should -Be "$($tool.PathDir)"
+                "$($row.Scope)" | Should -Be "$($tool.Scope)"
             }
         }
     }
@@ -51,7 +65,7 @@ Describe 'Get-PwshProfileToolInventory' {
     }
 }
 
-Describe 'Show-PwshProfileToolInventory' {
+Describe 'Show-PwshProfileInventory' {
     BeforeEach {
         $script:Rows = @(
             [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.b'; Exe = 'zoxide.exe'; Installed = $true }
@@ -63,7 +77,7 @@ Describe 'Show-PwshProfileToolInventory' {
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
-            Show-PwshProfileToolInventory -Tool $R
+            Show-PwshProfileInventory -Row $R
             Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*✓*zoxide*' }
             Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*↓*uv (Python toolchain)*' }
             # Deliberately not a cross: a tool that simply hasn't been fetched yet is the expected
@@ -72,15 +86,50 @@ Describe 'Show-PwshProfileToolInventory' {
         }
     }
 
+    It 'reads rows that carry no Detail property at all' {
+        # The tool rows deliberately don't have that column, and reading a property a PSCustomObject
+        # omits throws under Set-StrictMode -Version Latest, which is how the suite and CI run.
+        InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
+            param($R)
+            Set-StrictMode -Version Latest
+            Mock Write-SpectreHost { }
+            { Show-PwshProfileInventory -Row $R } | Should -Not -Throw
+        }
+    }
+
+    It 'marks a conditional row with a dot and its own reason rather than "will install"' {
+        # A flat "will install" would be a promise the install may never keep -- DockerCompletion on a
+        # machine with no docker is the case in point.
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            $row = [pscustomobject]@{ Label = 'DockerCompletion'; Installed = $false; Detail = 'only when docker is on PATH' }
+            Show-PwshProfileInventory -Row @($row)
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly `
+                -ParameterFilter { $Message -like '*·*DockerCompletion*only when docker is on PATH*' }
+            Should -Invoke Write-SpectreHost -Times 0 -Exactly -ParameterFilter { $Message -like '*will install*' }
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*1 only if needed*' }
+        }
+    }
+
+    It 'ignores Detail on a row that is already installed' {
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            $row = [pscustomobject]@{ Label = 'NerdFonts'; Installed = $true; Detail = 'only if you opt into Nerd Fonts' }
+            Show-PwshProfileInventory -Row @($row)
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*✓*NerdFonts*already installed*' }
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*all 1 already installed*' }
+        }
+    }
+
     It 'renders rows, not a panel' {
-        # It draws inside the wizard's Winget step, under that step's own header panel -- a panel
-        # nested in a panel reads wrong, and Format-SpectrePanel would also need an Out-Host to stop
-        # its rendered string leaking into the caller's return value.
+        # It draws inside a wizard step, under that step's own header panel -- a panel nested in a
+        # panel reads wrong, and Format-SpectrePanel would also need an Out-Host to stop its rendered
+        # string leaking into the caller's return value.
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
             Mock Format-SpectrePanel { } -RemoveParameterType 'Color'
-            Show-PwshProfileToolInventory -Tool $R
+            Show-PwshProfileInventory -Row $R
             Should -Invoke Format-SpectrePanel -Times 0 -Exactly
         }
     }
@@ -89,7 +138,7 @@ Describe 'Show-PwshProfileToolInventory' {
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
-            Show-PwshProfileToolInventory -Tool $R
+            Show-PwshProfileInventory -Row $R
             Should -Invoke Write-SpectreHost -Times 1 -Exactly `
                 -ParameterFilter { $Message -like '*1 present*1 to install*' }
         }
@@ -100,11 +149,20 @@ Describe 'Show-PwshProfileToolInventory' {
             param($R)
             Mock Write-SpectreHost { }
             $all = @($R | ForEach-Object { $_.Installed = $true; $_ })
-            Show-PwshProfileToolInventory -Tool $all
+            Show-PwshProfileInventory -Row $all
             Should -Invoke Write-SpectreHost -Times 1 -Exactly `
                 -ParameterFilter { $Message -like '*all 2 already installed*' }
             Should -Invoke Write-SpectreHost -Times 0 -Exactly `
                 -ParameterFilter { $Message -like '*to install*' -and $Message -notlike '*already installed*' }
+        }
+    }
+
+    It 'falls back to the tool inventory when given no rows' {
+        InModuleScope $script:Module {
+            Mock Write-SpectreHost { }
+            Mock Get-PwshProfileToolInventory { @([pscustomobject]@{ Label = 'jq'; Installed = $true }) }
+            Show-PwshProfileInventory
+            Should -Invoke Get-PwshProfileToolInventory -Times 1 -Exactly
         }
     }
 
@@ -115,7 +173,7 @@ Describe 'Show-PwshProfileToolInventory' {
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
-            $captured = Show-PwshProfileToolInventory -Tool $R
+            $captured = Show-PwshProfileInventory -Row $R
             $captured | Should -BeNullOrEmpty
         }
     }
@@ -125,7 +183,7 @@ Describe 'Show-PwshProfileToolInventory' {
             param($R)
             Mock Get-Command { $null } -ParameterFilter { $Name -eq 'Write-SpectreHost' }
             Mock Write-Host { }
-            { Show-PwshProfileToolInventory -Tool $R } | Should -Not -Throw
+            { Show-PwshProfileInventory -Row $R } | Should -Not -Throw
             Should -Invoke Write-Host -Times 1 -Exactly
         }
     }
@@ -134,7 +192,7 @@ Describe 'Show-PwshProfileToolInventory' {
         InModuleScope $script:Module {
             Mock Write-SpectreHost { }
             Mock Write-Host { }
-            Show-PwshProfileToolInventory -Tool @()
+            Show-PwshProfileInventory -Row @()
             Should -Invoke Write-Host -Times 0 -Exactly
         }
     }

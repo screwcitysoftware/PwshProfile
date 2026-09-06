@@ -22,21 +22,26 @@ function Invoke-PwshProfileWizard {
 
           1. Nerd Fonts (optional): installs the recommended Meslo + CascadiaCode pair, then offers to
              set 'MesloLGM Nerd Font' as the Windows Terminal default font.
-          2. Winget: a curated set of winget client settings (install scope, progress bar, anonymize
-             paths, suppress install notes), pre-filled from the live settings.json and gated behind a
-             single "change these?" prompt that defaults to No.
-          3. Theme: a bundled oh-my-posh theme or a custom path. The bundled choice seeds every branded
+          2. Winget: the full list of CLI packages setup is about to install (Show-PwshProfileInventory
+             over Get-PwshProfileToolInventory), then a curated set of winget client settings (install
+             scope, progress bar, anonymize paths, suppress install notes), pre-filled from the live
+             settings.json and gated behind a single "change these?" prompt that defaults to No. The
+             list frames those questions rather than trailing them.
+          3. Modules: disclosure only — the PowerShell Gallery modules the profile installs on demand,
+             marked present, will-install, or conditional. Nothing to answer, so it ends on a bare
+             "press Enter" rather than a question it does not have.
+          4. Theme: a bundled oh-my-posh theme or a custom path. The bundled choice seeds every branded
              setting later prompts pre-fill from (banner color, step icon, bat theme); a custom path
              seeds neutral ones. Re-picking a theme preserves any of those already customized. It then
              offers the matching Windows Terminal color scheme, and if accepted, whether to make it
              the default.
-          4. Banner: shows the current config and gates the per-setting prompts behind the same
+          5. Banner: shows the current config and gates the per-setting prompts behind the same
              "change these?" pattern. Clearing the banner text hides the banner — since BannerText must
              be non-empty, a cleared text becomes -NoBanner rather than a shown-but-blank half-state.
-          5. Step icon: always asked, since the icon marks every startup step whether or not there is a
+          6. Step icon: always asked, since the icon marks every startup step whether or not there is a
              banner. A curated shortcode menu with the current icon floated to the top, plus a custom
              escape hatch.
-          6. Wiring: every tool is installed and enabled, so this asks only how they wire into the
+          7. Wiring: every tool is installed and enabled, so this asks only how they wire into the
              shell. A grouped checkbox tree (Read-PwshProfileWiringTree, sourced from
              Get-PwshProfileWiringCatalog) covers the binary choices — which commands get taken over,
              and the Ctrl+G git chords — then the free-text settings a checkbox can't express follow:
@@ -345,11 +350,12 @@ function Invoke-PwshProfileWizard {
         Write-PwshProfileStepHeader -Title 'Winget' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
             -Body '**winget** is what installs the CLI tools below. This tunes the client itself — the defaults in its `settings.json` that apply whenever it installs a package. Applied once now; pre-filled from your current winget settings.'
 
-        # The tools winget is about to handle, shown BEFORE the settings so they frame the question
-        # rather than trailing it -- the scope and progress-bar answers matter precisely because this
-        # is what they will be applied to. Also the earliest point the plan can be seen: the install
-        # itself happens after the review screen, by which time you have already committed.
-        Show-PwshProfileToolInventory -Color $s.Accent
+        # Every package winget is about to handle -- git and oh-my-posh included, which is the reason
+        # they are catalog rows now -- shown BEFORE the settings so they frame the question rather than
+        # trailing it: the scope and progress-bar answers matter precisely because this is what they
+        # will be applied to. Also the earliest point the plan can be seen, the install itself
+        # happening after the review screen, by which time you have already committed.
+        Show-PwshProfileInventory -Color $s.Accent
 
         # Show the current values (flagging any off the recommendation), then gate before prompting.
         $rec = Get-WingetSettingRecommended
@@ -388,11 +394,24 @@ function Invoke-PwshProfileWizard {
         $s.Settings.WingetDisableInstallNote = [bool](Read-SpectreConfirm -Message 'Suppress post-install notes?' -Color $s.Accent -DefaultAnswer $(if ($s.Settings.WingetDisableInstallNote) { 'y' } else { 'n' }))
     }
 
+    # --- Step: PowerShell modules (disclosure only) -----------------------------------------
+    $stepModules = {
+        param($s, $i, $total)
+        Write-PwshProfileStepHeader -Title 'Modules' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
+            -Body 'The other half of what lands on your machine: a few **PowerShell Gallery** modules the profile leans on. Each installs for your user only (`CurrentUser` scope, no admin) the first time it is actually needed. Nothing to choose here — this step exists so it is not a surprise.'
+        Show-PwshProfileInventory -Row (Get-PwshProfileModuleInventory) -Color $s.Accent
+        # Every other step pauses on a prompt of its own; a step that only discloses has nothing to
+        # ask, and without this the next step's header would scroll it away the instant it drew. The
+        # answer is deliberately discarded -- -AllowEmpty makes a bare Enter the expected input.
+        $null = Read-SpectreText -Message 'Press Enter to continue' -AllowEmpty
+    }
+
     # Ordered step table — drives the forward pass and the review hub's Edit choices. Theme must stay
     # ahead of Banner and Step icon, which pre-fill from the branding it seeds.
     $steps = [ordered]@{
         'Fonts'        = $stepFonts
         'Winget'       = $stepWinget
+        'Modules'      = $stepModules
         'Theme'        = $stepTheme
         'Banner'       = $stepBanner
         'Step icon'    = $stepIcon
@@ -445,6 +464,12 @@ function Invoke-PwshProfileWizard {
         $toInstall = @($inventory | Where-Object { -not $_.Installed })
         $toolsLine = if ($toInstall.Count -eq 0) { "[grey]all $($inventory.Count) already installed[/]" }
         else { "[$code]$($toInstall.Count) to install[/] [grey]·[/] [grey]$($inventory.Count - $toInstall.Count) present[/]" }
+        # The gallery modules are installed on demand by Import-ModuleSafe, not by setup, so this is
+        # disclosure rather than a plan -- a conditional row may never be fetched at all.
+        $modules = @(Get-PwshProfileModuleInventory)
+        $modulesMissing = @($modules | Where-Object { -not $_.Installed })
+        $modulesLine = if ($modulesMissing.Count -eq 0) { "[grey]all $($modules.Count) already installed[/]" }
+        else { "[$code]$($modulesMissing.Count) to install[/] [grey]·[/] [grey]$($modules.Count - $modulesMissing.Count) present[/]" }
         $fontsLine = if (@($set.NerdFont).Count -gt 0) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }
@@ -465,6 +490,7 @@ function Invoke-PwshProfileWizard {
             "[bold]Step icon:[/]  [$code]$(ConvertTo-EscapedText $set.StepIcon)[/]"
             "[bold]Wiring:[/]     $featuresLine"
             "[bold]Tools:[/]      $toolsLine"
+            "[bold]Modules:[/]    $modulesLine"
             "[bold]bat:[/]        [$code]$(ConvertTo-EscapedText $set.BatTheme)[/] [grey]/[/] [$code]$(ConvertTo-EscapedText $set.BatStyle)[/]"
             "[bold]less:[/]       [$code]$(ConvertTo-EscapedText $set.LessOptions)[/]"
             "[bold]Nerd Fonts:[/] $fontsLine"

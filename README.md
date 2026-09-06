@@ -284,7 +284,7 @@ fnm list            # show installed versions
 
 ### git — version control
 
-git is **always installed** (like oh-my-posh, it sits outside the tool catalog). Several profile
+git is **always installed** — there is no opt-out. Several profile
 features lean on it — posh-git's status prompt, PSFzf's `Ctrl+G` git pickers, lazygit, and the
 GitHub CLI — so the profile installs `Git.Git` via winget if `git` isn't already on PATH (the
 common case short-circuits, and a failed/elevation-blocked install just warns and startup
@@ -405,7 +405,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-OhMyPoshTheme.ps1          # emit the bundled oh-my-posh theme JSON
 │   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
 │   ├── Tools/
-│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (outside the tool catalog)
+│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (%ProgramFiles%\Git\cmd)
 │   │   ├── Enable-Zoxide.ps1
 │   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
@@ -445,9 +445,12 @@ ScrewCitySoftware.PwshProfile/
 │   │                               #   Get-PwshProfileSettingSchema (source of truth for the
 │   │                               #   settable parameters and their metadata), and
 │   │                               #   Get-PwshProfileWiringCatalog / Read-PwshProfileWiringTree
-│   │                               #   (the wizard's wiring toggles and their checkbox tree)
+│   │                               #   (the wizard's wiring toggles and their checkbox tree), plus
+│   │                               #   Get-PwshProfileToolInventory / Get-PwshProfileModuleInventory
+│   │                               #   and the shared Show-PwshProfileInventory renderer
 │   ├── Startup/                         # startup helpers shared with the wizard
-│   │   └── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
+│   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
+│   │   └── Get-PwshProfileModuleCatalog.ps1   # single source of truth for the PSGallery modules it installs
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
@@ -508,12 +511,12 @@ default it targets `$PROFILE`. On a re-run it reads the existing block to pre-fi
 It **wires the module into your profile file**; it does not install the
 module itself from the gallery (use `Install-PSResource ScrewCitySoftware.PwshProfile` for that).
 
-It also **installs the tool CLIs**, so the first shell after setup starts fast — every `Enable-*`
-install step then short-circuits on `Get-Command`. The packages come from the tool catalog rather than
-from calling the `Enable-*` functions, which would also *wire* the setup session (aliasing `cat`,
-rebinding `cd`) halfway through the wizard.
+It also **installs the tool CLIs** — all thirteen, git and oh-my-posh included — so the first shell
+after setup starts fast: every `Enable-*` install step then short-circuits on `Get-Command`. The
+packages come from the tool catalog rather than from calling the `Enable-*` functions, which would also
+*wire* the setup session (aliasing `cat`, rebinding `cd`) halfway through the wizard.
 
-Each step opens with a rounded header panel — its title, a `step N of 6` progress counter, and a
+Each step opens with a rounded header panel — its title, a `step N of 7` progress counter, and a
 short description — and secondary prompts carry an indented hint line beneath them (the feature step
 shows a one-line-per-feature legend). The descriptions are syntax-highlighted: tool names in the
 accent color, code literals (file types, commands like `cd` / `z`, paths) in cyan, body prose in soft
@@ -530,13 +533,16 @@ The wizard walks one forward pass, then lets you revise anything before committi
    via [`Set-WindowsTerminalFont`](#set-windowsterminalfont) — applied to `settings.json` when you
    submit (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
 2. **Winget** — first, **what winget is about to install**: a check for each tool already on this
-   machine, a down-arrow for each one setup will fetch, and a count.
+   machine, a down-arrow for each one setup will fetch, and a count. This is the *full* list — git
+   and oh-my-posh are on it too, rather than appearing unannounced at first startup as they used to.
 
    ```text
+     ✓ git (version control)    already installed
+     ↓ oh-my-posh (prompt)      will install
      ✓ zoxide (smart cd)        already installed
      ✓ bat (cat replacement)    already installed
      ↓ uv (Python toolchain)    will install
-     8 present · 3 to install
+     10 present · 3 to install
    ```
 
    Then a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
@@ -546,7 +552,23 @@ The wizard walks one forward pass, then lets you revise anything before committi
    — **defaulting to No**, so pressing Enter keeps them and skips the per-setting prompts. The values
    are merged into your `settings.json` via [`Set-WingetSetting`](#set-wingetsetting) when you submit
    (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
-3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
+3. **Modules** — the other half of what lands on your machine: the PowerShell Gallery modules the
+   profile leans on, each installed for your user only (`CurrentUser` scope, no admin) the first time
+   it is actually needed. Nothing to answer — the step exists so nothing installs unannounced, and a
+   module that is only fetched under some condition says so instead of promising an install:
+
+   ```text
+     ✓ PwshSpectreConsole (console UI)            already installed
+     ↓ Terminal-Icons (file icons)                will install
+     ✓ posh-git (git in the prompt)               already installed
+     ↓ PSFzf (fzf key bindings)                   will install
+     ✓ Microsoft.WinGet.Client (winget installs)  already installed
+     · NerdFonts (font downloads)                 only if you opt into Nerd Fonts
+     · DockerCompletion (docker completion)       only when docker is on PATH
+     3 present · 2 to install · 2 only if needed
+   ```
+
+4. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
    your own (see [Themes](#themes)). The choice seeds every branded setting the later prompts are
    pre-filled with — banner color, step icon, and bat's syntax theme; a custom path seeds neutral
    ones (`Silver`, `:gear:`, `ansi`) so you brand those fresh. The banner text defaults to your
@@ -557,13 +579,13 @@ The wizard walks one forward pass, then lets you revise anything before committi
    (**defaulting to Yes**) — applied to `settings.json` when you submit (a one-time
    machine change, not part of the bootstrap; skipped under `-WhatIf`). A custom theme has no matching
    scheme, so it installs the neutral **Screw City** scheme.
-4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
+5. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
    noting anything off the theme default) and asks whether to change it — **defaulting to No**. On
    yes, a show/hide question gates the rest: say no and the banner is suppressed (`-NoBanner`) and
    the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
-5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
+6. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
    current icon floated to the top and a "custom shortcode" escape.
-6. **Wiring** — every tool is installed and enabled, so this asks only how they wire into your shell.
+7. **Wiring** — every tool is installed and enabled, so this asks only how they wire into your shell.
    A single grouped checkbox tree covers the binary choices, with a one-line explanation per row:
 
    ```text
@@ -605,7 +627,7 @@ Tools already present get no line — they cost a single `Get-Command` each. Whe
 all to fetch, you get one line saying so:
 
 ```text
-⚙ Tools — all 11 already present...................... [   41ms]
+⚙ Tools — all 13 already present...................... [   47ms]
 ```
 
 On submit it applies the one-time machine actions — the Nerd Font install, the winget client settings,
@@ -699,8 +721,10 @@ model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Termi
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
 installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, uv — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI, uv a standalone Python toolchain). git, oh-my-posh, and the `which` alias run alongside them,
-outside the tool catalog. Both sections always render. `Install-PwshProfile` installs the CLIs during
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI, uv a standalone Python toolchain). git and oh-my-posh run in **Core** for ordering reasons — git
+first, so it is on PATH for posh-git and the git-aware WinGet tools — but they are winget packages
+like the rest, and the catalog groups them by that install model, which is how setup knows to fetch
+them. Only the `which` alias sits outside the catalog: it installs nothing. Both sections always render. `Install-PwshProfile` installs the CLIs during
 setup, so at startup each install step short-circuits on `Get-Command` and costs almost nothing; a tool
 that is genuinely missing is installed here instead. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
@@ -987,7 +1011,7 @@ Set-WindowsTerminalFont -WhatIf                         # preview the change, wr
 
 Installs git (`Git.Git`) with winget if `git.exe` isn't already on PATH, patching the current
 session's PATH so it's usable immediately. Unlike the tool enablers below, `Enable-Git` is
-**always-on** (it sits outside the tool catalog) and runs first in the **Core** section — posh-git's
+**always-on** — there is no opt-out — and runs first in the **Core** section — posh-git's
 status prompt, PSFzf's `Ctrl+G` git chords, lazygit, and the GitHub CLI all want git on PATH. It's
 install-only (git ships no PowerShell shell-init or completion, so Initialize is a
 `Get-Command`-guarded no-op). `Git.Git` is a full installer (not a winget portable), so it targets
