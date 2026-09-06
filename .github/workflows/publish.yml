@@ -11,19 +11,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Verify release tag matches manifest version
-        shell: pwsh
-        run: |
-          $tag = '${{ github.event.release.tag_name }}' -replace '^v', ''
-          $manifest = Import-PowerShellDataFile ./ScrewCitySoftware.PwshProfile.psd1
-          $version = $manifest.ModuleVersion
-          $prerelease = $manifest.PrivateData.PSData.Prerelease
-          if ($prerelease) { $version = "$version-$prerelease" }
-          if ($tag -ne $version) {
-              throw "Release tag '$tag' does not match manifest version '$version'. Bump ModuleVersion (and Prerelease) to match the tag, or tag the release v$version."
-          }
-          Write-Host "Tag and manifest agree on version $version."
+        with:
+          fetch-depth: 0     # required -- GitVersion needs full history
+          fetch-tags: true   # be explicit; don't rely on fetch-depth:0 alone to guarantee tags arrive
 
       - name: Bootstrap dependencies
         shell: pwsh
@@ -32,6 +22,25 @@ jobs:
       - name: Analyze, Test, Build
         shell: pwsh
         run: ./build.ps1 -Task Analyze, Test, Build
+
+      - name: Sanity-check computed version against the release tag
+        shell: pwsh
+        run: |
+          # The tag drives the version, not the reverse: a human tags vX.Y.Z at the release
+          # commit and cuts a GitHub Release from it. GitVersion resolves an exactly-tagged
+          # commit's version as that tag, so the Build task's computed version equals the tag
+          # by construction -- this is a read-only tripwire against a release cut on the wrong
+          # commit (e.g. a re-run, or a tag moved after release creation), not the load-bearing
+          # versioning mechanism itself.
+          $tag = '${{ github.event.release.tag_name }}' -replace '^v', ''
+          $manifest = Import-PowerShellDataFile ./Output/ScrewCitySoftware.PwshProfile/ScrewCitySoftware.PwshProfile.psd1
+          $version = $manifest.ModuleVersion
+          $prerelease = $manifest.PrivateData.PSData.Prerelease
+          if ($prerelease) { $version = "$version-$prerelease" }
+          if ($tag -ne $version) {
+              throw "Release tag 'v$tag' does not match GitVersion-computed version '$version' -- HEAD may not be exactly the tagged commit."
+          }
+          Write-Host "Tag and GitVersion-computed version agree on $version."
 
       - name: Publish to PowerShell Gallery
         shell: pwsh

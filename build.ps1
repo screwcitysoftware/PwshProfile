@@ -11,17 +11,30 @@
     everything else is stock PowerShell.
 
     Tasks:
-      Bootstrap  Install the dev dependencies (Pester, PSScriptAnalyzer, ModuleBuilder) if missing.
+      Bootstrap  Install the dev dependencies pinned in RequiredModules.psd1 (Pester,
+                 PSScriptAnalyzer, ModuleBuilder) if missing, and restore the dotnet local
+                 tool pinned in .config/dotnet-tools.json (GitVersion.Tool).
       Analyze    Run PSScriptAnalyzer over Public/ and Private/; fail on any finding.
       Test       Run the Pester suite under Tests/ and emit NUnit XML to Output/.
-      Build      Stage only the shippable files into Output/<ModuleName>/ and validate
-                 the staged manifest. CLAUDE.md, Tests/, .github/, build.ps1 never ship.
+      Build      Stage only the shippable files into Output/<ModuleName>/, stamp the
+                 GitVersion-computed SemVer onto the staged manifest, and validate it.
+                 CLAUDE.md, Tests/, .github/, build.ps1 never ship.
       Publish    Publish the staged module to the PowerShell Gallery. Requires the
                  PSGALLERY_API_KEY environment variable.
+      Version    Print the GitVersion-computed SemVer and exit — a quick standalone check
+                 that doesn't require Analyze/Test/Build to run first.
 
     The default chain (Bootstrap -> Analyze -> Test -> Build) is what CI runs and what
     you should run locally before cutting a release. Publish is intentionally excluded
     from the default so it never fires by accident.
+
+    Versioning: the source manifest's ModuleVersion is a static placeholder ('0.0.1') —
+    it is never what ships. GitVersion computes the real SemVer from git tag/commit
+    history (see GitVersion.yml) and the Build task stamps it onto the *staged* manifest
+    only, via Update-ModuleManifest. The release recipe is: push a vX.Y.Z tag at the
+    release commit, cut a GitHub Release from it — since GitVersion resolves an exactly-
+    tagged commit's version as that tag, the computed version equals the tag by
+    construction, which is what lets publish.yml verify it instead of hand-maintaining it.
 
 .PARAMETER Task
     One or more tasks to run, in order. Defaults to Bootstrap, Analyze, Test, Build.
@@ -35,17 +48,21 @@
     Lints and tests without staging — what the CI workflow runs on pull requests.
 
 .EXAMPLE
+    ./build.ps1 -Task Version
+    Prints the GitVersion-computed SemVer for the current commit without building anything.
+
+.EXAMPLE
     $env:PSGALLERY_API_KEY = '<key>'; ./build.ps1 -Task Build, Publish
     Stages then publishes to the PowerShell Gallery.
 
 .NOTES
     Used by .github/workflows/ci.yml (Bootstrap/Analyze/Test) and publish.yml
-    (Analyze/Test/Build/Publish on a published GitHub release).
+    (Bootstrap/Analyze/Test/Build/Publish on a published GitHub release).
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('Bootstrap', 'Analyze', 'Test', 'Build', 'Publish')]
+    [ValidateSet('Bootstrap', 'Analyze', 'Test', 'Build', 'Publish', 'Version')]
     [string[]]$Task = @('Bootstrap', 'Analyze', 'Test', 'Build')
 )
 
@@ -60,14 +77,12 @@ $StagePath        = Join-Path $OutputRoot $ModuleName
 $TestsPath        = Join-Path $RepoRoot 'Tests'
 $AnalyzerSettings = Join-Path $RepoRoot 'PSScriptAnalyzerSettings.psd1'
 
-# Dev dependencies pinned to EXACT versions so "clean locally" == "clean in CI". The GitHub
-# windows image preinstalls these, and a different analyzer version surfaces different findings;
-# pinning removes that drift (Bootstrap force-installs the exact version when it's absent).
-$DevDependencies = @{
-    Pester           = '5.7.1'
-    PSScriptAnalyzer = '1.25.0'
-    ModuleBuilder    = '3.2.18'
-}
+# Dev dependencies pinned to EXACT versions so "clean locally" == "clean in CI", read from
+# RequiredModules.psd1 rather than hardcoded here. The GitHub windows image preinstalls these,
+# and a different analyzer version surfaces different findings; pinning removes that drift
+# (Bootstrap force-installs the exact version when it's absent). GitVersion.Tool is pinned
+# separately in .config/dotnet-tools.json — it's a dotnet tool, not a PowerShell module.
+$DevDependencies = Import-PowerShellDataFile -Path (Join-Path $RepoRoot 'RequiredModules.psd1')
 
 function Write-Banner {
     param([Parameter(Mandatory)][string]$Message)
@@ -100,6 +115,12 @@ function Invoke-Bootstrap {
             # Bracket = NuGet exact-version range, so we get this version and no other.
             Install-PSResource -Name $name -Version "[$version]" -TrustRepository
         }
+    }
+
+    Write-Host '    restoring dotnet local tools (GitVersion.Tool, see .config/dotnet-tools.json)' -ForegroundColor DarkGray
+    dotnet tool restore
+    if ($LASTEXITCODE -ne 0) {
+        throw 'dotnet tool restore failed.'
     }
 }
 
@@ -147,6 +168,38 @@ function Invoke-Test {
     Write-Host "    $($result.PassedCount) test(s) passed" -ForegroundColor Green
 }
 
+function Get-ComputedVersion {
+    <#
+        Computes the module's real SemVer from git tag/commit history via GitVersion (pinned in
+        .config/dotnet-tools.json, restored by Invoke-Bootstrap), returning the clean
+        Major.Minor.Patch (valid for a manifest's ModuleVersion) and a Prerelease tag sanitized
+        for PowerShell's manifest charset.
+
+        GitVersion's own PreReleaseTag separates its label/number with a dot (e.g. 'vNext.1'),
+        but Update-ModuleManifest's -Prerelease only accepts 'a-zA-Z0-9' plus an optional leading
+        hyphen — a dot throws "contains invalid characters" — so non-alphanumerics are stripped
+        rather than passed through verbatim.
+    #>
+    param()
+
+    $json = dotnet tool run dotnet-gitversion $RepoRoot /output json
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitVersion failed: $json"
+    }
+    $computed = $json | ConvertFrom-Json
+
+    [pscustomobject]@{
+        MajorMinorPatch = $computed.MajorMinorPatch
+        Prerelease      = if ($computed.PreReleaseTag) { $computed.PreReleaseTag -replace '[^a-zA-Z0-9]', '' } else { '' }
+    }
+}
+
+function Invoke-Version {
+    $version = Get-ComputedVersion
+    $display = if ($version.Prerelease) { "$($version.MajorMinorPatch)-$($version.Prerelease)" } else { $version.MajorMinorPatch }
+    Write-Banner "Version: $display"
+}
+
 function Invoke-Build {
     Assert-Dependency -Name 'ModuleBuilder' -Version $DevDependencies['ModuleBuilder']
     Import-Module ModuleBuilder -RequiredVersion $DevDependencies['ModuleBuilder']
@@ -173,6 +226,19 @@ function Invoke-Build {
         $strayPath = Join-Path $StagePath $stray
         if (Test-Path $strayPath) { Remove-Item -LiteralPath $strayPath -Force }
     }
+
+    # The source manifest's ModuleVersion is a static placeholder ('0.0.1') — GitVersion computes
+    # the real SemVer from git tag/commit history and it is stamped onto the staged manifest only,
+    # never the source one (which keeps its hand-authored formatting/comments untouched).
+    $version = Get-ComputedVersion
+    Write-Host "    GitVersion computed $($version.MajorMinorPatch)$(if ($version.Prerelease) { "-$($version.Prerelease)" })" -ForegroundColor DarkGray
+    $manifestParams = @{
+        Path          = $built.Path
+        ModuleVersion = $version.MajorMinorPatch
+        ErrorAction   = 'Stop'
+    }
+    if ($version.Prerelease) { $manifestParams.Prerelease = $version.Prerelease }
+    Update-ModuleManifest @manifestParams
 
     # The staged manifest must be valid before we ever try to publish it.
     $null = Test-ModuleManifest -Path $built.Path -ErrorAction Stop

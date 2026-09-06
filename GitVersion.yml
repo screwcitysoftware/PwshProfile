@@ -1,0 +1,20 @@
+# GitVersion config (GitVersion.Tool 6.8.2, pinned via .config/dotnet-tools.json).
+#
+# Inlines the concrete keys behind GitVersion's own `workflow: TrunkBased/preview1` preset rather
+# than referencing that preset by name — it's tagged preview1, and inlining avoids depending on a
+# preview preset's contents staying stable. Every commit on main bumps Patch by default
+# (continuous delivery); a `+semver: major|minor` trailer on a commit since the last tag overrides
+# that. NOTE: Conventional-Commits-style messages (`feat(x): ...`) do NOT trigger a bump by
+# themselves — only an explicit `+semver:` trailer does (see build.ps1 -Task Version / CLAUDE.md).
+mode: ContinuousDelivery
+major-version-bump-message: '\+semver:\s?(breaking|major)'
+minor-version-bump-message: '\+semver:\s?(feature|minor)'
+patch-version-bump-message: '\+semver:\s?(fix|patch)'
+no-bump-message: '\+semver:\s?(none|skip)'
+commit-message-incrementing: Enabled
+branches:
+  main:
+    mode: ContinuousDeployment
+    increment: Patch
+    regex: "^master$|^main$"
+    is-main-branch: true

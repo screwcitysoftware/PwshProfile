@@ -394,6 +394,9 @@ ScrewCitySoftware.PwshProfile/
 ├── Prefix.ps1                          # console-encoding preamble + $script:ModuleRoot (shared with the build)
 ├── Suffix.ps1                          # ensures PwshSpectreConsole (shared with the build)
 ├── build.psd1                          # ModuleBuilder settings for build.ps1 -Task Build
+├── RequiredModules.psd1                # dev-dependency pins (Pester/PSScriptAnalyzer/ModuleBuilder), read by Bootstrap
+├── GitVersion.yml                      # computes the shipped SemVer from git tag/commit history at build time
+├── .config/dotnet-tools.json           # pins the GitVersion.Tool local dotnet tool, restored by Bootstrap
 ├── Public/                              # one exported function per file
 │   ├── Install/
 │   │   ├── Install-PwshProfile.ps1   # wizard: write the bootstrap into a profile file
@@ -1450,9 +1453,11 @@ See [Build & release](#build--release) for the full task list.
 ### Build & release
 
 [`build.ps1`](build.ps1) is a self-contained task runner — no psake or InvokeBuild, each `-Task` just
-maps to a function and they run in order. `Bootstrap` installs the pinned dev dependencies (Pester,
-PSScriptAnalyzer, ModuleBuilder) when they are missing. The default chain lints, tests, and stages a
-shippable copy of the module:
+maps to a function and they run in order. `Bootstrap` installs the dev dependencies pinned in
+[`RequiredModules.psd1`](RequiredModules.psd1) (Pester, PSScriptAnalyzer, ModuleBuilder) when they
+are missing, and restores the [GitVersion](https://gitversion.net/) local dotnet tool pinned in
+`.config/dotnet-tools.json`. The default chain lints, tests, and stages a shippable copy of the
+module:
 
 Run it in a **clean** PowerShell session (`-NoProfile`) so a profile-loaded module / global state
 can't mask or alter results — that's what CI does:
@@ -1485,16 +1490,27 @@ Because the Pester suite imports the repo tree rather than the staged copy, `Bui
 importing the staged module in a clean child process and asserting it exports exactly what the
 manifest declares — so the merged artifact is never published untested.
 
+**Versioning is computed by [GitVersion](https://gitversion.net/), not hand-bumped.** The source
+manifest's `ModuleVersion` is a static placeholder (`0.0.1`) — `Build` computes the real SemVer from
+git tag/commit history (config in [`GitVersion.yml`](GitVersion.yml)) and stamps it onto the
+*staged* manifest only. Run `./build.ps1 -Task Version` for a quick standalone check of what the
+current commit computes to.
+
 CI runs lint + tests on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Publishing to the PowerShell Gallery is
 automated on release ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)). To cut a
 release:
 
-1. Bump `ModuleVersion` in the manifest (and set `Prerelease` for a preview, e.g. `preview1`).
-2. Push, then create a GitHub release tagged `vX.Y.Z` (or `vX.Y.Z-preview1`) with notes describing
-   the changes — the [Releases page](https://github.com/screwcitysoftware/PwshProfile/releases) is
-   the changelog. The workflow guards that the tag and manifest version agree, then builds and runs
-   `Publish-PSResource`.
+1. Push a `vX.Y.Z` tag (or `vX.Y.Z-preview1`, e.g. `v0.5.0-preview1`) at the commit to release.
+2. Create a GitHub release from that tag with notes describing the changes — the
+   [Releases page](https://github.com/screwcitysoftware/PwshProfile/releases) is the changelog.
+   Because GitVersion resolves an exactly-tagged commit's version as that tag, the workflow's
+   computed version agrees with the tag by construction; it sanity-checks that before building and
+   running `Publish-PSResource`.
+
+A deliberate minor/major bump needs an explicit `+semver: minor` / `+semver: major` commit-message
+trailer somewhere since the last tag — this repo's `feat:`/`fix:`-style commit messages don't drive
+version bumps on their own; every commit on `main` bumps Patch by default.
 
 The publish workflow reads the gallery API key from the `PSGALLERY_API_KEY` repository secret.
 

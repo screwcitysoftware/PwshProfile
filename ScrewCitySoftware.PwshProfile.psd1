@@ -1,6 +1,11 @@
 @{
     RootModule        = 'ScrewCitySoftware.PwshProfile.psm1'
-    ModuleVersion     = '0.7.3'
+
+    # Static placeholder — never what ships. GitVersion computes the real SemVer from git
+    # tag/commit history (see GitVersion.yml) and build.ps1's Build task stamps it onto the
+    # *staged* manifest only, via Update-ModuleManifest. Run `./build.ps1 -Task Version` to see
+    # what the current commit would compute to.
+    ModuleVersion     = '0.0.1'
     GUID              = '4382ebfd-1c06-4409-b7ee-89c3c386b6b0'
     Author            = 'Jason Rotello'
     CompanyName       = 'Screw City Software'   # "Screw City" = Rockford, Illinois (screw/fastener heritage)
