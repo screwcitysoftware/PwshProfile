@@ -80,10 +80,10 @@ Nerd Fonts and show how to point your terminal at them:
 Install-PwshProfile        # interactive wizard
 ```
 
-To remove the bootstrap later, run `Uninstall-PwshProfile` (it leaves your installed tools and
-fonts in place). For more on what the wizard writes and how to call the orchestrator yourself, see
-[Usage](#usage). The Nerd Font and terminal steps below are the manual equivalents of what the
-wizard offers.
+To remove the bootstrap later, run `Uninstall-PwshProfile` (interactively it also offers to remove
+installed tools/modules/scheme; fonts are always left in place). For more on what the wizard writes
+and how to call the orchestrator yourself, see [Usage](#usage). The Nerd Font and terminal steps
+below are the manual equivalents of what the wizard offers.
 
 ### Install a Nerd Font
 
@@ -131,7 +131,7 @@ terminal setup). To remove it, run **`Uninstall-PwshProfile`**:
 
 ```powershell
 Install-PwshProfile        # interactive wizard; re-run any time to change options
-Uninstall-PwshProfile      # remove the bootstrap (installed tools/fonts are left in place)
+Uninstall-PwshProfile      # remove the bootstrap; interactively, also offers to remove tools/modules/scheme
 ```
 
 The bootstrap it writes is a short guidance comment plus a call to
@@ -446,8 +446,10 @@ ScrewCitySoftware.PwshProfile/
 │   │                               #   settable parameters and their metadata), and
 │   │                               #   Get-PwshProfileWiringCatalog / Read-PwshProfileWiringTree
 │   │                               #   (the wizard's wiring toggles and their checkbox tree), plus
-│   │                               #   Get-PwshProfileToolInventory / Get-PwshProfileModuleInventory
-│   │                               #   and the shared Show-PwshProfileInventory renderer
+│   │                               #   Get-PwshProfileToolInventory / Get-PwshProfileModuleInventory,
+│   │                               #   the shared Show-PwshProfileInventory renderer, and
+│   │                               #   Get-PwshProfileRemovalInventory / Read-PwshProfileUninstallTree
+│   │                               #   (Uninstall-PwshProfile's removal checkbox tree)
 │   ├── Startup/                         # startup helpers shared with the wizard
 │   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
 │   │   └── Get-PwshProfileModuleCatalog.ps1   # single source of truth for the PSGallery modules it installs
@@ -457,6 +459,8 @@ ScrewCitySoftware.PwshProfile/
 │   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors + WT color scheme paired with each bundled theme
 │   ├── Tools/
 │   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers (-PathDir defaults to the WinGet\Links dir)
+│   │   ├── Uninstall-WingetPackageSafe.ps1 # inverse of the above (Uninstall-WinGetPackage), for Uninstall-PwshProfile's removal checkbox
+│   │   ├── Uninstall-ModuleSafe.ps1      # removes a gallery module (Uninstall-PSResource), for Uninstall-PwshProfile's removal checkbox
 │   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
 │   │   ├── Get-FzfVersion.ps1            # parses `fzf --version` so Enable-Fzf only adds --style on fzf 0.54+
 │   │   └── Completions/
@@ -467,6 +471,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
 │   │   ├── Get-WindowsTerminalSettingsPath.ps1 # locates WT settings.json (stable/preview/unpackaged)
 │   │   ├── Resolve-WindowsTerminalSettingsPath.ps1 # resolves + validates it, warning when absent
+│   │   ├── Get-WindowsTerminalSchemeName.ps1   # read-only: which scheme names are actually present
 │   │   └── Edit-WindowsTerminalSettings.ps1    # shared read/backup/write engine for the scheme install/uninstall
 │   └── Core/
 │       ├── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
@@ -700,17 +705,25 @@ To **change settings**, just re-run `Install-PwshProfile` (it rewrites the block
 Removes the marker-wrapped bootstrap block that `Install-PwshProfile` wrote, leaving every other
 line in the profile intact. By default it targets `$PROFILE`.
 
-It touches **only the profile file** — it does **not** uninstall any tools, Nerd Fonts, or modules
-that were installed during setup; it just stops the module from initializing on future sessions. A
-hand-written, unmanaged `Import-Module ScrewCitySoftware.PwshProfile` (no markers) is left untouched,
-since that's your own code rather than the managed injection.
+The profile-file edit always happens the same way, non-interactively: it just stops the module from
+initializing on future sessions. A hand-written, unmanaged `Import-Module ScrewCitySoftware.PwshProfile`
+(no markers) is left untouched, since that's your own code rather than the managed injection.
+
+**When run in an interactive session** with Spectre prompts available, it additionally offers a
+checkbox tree of the winget tools, PowerShell modules, and Windows Terminal color scheme actually
+installed on this machine, so you can choose which (if any) to remove too — bringing the machine
+closer to its state before setup. Nothing is pre-selected; every removal is opt-in. **Nerd Fonts are
+never offered**, since there is no clean way to uninstall one once installed. This step is skipped
+silently outside an interactive session, so scripted calls behave exactly as before.
 
 - **`-Path`** — the profile file to clean (default `$PROFILE`, current user / current host).
-- **`-PassThru`** — emit a result object (`Path`, `Action` = `Removed` | `NotInstalled`, `Changed`);
-  by default the command returns nothing.
+- **`-PassThru`** — emit a result object (`Path`, `Action` = `Removed` | `NotInstalled`, `Changed`,
+  `Uninstalled` — one entry per item you checked in the removal tree, each with `Group`, `Label`,
+  `Kind`, and whether it was actually `Removed`); by default the command returns nothing.
 
-Supports `-WhatIf` / `-Confirm`. If removing the block leaves the file empty, the empty file is left
-in place rather than deleted.
+Supports `-WhatIf` / `-Confirm` — the bootstrap-block write and each checked removal are all
+individually gated. If removing the block leaves the file empty, the empty file is left in place
+rather than deleted.
 
 ```powershell
 Uninstall-PwshProfile                            # remove the block from $PROFILE
