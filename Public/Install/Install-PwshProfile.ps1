@@ -22,12 +22,19 @@ function Install-PwshProfile {
         of the run, not part of the bootstrap block — so re-running re-applies them, and -WhatIf
         previews without touching anything.
 
-        When a block is actually written it finishes by offering to reload the profile in the current
-        session (default yes), dot-sourcing the file it just wrote so the prompt and tools apply
-        without opening a new shell. Declining leaves the file exactly as written. Note the wiring
-        switches are one-way in-session: turning one ON applies on a reload, turning one OFF still
-        needs a new shell, since the enablers only ever set their alias or environment variable. A
-        reload that throws warns rather than failing the install, which has already succeeded by then.
+        It finishes by offering to apply the new settings to the current session (default yes),
+        re-running the Initialize-PwshProfile call it just generated so the prompt and tools update
+        without opening a new shell. Deliberately that call rather than dot-sourcing the whole profile
+        file: the latter would also re-execute the user's own profile code, which carries no
+        idempotency contract of its own, to apply a change entirely inside the managed block.
+        The offer is NOT limited to runs that changed the block: a re-run answering every prompt the
+        same way writes an identical block and reports AlreadyPresent, and that is exactly the run
+        after which a reload matters most, since the run may still have installed tools this session
+        started without. Only BareImportPresent (nothing written, by design) and -WhatIf skip it.
+        Declining leaves the file exactly as written. Note the wiring switches are one-way
+        in-session: turning one ON applies here, turning one OFF still needs a new shell, since the
+        enablers only ever set their alias or environment variable. A failure to apply warns rather
+        than failing the install, which has already succeeded by then.
 
         Installing the tools here rather than at startup is what keeps the first shell fast: every
         Enable-* Install substep then short-circuits on Get-Command. The packages come from
@@ -303,42 +310,63 @@ function Install-PwshProfile {
     # The last thing standing between a finished install and a working prompt used to be the panel's
     # "run . $PROFILE yourself" line -- in the one session already sitting right there. So offer it.
     #
-    # Gated on Changed, which is $false for both AlreadyPresent and BareImportPresent: the two
-    # outcomes where nothing was written and a reload would apply nothing. The -not $WhatIfPreference
-    # is load-bearing rather than belt-and-braces -- Write-PwshProfileBlock computes Changed BEFORE
-    # ShouldProcess, so under -WhatIf it is $true while the file was never touched.
-    if ($result.Changed -and -not $WhatIfPreference -and (Get-Command Read-SpectreConfirm -ErrorAction SilentlyContinue)) {
+    # It re-runs the generated Initialize-PwshProfile call, NOT `. $PROFILE`. Dot-sourcing the whole
+    # file would also re-execute the user's own profile code, which carries no idempotency contract of
+    # its own -- duplicate PATH appends, re-registered handlers, re-imported modules, whatever else
+    # they keep there -- to apply a change that is entirely inside the managed block. $call is what
+    # the wizard just built and what was just written, so running it applies exactly what changed and
+    # nothing else, and it is all code this module owns and has made reload-safe.
+    #
+    # Deliberately NOT gated on $result.Changed. The block text is only one of the things a run
+    # changes: it also installs the tool CLIs, the fonts, and the winget/Windows Terminal settings. A
+    # re-run that answers every prompt the same way writes a byte-identical block and reports
+    # AlreadyPresent -- and that is exactly the run after which a reload matters most, because this
+    # session's Enable-* steps ran at startup, before those tools existed. Gating on Changed made the
+    # offer vanish on the commonest re-run.
+    #
+    # BareImportPresent is the one outcome skipped: nothing was written, by design, and the file is a
+    # hand-written import this command deliberately left alone.
+    #
+    # -not $WhatIfPreference is load-bearing rather than belt-and-braces -- a preview must not offer
+    # to apply what it only pretended to write.
+    if (-not $WhatIfPreference -and $result.Action -ne 'BareImportPresent' -and
+        (Get-Command Read-SpectreConfirm -ErrorAction SilentlyContinue)) {
         $reloadHint = @(
-            'Runs the block just written in **this** session, so your prompt and tools apply without opening a new shell.'
+            'Re-runs **Initialize-PwshProfile** with the settings you just chose, so your prompt and tools update without opening a new shell. Your own profile code is not re-run.'
+            if (-not $result.Changed) {
+                # Nothing new to write does not mean nothing new to apply: the run may still have
+                # installed tools this session started without.
+                'Worth it even though the block did not change, if this run installed a tool your shell started without.'
+            }
             # Only on a re-run, and a real limitation rather than a hedge: the wiring switches are
             # one-way in-session. -ReplaceCat / -ReplaceMore / -SetPager only ever *set* their alias
             # or env var, and a changed zoxide command leaves the old name defined, so turning
-            # something ON applies on reload while turning it OFF genuinely needs a new shell.
-            if ($reconfiguring) { 'A setting you turned **off** still needs a new shell: a reload re-applies wiring but cannot undo it.' }
+            # something ON applies here while turning it OFF genuinely needs a new shell.
+            if ($reconfiguring) { 'A setting you turned **off** still needs a new shell: re-running applies wiring but cannot undo it.' }
         )
         Write-PwshProfilePromptHelp $reloadHint -Accent $accent -Code $code
-        if (Read-SpectreConfirm -Message 'Reload your profile now?' -Color $accent -DefaultAnswer 'y') {
-            # Through Invoke-InGlobalScope, not a bare dot-source: run from a module function, `. $path`
-            # loads into THAT function's scope and every alias and function it defines vanishes on
-            # return. This is the same global-scope seam the tool enablers use for tool init.
+        if (Read-SpectreConfirm -Message 'Apply these settings to this session now?' -Color $accent -DefaultAnswer 'y') {
+            # Through Invoke-InGlobalScope rather than running $call here: invoked from a module
+            # function, everything Initialize-PwshProfile defines would land in THAT function's scope
+            # and vanish on return -- the aliases, the prompt, the completers, all of it. This is the
+            # same global-scope seam the tool enablers use for tool init.
             #
-            # Single-quoted with doubled quotes so a path containing $ or ' can neither interpolate
-            # nor break out, and $null = because Invoke-InGlobalScope returns whatever the script
-            # emits -- unsuppressed, a profile that prints anything would leak into this command's own
-            # output and break the "returns nothing without -PassThru" contract.
+            # $call needs no escaping: it is the command text this module generated, not user input.
+            # $null = because Invoke-InGlobalScope returns whatever the script emits -- unsuppressed,
+            # anything printed to the pipeline would leak into this command's own output and break the
+            # "returns nothing without -PassThru" contract.
             #
-            # Not inside an Invoke-Step: the reload opens its own top-level steps, and nesting them
-            # under a live spinner would tear the render.
-            $safeReloadPath = $result.Path -replace "'", "''"
+            # Not inside an Invoke-Step: Initialize-PwshProfile opens its own top-level steps, and
+            # nesting them under a live spinner would tear the render.
             try {
-                $null = Invoke-InGlobalScope -Expression ". '$safeReloadPath'"
-                Write-PwshProfilePromptAnswer 'Profile reloaded' -Accent $accent
+                $null = Invoke-InGlobalScope -Expression $call
+                Write-PwshProfilePromptAnswer 'Settings applied to this session' -Accent $accent
             }
             catch {
                 # Against this command's usual "genuine errors throw" rule, deliberately: the install
-                # has already succeeded by here, and a user's own profile code throwing must not turn
-                # a completed install into a failed one.
-                Write-Warning "Install-PwshProfile: reloading '$($result.Path)' failed: $($_.Exception.Message). Restart your shell to apply."
+                # has already succeeded by here, and a failure to apply the settings to this session
+                # must not turn a completed install into a failed one.
+                Write-Warning "Install-PwshProfile: applying the new settings to this session failed: $($_.Exception.Message). Restart your shell to pick them up."
             }
         }
     }

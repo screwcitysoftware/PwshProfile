@@ -1312,65 +1312,90 @@ Describe 'Install-PwshProfile' {
         Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 0 -Exactly
     }
 
-    It 'offers to reload the profile once the bootstrap is written' {
+    It 'offers to apply the settings once the bootstrap is written' {
         Install-PwshProfile -Path $script:Dest | Out-Null
         Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 1 -Exactly `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
     }
 
-    It 'dot-sources the written file in global scope when the reload is accepted' {
-        # Global scope is the whole point: run from a module function, a bare `. $path` would load
-        # into THAT function's scope and every alias and function it defines would vanish on return.
+    It 'runs the generated Initialize call in global scope when accepted' {
+        # Global scope is the whole point: invoked from a module function, everything
+        # Initialize-PwshProfile defines would land in THAT function's scope and vanish on return.
         Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
 
         Install-PwshProfile -Path $script:Dest | Out-Null
 
         Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 1 -Exactly `
-            -ParameterFilter { $Expression -eq ". '$script:Dest'" }
+            -ParameterFilter { $Expression -like 'Initialize-PwshProfile*' }
     }
 
-    It 'quotes the path so one containing a quote cannot break out' {
-        $script:Odd = Join-Path $script:Dir "it's here.ps1"
+    It 'applies the settings rather than dot-sourcing the whole profile' {
+        # Dot-sourcing the file would also re-execute the user's own profile code, which carries no
+        # idempotency contract of its own -- to apply a change entirely inside the managed block.
         Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
 
-        Install-PwshProfile -Path $script:Odd | Out-Null
+        Install-PwshProfile -Path $script:Dest | Out-Null
 
-        # Single-quoted with the quote doubled, so the path is data rather than script -- and a path
-        # holding a $ can't interpolate either.
-        Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 1 -Exactly `
-            -ParameterFilter { $Expression -eq ". '$($script:Odd -replace "'", "''")'" }
+        Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 0 -Exactly `
+            -ParameterFilter { $Expression -like '. *' }
     }
 
-    It 'reloads nothing when the offer is declined' {
+    It 'runs exactly the call it wrote into the block' {
+        # The session and the file must not drift: what runs here is the same text the block carries.
+        Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
+        $script:Ran = $null
+        Mock -ModuleName $script:Module Invoke-InGlobalScope { $script:Ran = $Expression }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        (Get-Content -LiteralPath $script:Dest -Raw) | Should -BeLike "*$script:Ran*"
+    }
+
+    It 'applies nothing when the offer is declined' {
         # The BeforeEach mock answers no.
         Install-PwshProfile -Path $script:Dest | Out-Null
         Should -Invoke -ModuleName $script:Module Invoke-InGlobalScope -Times 0 -Exactly
     }
 
-    It 'does not offer a reload under -WhatIf' {
+    It 'does not offer to apply anything under -WhatIf' {
         # Changed is computed BEFORE ShouldProcess, so it is $true here even though nothing was
         # written -- which is exactly why the gate carries its own -not $WhatIfPreference.
         Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
         Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 0 -Exactly `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
     }
 
-    It 'does not offer a reload when nothing changed' {
-        # A no-op re-run reports AlreadyPresent; there is nothing new to apply.
+    It 'still offers to apply when the block came out unchanged' {
+        # The regression this replaces: gating on Changed made the offer vanish on the commonest
+        # re-run of all -- same answers, byte-identical block, AlreadyPresent. That is exactly the run
+        # after which a reload matters most, because the block is only one of the things a run
+        # changes; it also installs the tool CLIs this session started without.
         Install-PwshProfile -Path $script:Dest | Out-Null
-        Install-PwshProfile -Path $script:Dest | Out-Null
-        Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 1 -Exactly `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+        Install-PwshProfile -Path $script:Dest -PassThru -OutVariable r | Out-Null
+        $r.Action | Should -Be 'AlreadyPresent'
+        Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 2 -Exactly `
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
     }
 
-    It 'warns rather than throwing when the reload fails' {
+    It 'does not offer to apply when it left a hand-written import alone' {
+        # BareImportPresent is the one outcome where nothing was written on purpose.
+        New-Item -ItemType Directory -Path $script:Dir | Out-Null
+        Set-Content -LiteralPath $script:Dest -Value 'Import-Module ScrewCitySoftware.PwshProfile'
+        $r = Install-PwshProfile -Path $script:Dest -PassThru
+        $r.Action | Should -Be 'BareImportPresent'
+        Should -Invoke -ModuleName $script:Module Read-SpectreConfirm -Times 0 -Exactly `
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
+    }
+
+    It 'warns rather than throwing when applying fails' {
         # Against this command's usual "genuine errors throw" rule, deliberately: the install has
         # already succeeded by this point, and a user's own profile code throwing must not turn a
         # completed install into a failed one.
         Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
         Mock -ModuleName $script:Module Invoke-InGlobalScope { throw 'boom' }
 
         { Install-PwshProfile -Path $script:Dest -WarningAction SilentlyContinue | Out-Null } |
@@ -1379,7 +1404,7 @@ Describe 'Install-PwshProfile' {
 
     It 'names the file and the failure in that warning' {
         Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
         Mock -ModuleName $script:Module Invoke-InGlobalScope { throw 'boom' }
 
         Install-PwshProfile -Path $script:Dest -WarningVariable w -WarningAction SilentlyContinue | Out-Null
@@ -1388,12 +1413,12 @@ Describe 'Install-PwshProfile' {
         "$w" | Should -BeLike '*Restart your shell*'
     }
 
-    It 'keeps the reload output out of its own pipeline' {
+    It 'keeps the applied-settings output out of its own pipeline' {
         # Invoke-InGlobalScope returns whatever the dot-sourced script emits. Unsuppressed, a profile
         # that prints anything would leak into this command's output and break "returns nothing
         # without -PassThru" -- so the $null = on that call is load-bearing, not tidiness.
         Mock -ModuleName $script:Module Read-SpectreConfirm { $true } -RemoveParameterType 'Color' `
-            -ParameterFilter { $Message -eq 'Reload your profile now?' }
+            -ParameterFilter { $Message -eq 'Apply these settings to this session now?' }
         Mock -ModuleName $script:Module Invoke-InGlobalScope { 'chatty profile output' }
 
         Install-PwshProfile -Path $script:Dest | Should -BeNullOrEmpty

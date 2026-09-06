@@ -636,19 +636,26 @@ preferences are already in place), and the Windows Terminal font/scheme — then
 None of them are part of the block, so re-running re-applies them, and `-WhatIf` previews the whole run
 without installing or writing anything.
 
-Once the block is written it offers to **reload the profile right there** — dot-sourcing the file it
-just wrote, so your prompt and tools apply without opening a new shell. It defaults to yes, so Enter
-finishes the job; declining leaves the file exactly as written and the panel's advice standing.
+Once the block is written it offers to **apply the new settings right there** — re-running the
+`Initialize-PwshProfile` call it just generated, so your prompt and tools update without opening a new
+shell. It defaults to yes, so Enter finishes the job; declining leaves the file exactly as written and
+the panel's advice standing.
 
 ```text
-  › Runs the block just written in this session, so your prompt and tools apply
-    without opening a new shell.
-Reload your profile now? [Y/n]
-  ✓ Profile reloaded
+  › Re-runs Initialize-PwshProfile with the settings you just chose, so your prompt
+    and tools update without opening a new shell. Your own profile code is not re-run.
+Apply these settings to this session now? [Y/n]
+  ✓ Settings applied to this session
 ```
 
-The offer only appears when something was actually written — a no-op re-run and a `-WhatIf` preview
-both skip it. **One caveat on a re-run:** the wiring switches are one-way in-session. Turning one
+It runs that one call rather than dot-sourcing the whole profile on purpose: dot-sourcing would also
+re-execute **your** profile code — duplicate PATH appends, re-registered handlers, whatever else you
+keep there — to apply a change that lives entirely inside the managed block.
+
+It appears on every completed run, not just one that changed the block — a re-run that answers
+everything the same way writes an identical block, and that is precisely when a reload is worth it,
+since the run may have installed a tool your shell started without. Only a `-WhatIf` preview and the
+case where a hand-written import was deliberately left alone skip it. **One caveat on a re-run:** the wiring switches are one-way in-session. Turning one
 **on** applies on a reload; turning one **off** still needs a new shell, because the enablers only
 ever *set* their alias or environment variable (`cat` stays aliased to `bat`, `$env:PAGER` stays
 set). The prompt says so when it's a re-run. A reload that throws warns rather than failing the
