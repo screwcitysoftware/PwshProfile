@@ -27,7 +27,7 @@ Describe 'Enable-Less' {
         $env:PAGER = $script:savedPager
     }
 
-    It 'sets $env:LESS and leaves the pager untouched without -ReplaceMore' {
+    It 'sets $env:LESS and takes over nothing by default' {
         Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'less.exe' }
         Enable-Less -Options '-R'
         $env:LESS  | Should -Be '-R'
@@ -35,16 +35,33 @@ Describe 'Enable-Less' {
         Get-Alias more -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
     }
 
-    It 'routes the pager through less and aliases more -> less with -ReplaceMore' {
+    It 'sets $env:PAGER under -SetPager without touching the more command' {
+        # The two halves are independent: this is the one that redirects `help`, git, delta and gh.
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'less.exe' }
+        Enable-Less -SetPager
+        $env:PAGER | Should -Be 'less'
+        Get-Alias more -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+    }
+
+    It 'aliases more -> less under -ReplaceMore without touching $env:PAGER' {
+        # The other half. `help` invokes the literal string more.com, so this alias alone does NOT
+        # redirect it -- which is exactly why these are two switches rather than one.
         Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'less.exe' }
         Enable-Less -ReplaceMore
+        (Get-Alias more).Definition | Should -Be 'less.exe'
+        $env:PAGER | Should -BeNullOrEmpty
+    }
+
+    It 'applies both when both are supplied' {
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'less.exe' }
+        Enable-Less -SetPager -ReplaceMore
         $env:PAGER | Should -Be 'less'
         (Get-Alias more).Definition | Should -Be 'less.exe'
     }
 
     It 'does nothing when less.exe is not on PATH' {
         Mock -ModuleName $script:Module Test-CommandAvailable { $null } -ParameterFilter { $Name -eq 'less.exe' }
-        Enable-Less -Options '-R' -ReplaceMore
+        Enable-Less -Options '-R' -SetPager -ReplaceMore
         $env:LESS  | Should -BeNullOrEmpty
         $env:PAGER | Should -BeNullOrEmpty
         Get-Alias more -ErrorAction SilentlyContinue | Should -BeNullOrEmpty

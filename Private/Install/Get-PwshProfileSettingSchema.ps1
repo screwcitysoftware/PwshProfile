@@ -97,6 +97,8 @@ function Get-PwshProfileSettingSchema {
             BrandingKey = 'BatTheme'; Neutral = 'ansi'; Tool = 'Bat'; Banner = $false; Emit = 'Scalar' }
         [pscustomobject]@{ Name = 'BatStyle'; Kind = 'String'; Default = 'numbers,changes,header'
             BrandingKey = $null; Neutral = $null; Tool = 'Bat'; Banner = $false; Emit = 'Scalar' }
+        [pscustomobject]@{ Name = 'LessOptions'; Kind = 'String'; Default = '-R -F -i'
+            BrandingKey = $null; Neutral = $null; Tool = 'Less'; Banner = $false; Emit = 'Scalar' }
         # FdColors reads the branding's LsColors — the one place the setting name and the branding
         # member name differ, which is why this column names the member instead of being a boolean.
         [pscustomobject]@{ Name = 'FdColors'; Kind = 'String'; Default = $null
@@ -107,8 +109,12 @@ function Get-PwshProfileSettingSchema {
             BrandingKey = $null; Neutral = $null; Tool = 'Fzf'; Banner = $false; Emit = 'Scalar' }
         [pscustomobject]@{ Name = 'ReplaceCat'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = 'Bat'; Banner = $false; Emit = 'Switch' }
+        [pscustomobject]@{ Name = 'SetPager'; Kind = 'Switch'; Default = $false
+            BrandingKey = $null; Neutral = $null; Tool = 'Less'; Banner = $false; Emit = 'Switch' }
         [pscustomobject]@{ Name = 'ReplaceMore'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = 'Less'; Banner = $false; Emit = 'Switch' }
+        [pscustomobject]@{ Name = 'ReplaceHttp'; Kind = 'Switch'; Default = $false
+            BrandingKey = $null; Neutral = $null; Tool = 'Xh'; Banner = $false; Emit = 'Switch' }
         [pscustomobject]@{ Name = 'FzfGitKeyBindings'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = 'Fzf'; Banner = $false; Emit = 'Switch' }
         [pscustomobject]@{ Name = 'NoBanner'; Kind = 'Switch'; Default = $false

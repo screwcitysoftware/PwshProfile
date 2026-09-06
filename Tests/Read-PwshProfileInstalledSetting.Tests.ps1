@@ -32,8 +32,11 @@ BeforeAll {
         ZoxideCommand     = 'z'
         BatTheme          = 'Nord'
         BatStyle          = 'full'
+        LessOptions       = '-R'
         ReplaceCat        = $true
+        SetPager          = $true
         ReplaceMore       = $true
+        ReplaceHttp       = $true
         FzfGitKeyBindings = $true
         FzfTabChord       = 'Ctrl+j'
     }

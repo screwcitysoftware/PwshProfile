@@ -73,7 +73,7 @@ Describe 'Initialize-PwshProfile' {
             Should -Invoke -ModuleName $script:Module Enable-Ripgrep -Times 1 -Exactly
             # less enables with the pager-override left off.
             Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
-                -ParameterFilter { -not $ReplaceMore }
+                -ParameterFilter { -not $ReplaceMore -and -not $SetPager -and $Options -eq '-R -F -i' }
             # lazygit enables (install-only, no arguments).
             Should -Invoke -ModuleName $script:Module Enable-Lazygit -Times 1 -Exactly
             # Completions register (under Core).
@@ -105,10 +105,42 @@ Describe 'Initialize-PwshProfile' {
                 -ParameterFilter { $ReplaceCat -and $Style -eq 'plain' }
         }
 
-        It 'forwards -ReplaceMore to Enable-Less' {
+        It 'forwards -ReplaceMore to Enable-Less without implying the pager' {
             Initialize-PwshProfile -ReplaceMore
             Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
-                -ParameterFilter { $ReplaceMore }
+                -ParameterFilter { $ReplaceMore -and -not $SetPager }
+        }
+
+        It 'forwards -SetPager to Enable-Less without implying the more alias' {
+            Initialize-PwshProfile -SetPager
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
+                -ParameterFilter { $SetPager -and -not $ReplaceMore }
+        }
+
+        It 'forwards -LessOptions to Enable-Less as -Options' {
+            Initialize-PwshProfile -LessOptions '-R'
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
+                -ParameterFilter { $Options -eq '-R' }
+        }
+
+        It 'passes the default less options when none are supplied' {
+            # The knob used to exist on Enable-Less but was never plumbed through the orchestrator,
+            # so $env:LESS was effectively hardcoded. Guard against it drifting back to unpassed.
+            Initialize-PwshProfile
+            Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
+                -ParameterFilter { $Options -eq '-R -F -i' }
+        }
+
+        It 'forwards -ReplaceHttp to Enable-Xh' {
+            Initialize-PwshProfile -ReplaceHttp
+            Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly `
+                -ParameterFilter { $ReplaceHttp }
+        }
+
+        It 'leaves http/https unclaimed by default' {
+            Initialize-PwshProfile
+            Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly `
+                -ParameterFilter { -not $ReplaceHttp }
         }
 
         It 'forwards an explicit -BatTheme, overriding the theme blend' {

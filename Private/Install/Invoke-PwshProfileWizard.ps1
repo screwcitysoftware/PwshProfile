@@ -36,9 +36,11 @@ function Invoke-PwshProfileWizard {
           5. Step icon: always asked, since the icon marks every startup step whether or not there is a
              banner. A curated shortcode menu with the current icon floated to the top, plus a custom
              escape hatch.
-          6. Tool options: every tool is installed and enabled, so this asks only how the opinionated
-             ones behave — zoxide's jump command, whether bat takes over `cat` (and its theme/style),
-             whether less becomes the pager, and fzf's two keybinding knobs.
+          6. Wiring: every tool is installed and enabled, so this asks only how they wire into the
+             shell. A grouped checkbox tree (Read-PwshProfileWiringTree, sourced from
+             Get-PwshProfileWiringCatalog) covers the binary choices — which commands get taken over,
+             and the Ctrl+G git chords — then the free-text settings a checkbox can't express follow:
+             bat's theme and style, less's options, and the fzf tab chord.
 
         The font, winget, and terminal-scheme choices are one-time machine actions applied by
         Install-PwshProfile, not baked into the bootstrap call.
@@ -268,28 +270,22 @@ function Invoke-PwshProfileWizard {
         }
     }
 
-    # --- Step: Tool options -----------------------------------------------------------------
-    $stepFeatures = {
+    # --- Step: Wiring -----------------------------------------------------------------------
+    $stepWiring = {
         param($s, $i, $total)
-        Write-PwshProfileStepHeader -Title 'Tool options' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
-            -Body 'Every tool is installed and enabled. These choose how the opinionated ones behave — which built-in commands they take over, and how they look.'
+        Write-PwshProfileStepHeader -Title 'Wiring' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
+            -Body 'Every tool is installed and enabled. These choose how they wire into your shell — which existing commands they take over, and how the themed ones look.'
 
-        Write-PwshProfilePromptHelp @(
-                '**zoxide** is a smarter `cd`: it remembers the directories you visit most and lets you jump to one by a partial name — e.g. `cd dev` jumps straight to `C:\Dev` from anywhere.'
-                'This sets the command name you type to do that. The default `cd` replaces the built-in cd (normal paths still work, it just gains the jump trick).'
-                'Prefer `z` to leave the built-in cd untouched and add a separate `z` command (the zoxide convention). Press Enter to keep `cd`.'
-        ) -Accent $s.Accent -Code $s.Code
-        $s.Settings.ZoxideCommand = Read-SpectreText -Message "zoxide's jump command (replaces cd)" -DefaultAnswer $s.Settings.ZoxideCommand
+        # The binary choices, all on one screen. Returns setting -> value for EVERY row, checked or
+        # not, so an unchecked box records a real "no" rather than leaving the prior run's value.
+        $chosen = Read-PwshProfileWiringTree -Setting $s.Settings -Color $s.Accent -CodeColor $s.Code
+        foreach ($key in $chosen.Keys) { $s.Settings[$key] = $chosen[$key] }
 
-        Write-PwshProfilePromptHelp @(
-            '**bat** is a `cat` with syntax highlighting, line numbers, and git change marks; its colors are themed to match your prompt.'
-            'Replace the built-in `cat` (an alias for `Get-Content`) with **bat**, so `cat file` renders highlighted? Plain redirection and piping still work.'
-        ) -Accent $s.Accent -Code $s.Code
-        $s.Settings.ReplaceCat = [bool](Read-SpectreConfirm -Message 'Replace the built-in cat (Get-Content) with bat?' -Color $s.Accent -DefaultAnswer 'y')
-
+        # Free-text settings a checkbox can't express, prompted after the tree.
+        #
         # Pre-filled from the selected theme's branding, so pressing Enter keeps bat matching the
-        # prompt. A text prompt rather than a menu on purpose: the wizard runs before bat is
-        # installed, so `bat --list-themes` has nothing to enumerate yet.
+        # prompt. A text prompt rather than a menu on purpose: the wizard still runs before the tool
+        # install step, so `bat --list-themes` has nothing to enumerate yet.
         Write-PwshProfilePromptHelp @(
             'The syntax-highlighting theme **bat** uses, from `bat --list-themes`. It is pre-filled to match your prompt theme; `ansi` follows your terminal''s own colors.'
         ) -Accent $s.Accent -Code $s.Code
@@ -301,16 +297,9 @@ function Invoke-PwshProfileWizard {
         $s.Settings.BatStyle = Read-SpectreText -Message 'bat style components' -DefaultAnswer $s.Settings.BatStyle
 
         Write-PwshProfilePromptHelp @(
-            '**less** is a full-featured pager (color, search, backward scroll) — far beyond the built-in `more.com`; it is also what lets **bat** page with color.'
-            'Make less the default pager? This sets `$env:PAGER` to less (so `help` and color CLIs page through it) and aliases `more` -> less. `more.com` stays available.'
+            'The options **less** applies to every invocation, via `$env:LESS`. The default `-R -F -i` means: pass color through, quit if the text fits one screen, and search case-insensitively.'
         ) -Accent $s.Accent -Code $s.Code
-        $s.Settings.ReplaceMore = [bool](Read-SpectreConfirm -Message 'Make less the default pager (replace more)?' -Color $s.Accent -DefaultAnswer 'y')
-
-        Write-PwshProfilePromptHelp @(
-            '**PSFzf** can bind `Ctrl+G` chords for fzf-powered git pickers — branches, commits, changed files, stashes.'
-            'With **lazygit** available for full git workflows these are off by default. Enable the PSFzf git keybindings (`Ctrl+G`)? `Ctrl+T` (files) and `Ctrl+R` (history) stay on regardless.'
-        ) -Accent $s.Accent -Code $s.Code
-        $s.Settings.FzfGitKeyBindings = [bool](Read-SpectreConfirm -Message 'Enable PSFzf git keybindings (Ctrl+G)?' -Color $s.Accent -DefaultAnswer 'n')
+        $s.Settings.LessOptions = Read-SpectreText -Message 'less options ($env:LESS)' -DefaultAnswer $s.Settings.LessOptions
 
         Write-PwshProfilePromptHelp @(
             '**PSFzf** puts a fuzzy tab-completion picker on a chord; `Tab` itself stays `MenuComplete`.'
@@ -401,7 +390,7 @@ function Invoke-PwshProfileWizard {
         'Theme'        = $stepTheme
         'Banner'       = $stepBanner
         'Step icon'    = $stepIcon
-        'Tool options' = $stepFeatures
+        'Wiring'       = $stepWiring
     }
 
     # Forward pass — thread each step's 1-based position and the total so its header shows "N of M".
@@ -427,18 +416,21 @@ function Invoke-PwshProfileWizard {
         else {
             "'$(ConvertTo-EscapedText $set.BannerText)' [grey]/[/] $(Format-PwshProfileColorValue $set.BannerColor) [grey]/[/] $($set.BannerAlignment) [grey]/[/] [$code]$($set.BannerFont)[/]"
         }
-        # Tool-option summary: the wiring choices that differ from a plain install. Every tool runs,
-        # so this lists what was customized rather than what was selected.
-        $optionParts = @(
-            "[$code]$(ConvertTo-EscapedText $set.ZoxideCommand) → zoxide[/]"
-            if ($set.ReplaceCat) { "[$code]cat→bat[/]" }
-            if ($set.ReplaceMore) { "[$code]more→less[/]" }
-            if ($set.FzfGitKeyBindings) { "[$code]git chords[/]" }
+        # Wiring summary, projected from the same catalog the tree renders — so a toggle cannot exist
+        # in the tree and be silently missing from the review. Only the "on" side is listed; a row
+        # left at Off contributes nothing rather than a noisy negative.
+        $wiringParts = @(
+            foreach ($row in Get-PwshProfileWiringCatalog) {
+                if ($set.ContainsKey($row.Setting) -and $set[$row.Setting] -eq $row.On) {
+                    "[$code]$(ConvertTo-EscapedText $row.Label)[/]"
+                }
+            }
             if ($set.FzfTabChord -and $set.FzfTabChord -ne 'Ctrl+Spacebar') {
                 "[$code]tab: $(ConvertTo-EscapedText $set.FzfTabChord)[/]"
             }
         )
-        $featuresLine = $optionParts -join " [grey]·[/] "
+        $featuresLine = if ($wiringParts.Count -gt 0) { $wiringParts -join " [grey]·[/] " }
+        else { '[grey]nothing taken over[/]' }
         $fontsLine = if (@($set.NerdFont).Count -gt 0) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }
@@ -457,8 +449,9 @@ function Invoke-PwshProfileWizard {
             "[bold]Theme:[/]      $themeLine"
             "[bold]Banner:[/]     $bannerLine"
             "[bold]Step icon:[/]  [$code]$(ConvertTo-EscapedText $set.StepIcon)[/]"
-            "[bold]Tools:[/]      $featuresLine"
+            "[bold]Wiring:[/]     $featuresLine"
             "[bold]bat:[/]        [$code]$(ConvertTo-EscapedText $set.BatTheme)[/] [grey]/[/] [$code]$(ConvertTo-EscapedText $set.BatStyle)[/]"
+            "[bold]less:[/]       [$code]$(ConvertTo-EscapedText $set.LessOptions)[/]"
             "[bold]Nerd Fonts:[/] $fontsLine"
             "[bold]WT font:[/]    $wtFontLine"
             "[bold]WT scheme:[/]  $wtSchemeLine"

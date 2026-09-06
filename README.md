@@ -247,15 +247,17 @@ bat -p script.ps1         # plain output, no decorations
 ### less — the pager
 
 The pager long output scrolls through — and what `bat`, `git`, and PowerShell's `help` page through
-when `-ReplaceMore` is on. While it's open: arrows / `Space` to scroll, `/text` to search, `q` to quit.
+when `-SetPager` is on. While it's open: arrows / `Space` to scroll, `/text` to search, `q` to quit.
 
 ### xh — HTTP client
 
-A fast, friendly HTTP client (HTTPie-style). `http` and `https` are aliased to it:
+A fast, friendly HTTP client (HTTPie-style). Invoke it as `xh`/`xhs` — or, if you turned on
+`-ReplaceHttp`, as `http`/`https`:
 
 ```powershell
-http GET httpbin.org/get                     # GET, pretty-printed JSON
-https POST api.example.com/users name=jo     # POST a JSON body over HTTPS
+xh GET httpbin.org/get                       # GET, pretty-printed JSON
+xhs POST api.example.com/users name=jo       # POST a JSON body over HTTPS
+http GET httpbin.org/get                     # same, with -ReplaceHttp on
 ```
 
 ### jq — JSON processor
@@ -422,9 +424,11 @@ ScrewCitySoftware.PwshProfile/
 ├── Private/                             # internal helpers (loaded, not exported)
 │   ├── Install/                         # Install/Uninstall helpers: marker + block builders, the
 │   │   └── *PwshProfile*.ps1       #   wizard, file writer, defaults, call builder,
-│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser), and
+│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser),
 │   │                               #   Get-PwshProfileSettingSchema (source of truth for the
-│   │                               #   settable parameters and their metadata)
+│   │                               #   settable parameters and their metadata), and
+│   │                               #   Get-PwshProfileWiringCatalog / Read-PwshProfileWiringTree
+│   │                               #   (the wizard's wiring toggles and their checkbox tree)
 │   ├── Startup/                         # startup helpers shared with the wizard
 │   │   └── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
 │   ├── Prompt/
@@ -532,15 +536,27 @@ The wizard walks one forward pass, then lets you revise anything before committi
    the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
 5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
    current icon floated to the top and a "custom shortcode" escape.
-6. **Tool options** — every tool is installed and enabled, so this asks only how the opinionated ones
-   behave. You're prompted for zoxide's jump command (**default `cd`**, replacing the built-in; pass
-   `z` to leave `cd` alone); whether to replace the built-in `cat` with **bat** (**defaulting to Yes**,
-   emitting `-ReplaceCat`) plus its syntax **theme** and **style** components (both pre-filled, the
-   theme from your prompt theme's branding, so Enter keeps them; `bat --list-themes` lists the
-   choices); whether to make **less** the default pager (**defaulting to Yes**, emitting
-   `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`); whether to bind the PSFzf `Ctrl+G`
-   git keybindings (**defaulting to No**; lazygit already covers git); and which chord drives the
-   fuzzy tab-completion picker (**default `Ctrl+Spacebar`**). `Ctrl+T`/`Ctrl+R` are bound regardless.
+6. **Wiring** — every tool is installed and enabled, so this asks only how they wire into your shell.
+   A single grouped checkbox tree covers the binary choices, with a one-line explanation per row:
+
+   ```text
+   Replacements
+     [x] cd -> zoxide (smart jump)          [ ] more -> less (the command)
+     [ ] cat -> bat (syntax highlighting)   [ ] http / https -> xh
+     [ ] $env:PAGER -> less
+   Keybindings
+     [ ] Ctrl+G git pickers
+   ```
+
+   Only `cd` → zoxide starts checked; nothing else claims one of your existing command names unless
+   you ask. On a re-run the tree opens pre-checked from your prior choices, and **unchecking a box is
+   a real "no"** — it clears the setting rather than leaving last time's value behind. `Ctrl+T` and
+   `Ctrl+R` are bound regardless and aren't listed.
+
+   Four free-text settings a checkbox can't express follow: bat's syntax **theme** and **style**
+   components (both pre-filled, the theme from your prompt theme's branding, so Enter keeps them),
+   less's **options** (`$env:LESS`, default `-R -F -i`), and the chord for the fuzzy tab-completion
+   picker (**default `Ctrl+Spacebar`**).
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -669,9 +685,17 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   `numbers,changes,header`.
 - **`-ReplaceCat`** — forwarded to `Enable-Bat -ReplaceCat`: aliases `cat` → `bat` for the session
   (replacing the built-in `cat`, an alias for `Get-Content`). Off by default.
-- **`-ReplaceMore`** — forwarded to `Enable-Less -ReplaceMore`: sets `$env:PAGER` to `less` (so
-  PowerShell's `help`, `bat`, `git`, `delta`, and `gh` page through less instead of `more.com`) and
-  aliases `more` → `less` for the session. Off by default.
+- **`-LessOptions`** — the option string forwarded to `Enable-Less -Options` (sets `$env:LESS`);
+  default `-R -F -i` (raw color passthrough, quit-if-one-screen, smart-case search).
+- **`-SetPager`** — forwarded to `Enable-Less -SetPager`: sets `$env:PAGER` to `less`, so PowerShell's
+  `help`, `bat`, `git`, `delta`, and `gh` page through less instead of `more.com`. Off by default.
+- **`-ReplaceMore`** — forwarded to `Enable-Less -ReplaceMore`: aliases `more` → `less` for the
+  session. Off by default. Independent of `-SetPager` — this shadows the `more` *command*, that
+  redirects programs which consult `$env:PAGER`. (`help` invokes the literal string `more.com`, so the
+  alias alone never reaches it, which is why they're separate switches.)
+- **`-ReplaceHttp`** — forwarded to `Enable-Xh -ReplaceHttp`: aliases `http` → `xh` and `https` → `xhs`,
+  widening each generated completer to match. Off by default: unlike `cat` and `more`, these aren't
+  built-in commands, so this claims two previously-free names rather than shadowing anything.
 - **`-FdColors`** — fd's `LS_COLORS` palette, forwarded to `Enable-Fd -LsColors` (sets
   `$env:LS_COLORS`). Defaults to the active theme's blend (purple-led for screwcity, green-led for
   forestcity). fd stays standalone — it never replaces `Get-ChildItem`. (`LS_COLORS` is shared with
@@ -703,7 +727,8 @@ Initialize-PwshProfile -BannerFont ANSIShadow           # large block banner fon
 Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json
 Initialize-PwshProfile -NoBanner                        # no startup banner
 Initialize-PwshProfile -ReplaceCat                      # alias cat -> bat (themed syntax highlighting)
-Initialize-PwshProfile -ReplaceMore                     # make less the default pager (replace more.com)
+Initialize-PwshProfile -SetPager -ReplaceMore            # route $env:PAGER through less AND alias more
+Initialize-PwshProfile -ReplaceHttp                     # alias http/https -> xh/xhs
 Initialize-PwshProfile -ZoxideCommand 'z'               # zoxide on `z`, leaving the built-in cd alone
 ```
 
@@ -976,8 +1001,12 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   nothing. It fires with or without zoxide and regardless of zoxide's jump command — chaining
   any existing `LocationChangedAction` (including zoxide's, which is registered the same way) and not
   re-registering on reload — so there's no ordering requirement relative to `Enable-Zoxide`.
-- **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
-  `http`/`https` to them globally, and registers tab completion for all four names.
+- **`Enable-Xh [-ReplaceHttp]`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`) and
+  registers tab completion for `xh` and `xhs`. With `-ReplaceHttp` it also aliases `http` → `xh` and
+  `https` → `xhs` globally and widens each completer to cover its alias. Off by default: `http` and
+  `https` aren't built-in commands, so this claims two free names rather than shadowing anything. The
+  completer widening rides the same switch — a completion registered for `http` is meaningless when
+  `http` isn't a command.
 - **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
   on PATH. jq is a standalone C program with no built-in shell completion, so this is
   install-only — there's no Initialize work and no completion to register.
@@ -1012,12 +1041,14 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   and its only knob for default flags (colors, `--smart-case`, …) is a config file pointed at by
   `$env:RIPGREP_CONFIG_PATH` — writing that file is left to you rather than done at startup. It has
   no init-time dependency on the other tools, so its position in the startup order is free.
-- **`Enable-Less [-Options <string>] [-ReplaceMore]`** — installs `jftuga.less` (GNU less compiled
-  standalone for Windows — a full-featured pager with color, search, and backward scroll, far beyond
-  the built-in `more.com`). In Initialize it sets `$env:LESS` to `-Options` (default `-R -F -i`: raw
-  color passthrough, quit-if-one-screen, smart-case search) and — with `-ReplaceMore` — sets
-  `$env:PAGER` to `less` (so PowerShell's own `help`, `bat`, `git`, `delta`, and `gh` page through
-  less rather than `more.com`) and aliases `more` → `less` globally. less is also what gives
+- **`Enable-Less [-Options <string>] [-SetPager] [-ReplaceMore]`** — installs `jftuga.less` (GNU less
+  compiled standalone for Windows — a full-featured pager with color, search, and backward scroll, far
+  beyond the built-in `more.com`). In Initialize it sets `$env:LESS` to `-Options` (default `-R -F -i`:
+  raw color passthrough, quit-if-one-screen, smart-case search), and applies two **independent**
+  overrides: `-SetPager` sets `$env:PAGER` to `less` (so PowerShell's own `help`, `bat`, `git`,
+  `delta`, and `gh` page through less rather than `more.com`), while `-ReplaceMore` aliases `more` →
+  `less` globally. Neither implies the other — `help` invokes the literal string `more.com`, so the
+  alias alone would not redirect it, which is exactly why they are two switches. less is also what gives
   `Enable-Bat` color paging: bat's default pager is less, so without it on PATH bat can't page colored
   output. Unlike bat/fd, less ships no PowerShell completer and has no palette, so it registers no
   completion and isn't themed — `$env:LESS` carries functional defaults only.
@@ -1031,12 +1062,12 @@ Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.om
 Enable-Zoxide
 Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '~100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
 Enable-FastNodeManager
-Enable-Xh
+Enable-Xh -ReplaceHttp
 Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
 Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 Enable-Ripgrep
-Enable-Less -ReplaceMore
+Enable-Less -Options '-R -F -i' -SetPager -ReplaceMore
 Enable-Lazygit
 ```
 

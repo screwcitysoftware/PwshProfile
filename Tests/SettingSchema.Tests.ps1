@@ -53,8 +53,8 @@ Describe 'Get-PwshProfileSettingSchema' {
             # when a value silently fails to round-trip.
             @($script:WizardSchema.Name) | Sort-Object | Should -Be (@(
                     'BannerAlignment', 'BannerColor', 'BannerFont', 'BannerText', 'BatStyle', 'BatTheme',
-                    'CustomTheme', 'FzfGitKeyBindings', 'FzfTabChord', 'NoBanner',
-                    'ReplaceCat', 'ReplaceMore', 'StepIcon', 'Theme', 'ZoxideCommand'
+                    'CustomTheme', 'FzfGitKeyBindings', 'FzfTabChord', 'LessOptions', 'NoBanner',
+                    'ReplaceCat', 'ReplaceHttp', 'ReplaceMore', 'SetPager', 'StepIcon', 'Theme', 'ZoxideCommand'
                 ) | Sort-Object)
         }
 

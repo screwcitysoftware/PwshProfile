@@ -76,9 +76,23 @@ function Initialize-PwshProfile {
         Alias cat -> bat for the session, replacing the built-in cat (an alias for Get-Content).
         Forwarded to Enable-Bat; off by default.
 
+    .PARAMETER LessOptions
+        The option string assigned to $env:LESS, forwarded to Enable-Less as -Options. Defaults to
+        '-R -F -i': raw color passthrough, quit-if-one-screen, and smart-case search.
+
+    .PARAMETER SetPager
+        Set $env:PAGER to less, so `help`, bat, git, delta and gh page through it. Forwarded to
+        Enable-Less; off by default. Independent of -ReplaceMore.
+
     .PARAMETER ReplaceMore
-        Make less the pager: sets $env:PAGER (so `help`, bat, git, delta and gh page through less) and
-        aliases more -> less. Forwarded to Enable-Less; off by default.
+        Alias more -> less. Forwarded to Enable-Less; off by default. Independent of -SetPager: this
+        shadows the `more` command, that redirects programs which consult $env:PAGER (`help` invokes
+        the literal string more.com, so the alias alone does not reach it).
+
+    .PARAMETER ReplaceHttp
+        Alias http -> xh and https -> xhs, widening each generated completer to match. Forwarded to
+        Enable-Xh; off by default. Unlike cat and more these are not built-in commands, so this claims
+        two free names rather than shadowing anything.
 
     .PARAMETER FdColors
         The LS_COLORS spec forwarded to Enable-Fd as -LsColors, so fd's output matches the prompt.
@@ -211,7 +225,17 @@ function Initialize-PwshProfile {
         [switch]$ReplaceCat,
 
         [Parameter()]
+        [string]$LessOptions = '-R -F -i',
+
+        # Two independent halves of "make less the pager": $env:PAGER, and the `more` alias.
+        [Parameter()]
+        [switch]$SetPager,
+
+        [Parameter()]
         [switch]$ReplaceMore,
+
+        [Parameter()]
+        [switch]$ReplaceHttp,
 
         # Unset sentinels; resolved in the body from the theme branding (like BatTheme).
         [Parameter()]
@@ -318,7 +342,7 @@ function Initialize-PwshProfile {
                 -UseFd -GitKeyBindings:$FzfGitKeyBindings
         }
         Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager }
-        Invoke-Step "xh" { Enable-Xh }
+        Invoke-Step "xh" { Enable-Xh -ReplaceHttp:$ReplaceHttp }
         Invoke-Step "jq" { Enable-Jq }
         Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat }
         # After fzf so fzf.exe is on PATH when -IntegrateFzf is evaluated.
@@ -326,7 +350,7 @@ function Initialize-PwshProfile {
         # fd's content-search counterpart; no init-time dependency, so its position is free.
         Invoke-Step "ripgrep" { Enable-Ripgrep }
         # No init-time dependency on the other tools, so its position is free.
-        Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore }
+        Invoke-Step "less" { Enable-Less -Options $LessOptions -SetPager:$SetPager -ReplaceMore:$ReplaceMore }
         # Standalone git TUI: no shell init, no completion, no dependencies — kept last.
         Invoke-Step "lazygit" { Enable-Lazygit }
     }

@@ -241,8 +241,11 @@ Describe 'Build-PwshProfileInitializeCall' {
                     $s.ZoxideCommand = 'z'
                     $s.BatTheme = 'Nord'
                     $s.BatStyle = 'full'
+                    $s.LessOptions = '-R'
                     $s.ReplaceCat = $true
+                    $s.SetPager = $true
                     $s.ReplaceMore = $true
+                    $s.ReplaceHttp = $true
                     $s.FzfGitKeyBindings = $true
                     $s.FzfTabChord = 'Ctrl+j'
                     $s
@@ -258,7 +261,8 @@ Describe 'Build-PwshProfileInitializeCall' {
                     "Initialize-PwshProfile -Theme forestcity -BannerText `"ROUNDTRIP`" " +
                     "-BannerColor '#123456' -BannerAlignment 'Center' -BannerFont 'Small' " +
                     "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
-                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings")
+                    "-LessOptions '-R' " +
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -SetPager -ReplaceMore -ReplaceHttp -FzfGitKeyBindings")
             }
         }
 
@@ -270,7 +274,8 @@ Describe 'Build-PwshProfileInitializeCall' {
                 Build-PwshProfileInitializeCall -Setting $S | Should -Be (
                     "Initialize-PwshProfile -Theme forestcity -NoBanner " +
                     "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
-                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings")
+                    "-LessOptions '-R' " +
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -SetPager -ReplaceMore -ReplaceHttp -FzfGitKeyBindings")
             }
         }
 
@@ -283,8 +288,8 @@ Describe 'Build-PwshProfileInitializeCall' {
                     "Initialize-PwshProfile -CustomTheme 'C:\themes\mine.omp.json' " +
                     "-BannerText `"ROUNDTRIP`" -BannerColor '#123456' -BannerAlignment 'Center' " +
                     "-BannerFont 'Small' -StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' " +
-                    "-BatStyle 'full' -FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore " +
-                    "-FzfGitKeyBindings")
+                    "-BatStyle 'full' -LessOptions '-R' -FzfTabChord 'Ctrl+j' " +
+                    "-ReplaceCat -SetPager -ReplaceMore -ReplaceHttp -FzfGitKeyBindings")
             }
         }
     }
@@ -577,7 +582,16 @@ Describe 'Invoke-PwshProfileWizard' {
             # Banner: shown by default; Nerd Fonts: declined by default.
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color'
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }
-            # The BeforeEach catch-all Read-SpectreConfirm { $false } answers the git-chords prompt.
+            # The wiring tree drives a real Spectre MultiSelectionPrompt, which throws outside an
+            # interactive terminal. Default it to "every box left as seeded", i.e. the incoming value
+            # for each row; tests that care about a specific toggle re-mock it.
+            Mock Read-PwshProfileWiringTree {
+                $out = @{}
+                foreach ($row in Get-PwshProfileWiringCatalog) {
+                    $out[$row.Setting] = if ($Setting.ContainsKey($row.Setting) -and $Setting[$row.Setting] -eq $row.On) { $row.On } else { $row.Off }
+                }
+                $out
+            } -RemoveParameterType 'Color'
             # Open both "make changes?" gates so the per-setting prompts below run; the gate-closed
             # paths get their own tests.
             Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Change these banner settings?' }
@@ -645,12 +659,55 @@ Describe 'Invoke-PwshProfileWizard' {
             $s.ZoxideCommand | Should -Be 'z'
         }
     }
-    It 'sets ReplaceCat when bat stays enabled and the cat-override is confirmed' {
+    It 'folds every checked wiring row back into the settings' {
         InModuleScope $script:Module {
-            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
+            # The tree answers with the On value for every row, as though the user checked them all.
+            Mock Read-PwshProfileWiringTree {
+                $out = @{}
+                foreach ($row in Get-PwshProfileWiringCatalog) { $out[$row.Setting] = $row.On }
+                $out
+            } -RemoveParameterType 'Color'
 
             $s = Invoke-PwshProfileWizard
             $s.ReplaceCat | Should -BeTrue
+            $s.SetPager | Should -BeTrue
+            $s.ReplaceMore | Should -BeTrue
+            $s.ReplaceHttp | Should -BeTrue
+            $s.FzfGitKeyBindings | Should -BeTrue
+            # ZoxideCommand is the non-boolean row: checked means 'cd', not $true.
+            $s.ZoxideCommand | Should -Be 'cd'
+        }
+    }
+
+    It 'records an unchecked wiring row as a real no, not a missing key' {
+        InModuleScope $script:Module {
+            Mock Read-PwshProfileWiringTree {
+                $out = @{}
+                foreach ($row in Get-PwshProfileWiringCatalog) { $out[$row.Setting] = $row.Off }
+                $out
+            } -RemoveParameterType 'Color'
+
+            # Seed a prior run that had everything on, to prove unchecking actually clears it rather
+            # than leaving last time's value in place.
+            $s = Invoke-PwshProfileWizard -PriorSetting @{
+                ReplaceCat = $true; SetPager = $true; ReplaceMore = $true
+                ReplaceHttp = $true; FzfGitKeyBindings = $true; ZoxideCommand = 'cd'
+            }
+            $s.ReplaceCat | Should -BeFalse
+            $s.SetPager | Should -BeFalse
+            $s.ReplaceMore | Should -BeFalse
+            $s.ReplaceHttp | Should -BeFalse
+            $s.FzfGitKeyBindings | Should -BeFalse
+            $s.ZoxideCommand | Should -Be 'z'
+        }
+    }
+
+    It 'seeds the tree from the prior run so a re-run opens pre-checked' {
+        InModuleScope $script:Module {
+            $s = Invoke-PwshProfileWizard -PriorSetting @{ ReplaceCat = $true; ZoxideCommand = 'z' }
+            Should -Invoke Read-PwshProfileWiringTree -Times 1 -Exactly -ParameterFilter {
+                $Setting.ReplaceCat -eq $true -and $Setting.ZoxideCommand -eq 'z'
+            }
         }
     }
 
@@ -675,30 +732,28 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
-    It 'sets ReplaceMore when less stays enabled and the pager-override is confirmed' {
+    It 'prompts for the less options, pre-filled from the default' {
         InModuleScope $script:Module {
-            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Make less the default pager (replace more)?' }
-
             $s = Invoke-PwshProfileWizard
-            $s.ReplaceMore | Should -BeTrue
+            $s.LessOptions | Should -Be '-R -F -i'
         }
     }
 
-    It 'leaves fzf git chords off by default (prompt declined) with the default tab chord' {
+    It 'captures custom less options' {
         InModuleScope $script:Module {
-            # BeforeEach: catch-all $false declines the git-chords prompt; Read-SpectreText returns the default.
+            Mock Read-SpectreText { '-R' } -ParameterFilter { $Message -eq 'less options ($env:LESS)' }
+            $s = Invoke-PwshProfileWizard
+            $s.LessOptions | Should -Be '-R'
+        }
+    }
+
+    It 'leaves the wiring toggles off by default, with the default tab chord' {
+        InModuleScope $script:Module {
+            # BeforeEach's tree mock echoes the seed, and a clean run seeds every toggle off.
             $s = Invoke-PwshProfileWizard
             $s.FzfGitKeyBindings | Should -BeFalse
+            $s.ReplaceCat | Should -BeFalse
             $s.FzfTabChord | Should -Be 'Ctrl+Spacebar'
-        }
-    }
-
-    It 'sets FzfGitKeyBindings true when the git-chords prompt is accepted' {
-        InModuleScope $script:Module {
-            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Enable PSFzf git keybindings (Ctrl+G)?' }
-
-            $s = Invoke-PwshProfileWizard
-            $s.FzfGitKeyBindings | Should -BeTrue
         }
     }
 
