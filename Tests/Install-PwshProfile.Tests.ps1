@@ -834,6 +834,10 @@ Describe 'Invoke-PwshProfileWizard' {
             $s.BannerText | Should -Be '$env:COMPUTERNAME'
             $s.BannerColor | Should -Be '#8fce72'
             $s.StepIcon | Should -Be ':deciduous_tree:'
+            # The regression this step fixes. BatTheme is branded exactly like the two above, but was
+            # left out of the re-seed, so picking forestcity kept Screw City's Dracula and wrote it
+            # into the profile as an explicit -BatTheme.
+            $s.BatTheme | Should -Be 'gruvbox-dark'
         }
     }
 
@@ -854,6 +858,9 @@ Describe 'Invoke-PwshProfileWizard' {
                 $s.BannerText | Should -Be '$env:COMPUTERNAME'
                 $s.BannerColor | Should -Be 'Silver'
                 $s.StepIcon | Should -Be ':gear:'
+                # A custom prompt has no bundled identity to match, so bat follows the terminal's own
+                # ANSI palette rather than silently inheriting Screw City's.
+                $s.BatTheme | Should -Be 'ansi'
             }
             finally { Remove-Item -Path $custom -ErrorAction SilentlyContinue }
         }

@@ -126,9 +126,12 @@ function Invoke-PwshProfileWizard {
         $pickTheme = Read-SpectreSelection -Message 'Choose an oh-my-posh theme' -Color $s.Accent -Choices $themeChoices -ChoiceLabelProperty Label
         Write-PwshProfilePromptAnswer $pickTheme.Label -Accent $s.Accent
 
-        # Branding the current fields were seeded from, so only untouched ones get re-seeded.
-        $neutral = @{ BannerColor = 'Silver'; StepIcon = ':gear:' }
-        $prevBranding = if ($s.Settings.CustomTheme) { $neutral } else { Get-BundledThemeBranding -Name $s.Settings.Theme }
+        # Every branded setting, and the branding the current values were seeded from, so only
+        # untouched ones get re-seeded. Driving this off the schema is what makes BatTheme ride along:
+        # it is branded exactly like BannerColor and StepIcon, and was previously left out of this
+        # list, so switching theme wrote the old theme's bat palette into the new theme's profile.
+        $themedRow = @(Get-PwshProfileSettingSchema -Wizard | Where-Object BrandingKey)
+        $prevBranding = if ($s.Settings.CustomTheme) { $null } else { Get-BundledThemeBranding -Name $s.Settings.Theme }
 
         if ($pickTheme.Custom) {
             do {
@@ -140,8 +143,8 @@ function Invoke-PwshProfileWizard {
             # A custom theme has no bundled identity, so color/icon fall back to neutral. Theme stays
             # 'screwcity' but is never emitted — -CustomTheme wins in the generated call.
             $newDef = Get-PwshProfileDefault
-            $newDef.BannerColor = 'Silver'; $newDef.StepIcon = ':gear:'
-            $newBranding = $neutral
+            foreach ($row in $themedRow) { $newDef[$row.Name] = $row.Neutral }
+            $newBranding = $null
             $s.Settings.Theme = 'screwcity'
             $s.Settings.CustomTheme = $customPath
         }
@@ -152,9 +155,14 @@ function Invoke-PwshProfileWizard {
             $s.Settings.CustomTheme = ''
         }
 
-        # Re-seed only the color/icon fields the user hasn't customized away from the old theme.
-        foreach ($k in 'BannerColor', 'StepIcon') {
-            if ($s.Settings[$k] -eq $prevBranding[$k]) { $s.Settings[$k] = $newBranding[$k] }
+        # Re-seed only the branded fields the user hasn't customized away from the old theme. A null
+        # branding means the theme on that side was custom, which has no bundled identity — the row's
+        # Neutral stands in. Settings are keyed by Name and branding by BrandingKey: not the same
+        # namespace, which is why the schema names the member rather than assuming they match.
+        foreach ($row in $themedRow) {
+            $prev = if ($prevBranding) { $prevBranding[$row.BrandingKey] } else { $row.Neutral }
+            $next = if ($newBranding) { $newBranding[$row.BrandingKey] } else { $row.Neutral }
+            if ($s.Settings[$row.Name] -eq $prev) { $s.Settings[$row.Name] = $next }
         }
         # New branding baseline for pre-fills; the installer's own UI accent stays fixed.
         $s.Def = $newDef
