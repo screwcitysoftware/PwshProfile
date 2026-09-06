@@ -100,7 +100,7 @@ function Show-PwshProfileChord {
     # Enable-Fzf's own exact gates so this agrees with reality by construction, not by coincidence.
     $rows = @(Get-PwshProfileChordCatalog | Where-Object {
             if ($_.Setting -eq 'FzfGitKeyBindings') {
-                $FzfGitKeyBindings -and (Test-CommandAvailable -Name 'git')
+                Test-FzfGitKeyBindingGate -GitKeyBindings:$FzfGitKeyBindings
             }
             elseif ($_.Setting -eq 'FzfTabChord') {
                 -not [string]::IsNullOrWhiteSpace($FzfTabChord)
@@ -109,7 +109,7 @@ function Show-PwshProfileChord {
         })
     foreach ($row in $rows) {
         if ($row.Setting -eq 'FzfTabChord') {
-            $row.Chord = if ($FzfTabChord -in 'Ctrl+Spacebar', 'Ctrl+@') { 'Ctrl+Spacebar / Ctrl+@' } else { $FzfTabChord }
+            $row.Chord = (Get-FzfTabExpansionKey -Chord $FzfTabChord) -join ' / '
         }
     }
 
@@ -143,10 +143,7 @@ function Show-PwshProfileChord {
                 if ($atRowStart) {
                     $chordText = "$($row.Chord)"
                     $chordCell = if ($row.Url -and $hasSpectre) {
-                        # Pad the VISIBLE length with plain trailing spaces after the closing tag,
-                        # rather than PadRight-ing the markup string itself, which would count the
-                        # invisible "[link=...][/]" characters toward the column width.
-                        "[link=$($row.Url)]$chordText[/]" + (' ' * ($chordWidth - $chordText.Length))
+                        Format-PwshProfileHyperlinkCell -Text $chordText -Url $row.Url -Width $chordWidth
                     }
                     else {
                         $chordText.PadRight($chordWidth)

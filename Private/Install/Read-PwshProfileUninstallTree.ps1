@@ -8,11 +8,12 @@ function Read-PwshProfileUninstallTree {
         Tools, Modules, and (when present) Windows Terminal — with NOTHING pre-checked, and returns
         just the checked subset.
 
-        This is the one deliberate difference from Read-PwshProfileWiringTree, which it otherwise
-        mirrors: a wiring row is a persisted two-sided setting, where leaving a box unchecked is itself
-        a real answer (Off) that has to be recorded. A removal row is a one-shot action with no
-        persisted "off" state to preserve, so there is nothing to pre-check from and nothing to record
-        for an item left unchecked — the caller only needs the items that were actually chosen.
+        This is the one deliberate difference from Read-PwshProfileWiringTree: a wiring row is a
+        persisted two-sided setting, where leaving a box unchecked is itself a real answer (Off) that
+        has to be recorded. A removal row is a one-shot action with no persisted "off" state to
+        preserve, so there is nothing to pre-check from and nothing to record for an item left
+        unchecked — the caller only needs the items that were actually chosen. Both share the same
+        prompt construction, via New-PwshProfileGroupedMultiSelectionPrompt.
 
         Returns @() — no prompt shown at all — both when there is nothing installed to offer and when
         the Spectre.Console.MultiSelectionPrompt`1 type isn't loaded, the same self-contained guard
@@ -70,18 +71,8 @@ function Read-PwshProfileUninstallTree {
         'Nerd Fonts are not offered here: there is no clean way to uninstall a font once installed.'
     ) -Accent $accent -Code $CodeColor
 
-    $prompt = [Spectre.Console.MultiSelectionPrompt[string]]::new()
-    $prompt.Title = 'Select items to also uninstall from this machine (Space toggles; Enter submits)'
-    $prompt.PageSize = 12
-    $prompt.WrapAround = $true
-    $prompt.Required = $false
-    $prompt.HighlightStyle = [Spectre.Console.Style]::new((Get-SpectreColorValue $accent))
-
-    $groups = @($rows | ForEach-Object { $_.Group } | Select-Object -Unique)
-    foreach ($group in $groups) {
-        $labels = @($rows | Where-Object Group -eq $group | ForEach-Object { $_.Label })
-        $prompt = [Spectre.Console.MultiSelectionPromptExtensions]::AddChoiceGroup($prompt, $group, [string[]]$labels)
-    }
+    $prompt = New-PwshProfileGroupedMultiSelectionPrompt -Row $rows -Accent $accent `
+        -Title 'Select items to also uninstall from this machine (Space toggles; Enter submits)'
 
     $selected = @($prompt.Show([Spectre.Console.AnsiConsole]::Console))
 

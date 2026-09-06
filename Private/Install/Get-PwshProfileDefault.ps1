@@ -17,9 +17,7 @@ function Get-PwshProfileDefault {
         theme — the schema marks each with the branding member supplying it, so a forestcity default
         carries the green/🌳/gruvbox-dark identity and screwcity the purple/🔩/Dracula one.
         ReplaceCat, ReplaceMore, and NoBanner default to $false (the baseline), so opting in emits
-        -ReplaceCat / -ReplaceMore / -NoBanner. Tool selection is opt-in: Enable defaults to an empty
-        list (a first-run wizard starts with nothing checked, forcing an explicit per-tool choice) and
-        EnableAll defaults to $false. The remaining values are kept identical to
+        -ReplaceCat / -ReplaceMore / -NoBanner. The remaining values are kept identical to
         Initialize-PwshProfile's own parameter defaults. A fresh hashtable is returned on every call so
         callers can mutate it freely.
 

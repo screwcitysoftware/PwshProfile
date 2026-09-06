@@ -3,12 +3,12 @@
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'ScrewCitySoftware.PwshProfile.psd1') -Force
     $script:Module = 'ScrewCitySoftware.PwshProfile'
+    . (Join-Path $PSScriptRoot 'CommandAst.Helpers.ps1')
 
     # Every module name a real Import-ModuleSafe call passes, read from the module's own source.
-    #
-    # Parsed rather than grepped: 'Import-ModuleSafe Terminal-Icons' also appears inside comment-based
-    # help in half a dozen files, and a text search would count those as call sites. The AST sees only
-    # code, so the two sets can be compared exactly.
+    # Parsed (via the shared Find-PwshProfileCommandAst) rather than grepped: 'Import-ModuleSafe
+    # Terminal-Icons' also appears inside comment-based help in half a dozen files, and a text search
+    # would count those as call sites. The AST sees only code, so the two sets can be compared exactly.
     function Get-ImportedModuleName {
         $root = Join-Path $PSScriptRoot '..'
         $files = @(
@@ -17,18 +17,11 @@ BeforeAll {
             Get-Item -Path (Join-Path $root 'Suffix.ps1')
             Get-Item -Path (Join-Path $root 'Prefix.ps1')
         )
-        $names = foreach ($file in $files) {
-            $ast = [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$null, [ref]$null)
-            $calls = $ast.FindAll({
-                    param($node)
-                    $node -is [System.Management.Automation.Language.CommandAst] -and
-                    $node.GetCommandName() -eq 'Import-ModuleSafe'
-                }, $true)
-            foreach ($call in $calls) {
-                # Element 0 is the command name; element 1 is the module, always passed positionally.
-                $argument = @($call.CommandElements)[1]
-                if ($argument -is [System.Management.Automation.Language.ConstantExpressionAst]) { $argument.Value }
-            }
+        $calls = Find-PwshProfileCommandAst -Path @($files.FullName) -CommandName 'Import-ModuleSafe'
+        $names = foreach ($call in $calls) {
+            # Element 0 is the command name; element 1 is the module, always passed positionally.
+            $argument = @($call.CommandElements)[1]
+            if ($argument -is [System.Management.Automation.Language.ConstantExpressionAst]) { $argument.Value }
         }
         @($names | Sort-Object -Unique)
     }

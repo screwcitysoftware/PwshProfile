@@ -14,7 +14,10 @@ function Read-PwshProfileWiringTree {
 
         Built directly on Spectre.Console's MultiSelectionPrompt rather than
         Read-SpectreMultiSelectionGrouped, because that wrapper cannot pre-check items — and
-        pre-checking is the whole point on a re-run. Three mechanics that API forces:
+        pre-checking is the whole point on a re-run. The prompt itself is built by the shared
+        New-PwshProfileGroupedMultiSelectionPrompt (also used by Read-PwshProfileUninstallTree);
+        pre-checking and showing it stay here since those steps differ between the two callers. Three
+        mechanics that API forces:
           - The extension methods return a NEW prompt each call, hence the $prompt = [...]::(...)
             reassignment idiom rather than plain method calls.
           - Selection is keyed by the label STRING, so labels must be unique across all groups. The
@@ -86,21 +89,12 @@ function Read-PwshProfileWiringTree {
         foreach ($row in $rows) { $row.Help }
     ) -Accent $accent -Code $CodeColor
 
-    $prompt = [Spectre.Console.MultiSelectionPrompt[string]]::new()
-    $prompt.Title = 'Select the wiring to apply (Space toggles an item or a whole section; Enter submits)'
-    $prompt.PageSize = 12
-    $prompt.WrapAround = $true
-    $prompt.Required = $false
-    $prompt.HighlightStyle = [Spectre.Console.Style]::new((Get-SpectreColorValue $accent))
-
-    $groups = @($rows | ForEach-Object { $_.Group } | Select-Object -Unique)
-    foreach ($group in $groups) {
-        $labels = @($rows | Where-Object Group -eq $group | ForEach-Object { $_.Label })
-        $prompt = [Spectre.Console.MultiSelectionPromptExtensions]::AddChoiceGroup($prompt, $group, [string[]]$labels)
-    }
+    $prompt = New-PwshProfileGroupedMultiSelectionPrompt -Row $rows -Accent $accent `
+        -Title 'Select the wiring to apply (Space toggles an item or a whole section; Enter submits)'
 
     # Pre-check each already-on row. A fully-on group also needs its header checked: in Leaf mode the
     # parent box is derived from children during interaction, not at first render.
+    $groups = @($rows | ForEach-Object { $_.Group } | Select-Object -Unique)
     foreach ($group in $groups) {
         $children = @($rows | Where-Object Group -eq $group)
         $checked = @($children | Where-Object { Test-RowChecked $_ })

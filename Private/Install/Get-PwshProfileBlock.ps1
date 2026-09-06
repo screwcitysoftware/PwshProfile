@@ -14,7 +14,7 @@ function Get-PwshProfileBlock {
 
         There is no Import-Module line: invoking Initialize-PwshProfile auto-loads the module (its
         manifest lists an explicit FunctionsToExport, so command discovery finds it), keeping the
-        block to a guidance comment, the snapshot, and the one call.
+        block to a guidance comment and the one call.
 
     .PARAMETER InitializeCall
         The Initialize-PwshProfile command line to embed (as produced by

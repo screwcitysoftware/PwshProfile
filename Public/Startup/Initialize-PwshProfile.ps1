@@ -215,14 +215,9 @@ function Initialize-PwshProfile {
         [Parameter(ParameterSetName = 'Bundled')]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                # Completers run in the caller's scope, where Get-BundledThemeName isn't visible.
-                # Completers run in the caller's scope, so reach the private lister through the module.
+                # Completers run in the caller's scope; reach the shared completer through the module.
                 $module = Get-Module ScrewCitySoftware.PwshProfile
-                if ($module) {
-                    & $module { Get-BundledThemeName } |
-                        Where-Object { $_ -like "$wordToComplete*" } |
-                        ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-                }
+                if ($module) { & $module { param($w) Get-BundledThemeCompletion -WordToComplete $w } $wordToComplete }
             })]
         [ValidateScript({ $_ -in (Get-BundledThemeName) },
             ErrorMessage = "'{0}' is not a bundled theme. Run Get-OhMyPoshTheme or check Assets/Themes for the available themes.")]

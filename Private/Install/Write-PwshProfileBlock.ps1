@@ -6,7 +6,7 @@ function Write-PwshProfileBlock {
 
     .DESCRIPTION
         The safety-critical file writer behind Install-PwshProfile. It places a marker-wrapped block
-        (built by Get-PwshProfileBlock — markers, a guidance comment, a tools snapshot, and the supplied
+        (built by Get-PwshProfileBlock — markers, a guidance comment, and the supplied
         Initialize-PwshProfile call) into the target file without ever destroying surrounding code.
 
         Behavior by file state:

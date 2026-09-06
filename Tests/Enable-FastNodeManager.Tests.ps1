@@ -3,6 +3,7 @@
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'ScrewCitySoftware.PwshProfile.psd1') -Force
     $script:Module = 'ScrewCitySoftware.PwshProfile'
+    . (Join-Path $PSScriptRoot 'LocationHookGlobal.Helpers.ps1')
 }
 
 Describe 'Enable-FastNodeManager' {
@@ -30,18 +31,9 @@ Describe 'Enable-FastNodeManager' {
         $script:savedLoc = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
         $script:savedPwd = $PWD
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $null
-        # Snapshot (not just clear) any pre-existing hook globals. If a real profile's
-        # Enable-FastNodeManager was already active before the suite ran (this module doubles as the
-        # author's own profile), $script:savedLoc above just captured a REAL hook closure that itself
-        # reads these globals -- AfterEach must put them back exactly, not merely delete them, or
-        # restoring that real hook leaves it referencing variables that no longer exist, so the very
-        # next Set-Location anywhere later in the suite throws under StrictMode.
-        $script:savedFnmGlobals = @{}
-        foreach ($name in '__fnm_loc_hooked', '__fnm_loc_base', '__fnm_last_version_stamp') {
-            $existing = Get-Variable -Name $name -Scope Global -ErrorAction SilentlyContinue
-            if ($existing) { $script:savedFnmGlobals[$name] = $existing.Value }
-        }
-        Remove-Variable -Name __fnm_loc_hooked, __fnm_loc_base, __fnm_last_version_stamp -Scope Global -ErrorAction SilentlyContinue
+        # Snapshot (not just clear) any pre-existing hook globals — see LocationHookGlobal.Helpers.ps1.
+        $script:fnmHookGlobalName = '__fnm_loc_hooked', '__fnm_loc_base', '__fnm_last_version_stamp'
+        $script:savedFnmGlobals = Backup-PwshProfileLocationHookGlobal -Name $script:fnmHookGlobalName
 
         # An isolated temp tree with two real directories to move between: one IS a Node project
         # (carries a .node-version file), one is not. The hook only spawns fnm when the resolved
@@ -64,16 +56,7 @@ Describe 'Enable-FastNodeManager' {
         # cleared $global:OutHostHits breaks every later test under StrictMode (how CI runs).
         Remove-Item Function:fnm, Function:Out-Host -ErrorAction SilentlyContinue
         Remove-Variable -Name FnmUseCalls, OutHostHits, BaseRan -Scope Global -ErrorAction SilentlyContinue
-        # Restore the hook globals to their pre-test state (a real value if one was snapshotted above,
-        # otherwise absent) rather than unconditionally deleting them -- see the BeforeEach comment.
-        foreach ($name in '__fnm_loc_hooked', '__fnm_loc_base', '__fnm_last_version_stamp') {
-            if ($script:savedFnmGlobals.ContainsKey($name)) {
-                Set-Variable -Name $name -Value $script:savedFnmGlobals[$name] -Scope Global
-            }
-            else {
-                Remove-Variable -Name $name -Scope Global -ErrorAction SilentlyContinue
-            }
-        }
+        Restore-PwshProfileLocationHookGlobal -Name $script:fnmHookGlobalName -Saved $script:savedFnmGlobals
     }
 
     It 'registers a location hook even when zoxide is absent' {

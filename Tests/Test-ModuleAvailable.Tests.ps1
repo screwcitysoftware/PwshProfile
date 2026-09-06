@@ -17,18 +17,18 @@ AfterAll {
 }
 
 Describe 'Test-ModuleAvailable' {
+    # $env:PSModulePath is process-global, so a Describe-level save/restore covers every It below.
+    BeforeEach { $script:savedPSModulePath = $env:PSModulePath }
+    AfterEach { $env:PSModulePath = $script:savedPSModulePath }
+
     Context 'a module that is already loaded' {
         It 'reports available without consulting PSModulePath' {
             # Get-Module answering non-null is the whole check; PSModulePath is emptied to prove the
             # directory probe is never needed to reach $true.
             InModuleScope $script:Module {
                 Mock Get-Module { @{ Name = 'AnyName' } }
-                $saved = $env:PSModulePath
-                try {
-                    $env:PSModulePath = ''
-                    Test-ModuleAvailable -Name 'AnyName' | Should -BeTrue
-                }
-                finally { $env:PSModulePath = $saved }
+                $env:PSModulePath = ''
+                Test-ModuleAvailable -Name 'AnyName' | Should -BeTrue
             }
         }
     }
@@ -38,12 +38,8 @@ Describe 'Test-ModuleAvailable' {
             InModuleScope $script:Module -Parameters @{ Root = $script:FakeRoot } {
                 param($Root)
                 Mock Get-Module { $null }
-                $saved = $env:PSModulePath
-                try {
-                    $env:PSModulePath = $Root
-                    Test-ModuleAvailable -Name 'ScsInstalledModule' | Should -BeTrue
-                }
-                finally { $env:PSModulePath = $saved }
+                $env:PSModulePath = $Root
+                Test-ModuleAvailable -Name 'ScsInstalledModule' | Should -BeTrue
             }
         }
     }
@@ -53,12 +49,8 @@ Describe 'Test-ModuleAvailable' {
             InModuleScope $script:Module -Parameters @{ Root = $script:FakeRoot } {
                 param($Root)
                 Mock Get-Module { $null }
-                $saved = $env:PSModulePath
-                try {
-                    $env:PSModulePath = $Root
-                    Test-ModuleAvailable -Name 'ScsMissingModule' | Should -BeFalse
-                }
-                finally { $env:PSModulePath = $saved }
+                $env:PSModulePath = $Root
+                Test-ModuleAvailable -Name 'ScsMissingModule' | Should -BeFalse
             }
         }
     }
@@ -68,14 +60,10 @@ Describe 'Test-ModuleAvailable' {
             InModuleScope $script:Module -Parameters @{ Root = $script:FakeRoot } {
                 param($Root)
                 Mock Get-Module { $null }
-                $saved = $env:PSModulePath
-                try {
-                    $sep = [System.IO.Path]::PathSeparator
-                    $env:PSModulePath = "$sep$sep$Root$sep"
-                    { Test-ModuleAvailable -Name 'ScsInstalledModule' } | Should -Not -Throw
-                    Test-ModuleAvailable -Name 'ScsInstalledModule' | Should -BeTrue
-                }
-                finally { $env:PSModulePath = $saved }
+                $sep = [System.IO.Path]::PathSeparator
+                $env:PSModulePath = "$sep$sep$Root$sep"
+                { Test-ModuleAvailable -Name 'ScsInstalledModule' } | Should -Not -Throw
+                Test-ModuleAvailable -Name 'ScsInstalledModule' | Should -BeTrue
             }
         }
     }

@@ -20,41 +20,34 @@ AfterAll {
 }
 
 Describe 'Test-CommandAvailable' {
+    # $env:PATH is process-global, so a Describe-level save/restore covers every It below regardless
+    # of whether it sets PATH inside InModuleScope or not.
+    BeforeEach { $script:savedPath = $env:PATH }
+    AfterEach { $env:PATH = $script:savedPath }
+
     Context 'an executable on PATH' {
         It 'finds a bare name by trying .exe' {
             InModuleScope $script:Module -Parameters @{ Dir = $script:FakeDir } {
                 param($Dir)
-                $saved = $env:PATH
-                try {
-                    $env:PATH = $Dir
-                    Test-CommandAvailable -Name 'scsfaketool' | Should -BeTrue
-                }
-                finally { $env:PATH = $saved }
+                $env:PATH = $Dir
+                Test-CommandAvailable -Name 'scsfaketool' | Should -BeTrue
             }
         }
 
         It 'finds a .cmd shim, which is how the Azure CLI ships' {
             InModuleScope $script:Module -Parameters @{ Dir = $script:FakeDir } {
                 param($Dir)
-                $saved = $env:PATH
-                try {
-                    $env:PATH = $Dir
-                    Test-CommandAvailable -Name 'scsbatchtool' | Should -BeTrue
-                }
-                finally { $env:PATH = $saved }
+                $env:PATH = $Dir
+                Test-CommandAvailable -Name 'scsbatchtool' | Should -BeTrue
             }
         }
 
         It 'honors an explicit extension rather than appending another' {
             InModuleScope $script:Module -Parameters @{ Dir = $script:FakeDir } {
                 param($Dir)
-                $saved = $env:PATH
-                try {
-                    $env:PATH = $Dir
-                    Test-CommandAvailable -Name 'scsfaketool.exe' | Should -BeTrue
-                    Test-CommandAvailable -Name 'scsfaketool.cmd' | Should -BeFalse
-                }
-                finally { $env:PATH = $saved }
+                $env:PATH = $Dir
+                Test-CommandAvailable -Name 'scsfaketool.exe' | Should -BeTrue
+                Test-CommandAvailable -Name 'scsfaketool.cmd' | Should -BeFalse
             }
         }
     }
@@ -63,12 +56,8 @@ Describe 'Test-CommandAvailable' {
         It 'reports unavailable, which is what makes the caller skip the tool' {
             InModuleScope $script:Module -Parameters @{ Dir = $script:FakeDir } {
                 param($Dir)
-                $saved = $env:PATH
-                try {
-                    $env:PATH = $Dir
-                    Test-CommandAvailable -Name 'scsdefinitelymissing' | Should -BeFalse
-                }
-                finally { $env:PATH = $saved }
+                $env:PATH = $Dir
+                Test-CommandAvailable -Name 'scsdefinitelymissing' | Should -BeFalse
             }
         }
     }
@@ -78,12 +67,8 @@ Describe 'Test-CommandAvailable' {
             # A function beats PATH in real command resolution, so the probe has to agree.
             function global:scsshadowed { 'shadow' }
             InModuleScope $script:Module {
-                $saved = $env:PATH
-                try {
-                    $env:PATH = ''
-                    Test-CommandAvailable -Name 'scsshadowed' | Should -BeTrue
-                }
-                finally { $env:PATH = $saved }
+                $env:PATH = ''
+                Test-CommandAvailable -Name 'scsshadowed' | Should -BeTrue
             }
         }
     }
@@ -92,14 +77,10 @@ Describe 'Test-CommandAvailable' {
         It 'skips empty entries rather than throwing' {
             InModuleScope $script:Module -Parameters @{ Dir = $script:FakeDir } {
                 param($Dir)
-                $saved = $env:PATH
-                try {
-                    $sep = [System.IO.Path]::PathSeparator
-                    $env:PATH = "$sep$sep$Dir$sep"
-                    { Test-CommandAvailable -Name 'scsfaketool' } | Should -Not -Throw
-                    Test-CommandAvailable -Name 'scsfaketool' | Should -BeTrue
-                }
-                finally { $env:PATH = $saved }
+                $sep = [System.IO.Path]::PathSeparator
+                $env:PATH = "$sep$sep$Dir$sep"
+                { Test-CommandAvailable -Name 'scsfaketool' } | Should -Not -Throw
+                Test-CommandAvailable -Name 'scsfaketool' | Should -BeTrue
             }
         }
     }

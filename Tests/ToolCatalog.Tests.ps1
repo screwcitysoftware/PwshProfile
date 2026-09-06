@@ -3,6 +3,7 @@
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'ScrewCitySoftware.PwshProfile.psd1') -Force
     $script:Module = 'ScrewCitySoftware.PwshProfile'
+    . (Join-Path $PSScriptRoot 'CommandAst.Helpers.ps1')
 
     # --- Anti-drift helpers, shared by the two checks below ---------------------------------------
 
@@ -25,12 +26,7 @@ BeforeAll {
     function Get-InstallCallAst {
         param($Path)
         if (-not $Path) { return $null }
-        $ast = [System.Management.Automation.Language.Parser]::ParseFile($Path, [ref]$null, [ref]$null)
-        @($ast.FindAll({
-                    param($node)
-                    $node -is [System.Management.Automation.Language.CommandAst] -and
-                    $node.GetCommandName() -eq 'Install-WingetPackageSafe'
-                }, $true))[0]
+        @(Find-PwshProfileCommandAst -Path $Path -CommandName 'Install-WingetPackageSafe')[0]
     }
 
     # The value the enabler would actually pass for -<Name>: the argument expression is lifted out of

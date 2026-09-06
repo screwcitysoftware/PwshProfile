@@ -178,7 +178,7 @@ function Enable-Fzf {
             if (-not [string]::IsNullOrWhiteSpace($ProviderChord)) { $psfzf.PSReadlineChordProvider = $ProviderChord }
             if (-not [string]::IsNullOrWhiteSpace($HistoryChord))  { $psfzf.PSReadlineChordReverseHistory = $HistoryChord }
             if ($UseFd) { $psfzf.EnableFd = $true }
-            if ($GitKeyBindings -and (Test-CommandAvailable -Name 'git')) { $psfzf.GitKeyBindings = $true }
+            if (Test-FzfGitKeyBindingGate -GitKeyBindings:$GitKeyBindings) { $psfzf.GitKeyBindings = $true }
             # -TabExpansionChord needs PSFzf too, so fold it into the "do we need PSFzf?" decision.
             $needPsfzf = $psfzf.Count -gt 0 -or -not [string]::IsNullOrWhiteSpace($TabExpansionChord)
             if ($needPsfzf) {
@@ -198,10 +198,7 @@ function Enable-Fzf {
                     # Many terminals emit the same byte (NUL) for Ctrl+Spacebar and Ctrl+@, and PSReadLine
                     # may report either name — so bind both when the chord is one of that pair. Separate
                     # -Key array elements are independent bindings (a comma inside one string is a chord).
-                    $tabKeys = if ($TabExpansionChord -in 'Ctrl+Spacebar', 'Ctrl+@') {
-                        'Ctrl+Spacebar', 'Ctrl+@'
-                    }
-                    else { $TabExpansionChord }
+                    $tabKeys = Get-FzfTabExpansionKey -Chord $TabExpansionChord
                     Set-PSReadLineKeyHandler -Key $tabKeys -ScriptBlock { Invoke-FzfTabCompletion } `
                         -BriefDescription 'FzfTabCompletion' `
                         -Description 'Fuzzy completion picker via fzf (PSFzf)'

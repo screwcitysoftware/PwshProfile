@@ -76,6 +76,8 @@ $OutputRoot       = Join-Path $RepoRoot 'Output'
 $StagePath        = Join-Path $OutputRoot $ModuleName
 $TestsPath        = Join-Path $RepoRoot 'Tests'
 $AnalyzerSettings = Join-Path $RepoRoot 'PSScriptAnalyzerSettings.psd1'
+$ComputedVersion  = $null   # Get-ComputedVersion's cache; declared here so reading it before the
+                            # first call doesn't throw under Set-StrictMode.
 
 # Dev dependencies pinned to EXACT versions so "clean locally" == "clean in CI", read from
 # RequiredModules.psd1 rather than hardcoded here. The GitHub windows image preinstalls these,
@@ -179,8 +181,14 @@ function Get-ComputedVersion {
         but Update-ModuleManifest's -Prerelease only accepts 'a-zA-Z0-9' plus an optional leading
         hyphen — a dot throws "contains invalid characters" — so non-alphanumerics are stripped
         rather than passed through verbatim.
+
+        Cached for the life of the process: the git history a single build.ps1 invocation sees
+        cannot change mid-run, and a task like `-Task Version, Build` would otherwise shell out to
+        GitVersion (a full history walk) twice for the same answer.
     #>
     param()
+
+    if ($script:ComputedVersion) { return $script:ComputedVersion }
 
     $json = dotnet tool run dotnet-gitversion $RepoRoot /output json
     if ($LASTEXITCODE -ne 0) {
@@ -188,16 +196,23 @@ function Get-ComputedVersion {
     }
     $computed = $json | ConvertFrom-Json
 
-    [pscustomobject]@{
+    $script:ComputedVersion = [pscustomobject]@{
         MajorMinorPatch = $computed.MajorMinorPatch
         Prerelease      = if ($computed.PreReleaseTag) { $computed.PreReleaseTag -replace '[^a-zA-Z0-9]', '' } else { '' }
     }
+    $script:ComputedVersion
+}
+
+function Format-ComputedVersionDisplay {
+    <# The "Major.Minor.Patch[-Prerelease]" display string, shared by Invoke-Version and Invoke-Build. #>
+    param([Parameter(Mandatory)]$Version)
+
+    if ($Version.Prerelease) { "$($Version.MajorMinorPatch)-$($Version.Prerelease)" } else { "$($Version.MajorMinorPatch)" }
 }
 
 function Invoke-Version {
     $version = Get-ComputedVersion
-    $display = if ($version.Prerelease) { "$($version.MajorMinorPatch)-$($version.Prerelease)" } else { $version.MajorMinorPatch }
-    Write-Banner "Version: $display"
+    Write-Banner "Version: $(Format-ComputedVersionDisplay -Version $version)"
 }
 
 function Invoke-Build {
@@ -231,7 +246,7 @@ function Invoke-Build {
     # the real SemVer from git tag/commit history and it is stamped onto the staged manifest only,
     # never the source one (which keeps its hand-authored formatting/comments untouched).
     $version = Get-ComputedVersion
-    Write-Host "    GitVersion computed $($version.MajorMinorPatch)$(if ($version.Prerelease) { "-$($version.Prerelease)" })" -ForegroundColor DarkGray
+    Write-Host "    GitVersion computed $(Format-ComputedVersionDisplay -Version $version)" -ForegroundColor DarkGray
     $manifestParams = @{
         Path          = $built.Path
         ModuleVersion = $version.MajorMinorPatch
@@ -252,6 +267,39 @@ function Invoke-Build {
 }
 
 
+function Invoke-WithRetry {
+    <#
+        Runs $Body, retrying up to $MaxAttempt times with an increasing delay between attempts.
+        Shared by Invoke-ModuleBuildWithRetry and Remove-OutputRoot, both patching around a transient
+        Windows file-handle race (an indexer/AV/ModuleBuilder handle briefly still open on a
+        just-written file). $OnRetry, if given, runs after the delay, right before the next attempt.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [scriptblock]$Body,
+
+        [Parameter()]
+        [int]$MaxAttempt = 4,
+
+        [Parameter()]
+        [int]$DelayMilliseconds = 250,
+
+        [Parameter()]
+        [scriptblock]$OnRetry
+    )
+
+    foreach ($attempt in 1..$MaxAttempt) {
+        try {
+            return & $Body
+        }
+        catch {
+            if ($attempt -eq $MaxAttempt) { throw }
+            Start-Sleep -Milliseconds ($DelayMilliseconds * $attempt)
+            if ($OnRetry) { & $OnRetry $attempt }
+        }
+    }
+}
+
 function Invoke-ModuleBuildWithRetry {
     <#
         Runs Build-Module, retrying from a clean output directory on a transient file lock.
@@ -268,23 +316,20 @@ function Invoke-ModuleBuildWithRetry {
     #>
     param()
 
-    foreach ($attempt in 1..4) {
-        try {
-            return Build-Module -SourcePath (Join-Path $RepoRoot 'build.psd1') -Passthru -ErrorAction Stop
-        }
-        catch {
-            if ($attempt -eq 4) { throw }
-            Write-Host "    build attempt $attempt hit a file lock; retrying" -ForegroundColor DarkYellow
-            # The stale handle is usually ModuleBuilder's own FileStream awaiting finalization, and the
-            # retry runs in this same process — so without forcing finalizers the next attempt hits
-            # exactly the same lock.
-            [System.GC]::Collect()
-            [System.GC]::WaitForPendingFinalizers()
-            Start-Sleep -Milliseconds (250 * $attempt)
-            Remove-OutputRoot
-        }
+    Invoke-WithRetry -MaxAttempt 4 -DelayMilliseconds 250 -Body {
+        Build-Module -SourcePath (Join-Path $RepoRoot 'build.psd1') -Passthru -ErrorAction Stop
+    } -OnRetry {
+        param($Attempt)
+        Write-Host "    build attempt $Attempt hit a file lock; retrying" -ForegroundColor DarkYellow
+        # The stale handle is usually ModuleBuilder's own FileStream awaiting finalization, and the
+        # retry runs in this same process — so without forcing finalizers the next attempt hits
+        # exactly the same lock.
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+        Remove-OutputRoot
     }
 }
+
 function Remove-OutputRoot {
     <#
         Deletes the staging directory, retrying briefly on failure.
@@ -298,15 +343,8 @@ function Remove-OutputRoot {
 
     if (-not (Test-Path $OutputRoot)) { return }
 
-    foreach ($attempt in 1..5) {
-        try {
-            Remove-Item -Path $OutputRoot -Recurse -Force -ErrorAction Stop
-            return
-        }
-        catch {
-            if ($attempt -eq 5) { throw }
-            Start-Sleep -Milliseconds (100 * $attempt)
-        }
+    Invoke-WithRetry -MaxAttempt 5 -DelayMilliseconds 100 -Body {
+        Remove-Item -Path $OutputRoot -Recurse -Force -ErrorAction Stop
     }
 }
 

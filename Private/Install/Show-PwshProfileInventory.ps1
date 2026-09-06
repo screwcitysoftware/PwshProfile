@@ -34,14 +34,10 @@ function Show-PwshProfileInventory {
         authored help text, where a stray backtick or asterisk is meant as syntax. Detail IS authored
         help text, so it goes the other way and is formatted.
 
-        A row may also carry an optional Url (the project's homepage or repo): when present, the
-        escaped label is wrapped in a Spectre hyperlink span and THEN padded with plain spaces after
-        the closing tag, rather than padded first like the no-link branch -- padding inside the span
-        would put the trailing whitespace inside "[link=...]...[/]", which a real terminal renders as
-        part of the clickable/underlined link. Never escape the assembled link-markup string itself,
-        either: escaping doubles brackets and would corrupt the markup rather than the (already-safe)
-        label text inside it. The plain-text fallback has no markup at all, so it appends the raw URL
-        as visible text instead.
+        A row may also carry an optional Url (the project's homepage or repo): when present, the label
+        is wrapped in a Spectre hyperlink span via the shared Format-PwshProfileHyperlinkCell (also
+        used by Show-PwshProfileChord). The plain-text fallback has no markup at all, so it appends the
+        raw URL as visible text instead.
 
         Degrades like Show-NerdFontSetup — a plain Write-Host when Spectre isn't available.
 
@@ -115,11 +111,7 @@ function Show-PwshProfileInventory {
             $rawLabel = "$($r.Label)"
             $url = Get-RowUrl $r
             if ($url) {
-                # Pad OUTSIDE the link span with plain spaces, keyed to the unescaped label's length --
-                # padding the label before wrapping (as the no-link branch does) would put the trailing
-                # whitespace INSIDE "[link=...]...[/]", and a real terminal renders that whitespace as
-                # part of the clickable/underlined link.
-                $label = "[link=$url]$(Get-SpectreEscapedTextSafe -Text $rawLabel)[/]" + (' ' * ($width - $rawLabel.Length))
+                $label = Format-PwshProfileHyperlinkCell -Text $rawLabel -Url $url -Width $width -Escape
             }
             else {
                 # Pad BEFORE escaping: escaping can lengthen the string (a '[' doubles), so padding
