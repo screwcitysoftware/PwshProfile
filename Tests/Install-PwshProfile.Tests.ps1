@@ -248,6 +248,94 @@ Describe 'Build-PwshProfileInitializeCall' {
                 Should -Be 'Initialize-PwshProfile -Enable Fzf'
         }
     }
+
+    Context 'emit order (characterization)' {
+        # The ~25 cases above each set one or two keys, so they pin quoting and gating but NOT the
+        # order parameters appear in. These four lock every cross-category ordering relationship:
+        # scalars in schema order, then switches, then the tool selection last; -NoBanner ahead of the
+        # scalars it suppresses; -CustomTheme occupying -Theme's slot. Captured from the live module,
+        # so they are a record of current behaviour rather than a judgement about it.
+        #
+        # Without these, a refactor that derives these lists from a shared source can reorder the
+        # generated call and every other test still passes -- the user would only notice as a churning
+        # diff in their $PROFILE on each re-run.
+        BeforeAll {
+            function script:NonDefaultSetting {
+                InModuleScope $script:Module {
+                    $s = Get-PwshProfileDefault
+                    $s.Theme = 'forestcity'
+                    $s.BannerText = 'ROUNDTRIP'
+                    $s.BannerColor = '#123456'
+                    $s.BannerAlignment = 'Center'
+                    $s.BannerFont = 'Small'
+                    $s.StepIcon = ':rocket:'
+                    $s.ZoxideCommand = 'z'
+                    $s.BatTheme = 'Nord'
+                    $s.BatStyle = 'full'
+                    $s.ReplaceCat = $true
+                    $s.ReplaceMore = $true
+                    $s.FzfGitKeyBindings = $true
+                    $s.FzfTabChord = 'Ctrl+j'
+                    $s.Enable = @('Zoxide', 'Bat', 'Less', 'Fzf')
+                    $s
+                }
+            }
+        }
+
+        It 'emits every non-default setting in a fixed order' {
+            $s = script:NonDefaultSetting
+            InModuleScope $script:Module -Parameters @{ S = $s } {
+                param($S)
+                Build-PwshProfileInitializeCall -Setting $S | Should -Be (
+                    "Initialize-PwshProfile -Theme forestcity -BannerText `"ROUNDTRIP`" " +
+                    "-BannerColor '#123456' -BannerAlignment 'Center' -BannerFont 'Small' " +
+                    "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings " +
+                    "-Enable Zoxide,Bat,Less,Fzf")
+            }
+        }
+
+        It 'puts -EnableAll in the tool-selection slot, replacing -Enable' {
+            $s = script:NonDefaultSetting
+            $s.EnableAll = $true
+            InModuleScope $script:Module -Parameters @{ S = $s } {
+                param($S)
+                Build-PwshProfileInitializeCall -Setting $S | Should -Be (
+                    "Initialize-PwshProfile -Theme forestcity -BannerText `"ROUNDTRIP`" " +
+                    "-BannerColor '#123456' -BannerAlignment 'Center' -BannerFont 'Small' " +
+                    "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings " +
+                    "-EnableAll")
+            }
+        }
+
+        It 'puts -NoBanner ahead of the scalars and drops the four banner keys' {
+            $s = script:NonDefaultSetting
+            $s.NoBanner = $true
+            InModuleScope $script:Module -Parameters @{ S = $s } {
+                param($S)
+                Build-PwshProfileInitializeCall -Setting $S | Should -Be (
+                    "Initialize-PwshProfile -Theme forestcity -NoBanner " +
+                    "-StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' -BatStyle 'full' " +
+                    "-FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore -FzfGitKeyBindings " +
+                    "-Enable Zoxide,Bat,Less,Fzf")
+            }
+        }
+
+        It 'puts -CustomTheme in -Theme''s slot, leaving the rest of the order intact' {
+            $s = script:NonDefaultSetting
+            $s.CustomTheme = 'C:\themes\mine.omp.json'
+            InModuleScope $script:Module -Parameters @{ S = $s } {
+                param($S)
+                Build-PwshProfileInitializeCall -Setting $S | Should -Be (
+                    "Initialize-PwshProfile -CustomTheme 'C:\themes\mine.omp.json' " +
+                    "-BannerText `"ROUNDTRIP`" -BannerColor '#123456' -BannerAlignment 'Center' " +
+                    "-BannerFont 'Small' -StepIcon ':rocket:' -ZoxideCommand 'z' -BatTheme 'Nord' " +
+                    "-BatStyle 'full' -FzfTabChord 'Ctrl+j' -ReplaceCat -ReplaceMore " +
+                    "-FzfGitKeyBindings -Enable Zoxide,Bat,Less,Fzf")
+            }
+        }
+    }
 }
 
 Describe 'Get-SpectreColorValue' {
@@ -612,6 +700,20 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
+
+    It 'carries every prior setting through, including the two the wizard never prompts for' {
+        # BatTheme and BatStyle have no prompt anywhere in the wizard -- they exist purely as
+        # pass-through of the -PriorSetting re-seed list, so this is their only coverage. That list
+        # is about to become a projection of the settings schema, and a projection that quietly
+        # dropped them would otherwise go unnoticed.
+        InModuleScope $script:Module {
+            $prior = @{ BatTheme = 'Nord'; BatStyle = 'full'; ZoxideCommand = 'z' }
+            $s = Invoke-PwshProfileWizard -PriorSetting $prior
+            $s.BatTheme | Should -Be 'Nord'
+            $s.BatStyle | Should -Be 'full'
+            $s.ZoxideCommand | Should -Be 'z'
+        }
+    }
     It 'on a clean first run pre-checks Core and leaves WinGet tools unchecked' {
         InModuleScope $script:Module {
             # No PriorSetting -> first run: the tree opens with non-winget (Core) tokens checked and
