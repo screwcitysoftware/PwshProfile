@@ -77,10 +77,12 @@ function Invoke-PwshProfileWizard {
     $priorTheme = if ($PriorSetting -and $PriorSetting.ContainsKey('Theme') -and $PriorSetting.Theme) { $PriorSetting.Theme } else { 'screwcity' }
     $def = Get-PwshProfileDefault -Theme $priorTheme
     $settings = $def.Clone()
+    # Every setting a profile can carry, from the schema — so a parameter cannot be added to the
+    # bootstrap and then silently fail to survive a re-run. Deliberately not the install-time keys set
+    # just below (NerdFont, the Windows Terminal pair, the winget four): those are one-time machine
+    # actions that re-ask every run rather than being remembered.
     if ($PriorSetting) {
-        foreach ($k in 'Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont',
-            'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'ReplaceCat', 'ReplaceMore',
-            'FzfGitKeyBindings', 'FzfTabChord', 'NoBanner', 'Enable', 'EnableAll') {
+        foreach ($k in @((Get-PwshProfileSettingSchema -Wizard).Name)) {
             if ($PriorSetting.ContainsKey($k)) { $settings[$k] = $PriorSetting[$k] }
         }
     }
