@@ -491,7 +491,7 @@ ScrewCitySoftware.PwshProfile/
 │   └── Fonts/                           # 25 bundled FIGlet fonts (see Write-Figlet / Show-FigletFont)
 │       ├── *.flf                        # ANSIShadow, Colossal, Doom, Slant, Small, ... (run Show-FigletFont)
 │       └── README.md                    # font sources + license/attribution
-└── Tests/                               # Pester 5 tests
+└── Tests/                               # Pester 6 tests
 ```
 
 Before it loads anything, the `.psm1` sets `[Console]::InputEncoding`, `[Console]::OutputEncoding`
@@ -1429,7 +1429,7 @@ Invoke-Step "Demo" { Start-Sleep -Milliseconds 50 }
 
 ### Tests
 
-The `Tests/` folder holds Pester 5 tests: module-level checks (valid manifest, exports match
+The `Tests/` folder holds Pester 6 tests: module-level checks (valid manifest, exports match
 the manifest, every function documented) plus per-function behavior tests across the module —
 `Invoke-Step` rendering, `Import-ModuleSafe` install/import/failure paths, the profile
 install/uninstall/wizard logic, and the rest. Install Pester with `Install-PSResource Pester`

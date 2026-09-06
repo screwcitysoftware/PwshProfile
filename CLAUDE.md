@@ -20,7 +20,7 @@ Reload after changes:
 Import-Module ./ScrewCitySoftware.PwshProfile.psd1 -Force
 ```
 
-Run the checks the way CI does (Pester 5 + PSScriptAnalyzer; `build.ps1 -Task Bootstrap`
+Run the checks the way CI does (Pester 6 + PSScriptAnalyzer; `build.ps1 -Task Bootstrap`
 installs them if missing) — this lints **and** runs the Pester suite under
 `Set-StrictMode -Version Latest`, so a clean local run matches a clean CI run. Run it in a **clean**
 PowerShell session (`-NoProfile`, like CI) so the profile's own loaded module / global state can't

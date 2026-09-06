@@ -4,7 +4,7 @@
     #
     # GitVersion.Tool is NOT listed here — it's a dotnet tool, not a PowerShell module, and is
     # pinned separately via .config/dotnet-tools.json (restored by `dotnet tool restore`).
-    Pester           = '5.7.1'
+    Pester           = '6.1.0'
     PSScriptAnalyzer = '1.25.0'
     ModuleBuilder    = '3.2.18'
 }
