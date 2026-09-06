@@ -39,6 +39,7 @@ BeforeAll {
         ReplaceHttp       = $true
         FzfGitKeyBindings = $true
         FzfTabChord       = 'Ctrl+j'
+        ShowChordGuidance = $true
     }
     $script:CoveredSeparately = 'CustomTheme', 'NoBanner'
 }

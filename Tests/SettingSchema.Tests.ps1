@@ -54,7 +54,8 @@ Describe 'Get-PwshProfileSettingSchema' {
             @($script:WizardSchema.Name) | Sort-Object | Should -Be (@(
                     'BannerAlignment', 'BannerColor', 'BannerFont', 'BannerText', 'BatStyle', 'BatTheme',
                     'CustomTheme', 'FzfGitKeyBindings', 'FzfTabChord', 'LessOptions', 'NoBanner',
-                    'ReplaceCat', 'ReplaceHttp', 'ReplaceMore', 'SetPager', 'StepIcon', 'Theme', 'ZoxideCommand'
+                    'ReplaceCat', 'ReplaceHttp', 'ReplaceMore', 'SetPager', 'ShowChordGuidance', 'StepIcon',
+                    'Theme', 'ZoxideCommand'
                 ) | Sort-Object)
         }
 

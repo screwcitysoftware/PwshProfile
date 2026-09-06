@@ -47,6 +47,7 @@
         'Set-WingetSetting'
         'Select-Fzf'
         'Show-PwshProfileReadme'
+        'Show-PwshProfileChord'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

@@ -117,6 +117,8 @@ function Get-PwshProfileSettingSchema {
             BrandingKey = $null; Neutral = $null; Tool = 'Xh'; Banner = $false; Emit = 'Switch' }
         [pscustomobject]@{ Name = 'FzfGitKeyBindings'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = 'Fzf'; Banner = $false; Emit = 'Switch' }
+        [pscustomobject]@{ Name = 'ShowChordGuidance'; Kind = 'Switch'; Default = $false
+            BrandingKey = $null; Neutral = $null; Tool = $null; Banner = $false; Emit = 'Switch' }
         [pscustomobject]@{ Name = 'NoBanner'; Kind = 'Switch'; Default = $false
             BrandingKey = $null; Neutral = $null; Tool = $null; Banner = $false; Emit = 'Custom' }
     )

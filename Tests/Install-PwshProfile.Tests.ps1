@@ -801,6 +801,23 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
+    It 'leaves chord guidance off by default' {
+        InModuleScope $script:Module {
+            # BeforeEach's catch-all Read-SpectreConfirm { $false } covers this prompt too.
+            $s = Invoke-PwshProfileWizard
+            $s.ShowChordGuidance | Should -BeFalse
+        }
+    }
+
+    It 'captures an accepted chord-guidance prompt' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreConfirm { $true } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a keyboard-chord reference at every startup?' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.ShowChordGuidance | Should -BeTrue
+        }
+    }
+
     It 'sets NoBanner and skips the theming sub-steps when the banner is declined' {
         InModuleScope $script:Module {
             Mock Read-SpectreConfirm { $false } -RemoveParameterType 'Color' -ParameterFilter { $Message -eq 'Show a startup banner?' }

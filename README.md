@@ -199,7 +199,8 @@ fzf adds interactive fuzzy pickers bound to keys in your shell (via PSFzf):
 
 - **Ctrl+T** — fuzzy-pick a file or directory and drop its path at the cursor (with a `bat` preview).
 - **Ctrl+R** — fuzzy-search your command history.
-- **Ctrl+G** chords — fuzzy git pickers (files, branches, hashes, …) when you're inside a repo.
+- **Ctrl+G**, then a second key — fuzzy git pickers when you're inside a repo: `Ctrl+B` branches,
+  `Ctrl+F` files, `Ctrl+H` hashes, `Ctrl+P` pull requests, `Ctrl+S` stashes, `Ctrl+T` tags.
 - **Ctrl+Spacebar** — fuzzy completion: opens an fzf picker over what `Tab` would complete (paths, command/parameter names, and every registered completer — `gh`, `az`, `winget`, …, all inserting cleanly). `Tab` itself stays the classic `MenuComplete` menu.
 
 In any picker: type to filter, arrows or Tab to move, Enter to accept, Esc to cancel.
@@ -435,7 +436,8 @@ ScrewCitySoftware.PwshProfile/
 │   │   └── Set-WindowsTerminalFont.ps1          # set WT's default profile font (face) in settings.json
 │   ├── Docs/
 │   │   ├── Show-PwshProfileReadme.ps1       # renders this README (Show-Markdown) or opens it (-Open)
-│   │   └── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
+│   │   ├── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
+│   │   └── Show-PwshProfileChord.ps1      # panel: keyboard chords this profile wires up (+ related defaults)
 │   └── Core/
 │       └── Import-ModuleSafe.ps1
 ├── Private/                             # internal helpers (loaded, not exported)
@@ -453,6 +455,8 @@ ScrewCitySoftware.PwshProfile/
 │   ├── Startup/                         # startup helpers shared with the wizard
 │   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
 │   │   └── Get-PwshProfileModuleCatalog.ps1   # single source of truth for the PSGallery modules it installs
+│   ├── Docs/
+│   │   └── Get-PwshProfileChordCatalog.ps1    # single source of truth for Show-PwshProfileChord's rows
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
@@ -612,7 +616,8 @@ The wizard walks one forward pass, then lets you revise anything before committi
    Four free-text settings a checkbox can't express follow: bat's syntax **theme** and **style**
    components (both pre-filled, the theme from your prompt theme's branding, so Enter keeps them),
    less's **options** (`$env:LESS`, default `-R -F -i`), and the chord for the fuzzy tab-completion
-   picker (**default `Ctrl+Spacebar`**).
+   picker (**default `Ctrl+Spacebar`**). A closing **chord guidance** confirm follows, off by
+   default: opt in and `Show-PwshProfileChord` prints a chord reference once at every startup.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
@@ -751,6 +756,34 @@ Show-NerdFontSetup                       # recommended families
 Show-NerdFontSetup -Font Meslo, CascadiaCode
 ```
 
+### `Show-PwshProfileChord`
+
+Renders a panel listing the keyboard chords this profile wires up — fzf's `Ctrl+T`/`Ctrl+R`/`Ctrl+G`/
+`Ctrl+Spacebar` pickers (`Enable-Fzf`) and `Initialize-PSReadline`'s `UpArrow`/`DownArrow`/`Tab`/
+`Alt+w`/`Alt+(` bindings — plus a couple of closely related defaults that aren't this module's own
+choice, for context: PSFzf's own unconditional `Alt+C` binding, and the PSReadLine default that
+`Ctrl+R` replaces. If PwshSpectreConsole isn't loaded, the same text is written plainly.
+
+A chord only appears when it's actually active for the given configuration — `-FzfGitKeyBindings`
+(same name and default as `Enable-Fzf`/`Initialize-PwshProfile`) shows the `Ctrl+G` row only when
+passed **and** git is on PATH, mirroring `Enable-Fzf`'s own exact gate; `-FzfTabChord` (same name and
+default `'Ctrl+Spacebar'`) shows the tab-completion row with whatever chord is actually configured —
+`Ctrl+Spacebar / Ctrl+@` at the default, just the literal chord otherwise, or hidden entirely if
+passed empty. Called with no arguments, this reflects a fresh default install.
+
+Each chord links to the project that owns it — **PSFzf** for its own fzf pickers, **PSReadLine** for
+`Initialize-PSReadline`'s bindings — as a clickable hyperlink in a terminal that supports it (Windows
+Terminal, VS Code, and most modern terminals).
+
+`Initialize-PwshProfile -ShowChordGuidance` prints this automatically at the end of every startup
+(off by default), forwarding its own `-FzfGitKeyBindings`/`-FzfTabChord` so the guidance matches this
+session's actual configuration; this cmdlet also runs standalone any time.
+
+```powershell
+Show-PwshProfileChord                                        # what a fresh default install has
+Show-PwshProfileChord -FzfGitKeyBindings -FzfTabChord 'Ctrl+j' # what this session's config actually wired up
+```
+
 ### `Initialize-PwshProfile`
 
 The headline entry point: one call that runs the profile startup, so `$PROFILE` shrinks to just this
@@ -814,16 +847,21 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-FzfColors`** — fzf's picker palette, forwarded to `Enable-Fzf -Colors` (folded into
   `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for screwcity,
   green/gold for forestcity).
-- **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G` git chords (branch/commit/file
-  pickers), forwarded to `Enable-Fzf -GitKeyBindings`. **Off by default** (opt-in) — pass
-  `-FzfGitKeyBindings` to enable them; they're off because lazygit already covers git workflows.
-  `Enable-Fzf` drops the chords if git isn't on PATH.
+- **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G,Ctrl+<key>` git chords (branch,
+  file, hash, pull request, stash, and tag pickers), forwarded to `Enable-Fzf -GitKeyBindings`.
+  **Off by default** (opt-in) — pass `-FzfGitKeyBindings` to enable them; they're off because
+  lazygit already covers git workflows. `Enable-Fzf` drops the chords if git isn't on PATH.
 - **`-FzfTabChord`** — the PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (`Tab`
   stays `MenuComplete`), forwarded to `Enable-Fzf -TabExpansionChord`. Default `Ctrl+Spacebar`
   (which also binds `Ctrl+@`).
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
+- **`-ShowChordGuidance`** — a switch that prints `Show-PwshProfileChord` once at the end of startup,
+  forwarding `-FzfGitKeyBindings`/`-FzfTabChord` so the guidance reflects this session's actual
+  configuration (the `Ctrl+G` row only if git bindings are on, the tab-completion row with the real
+  chord). **Off by default** — the install wizard asks explicitly rather than defaulting it silently;
+  `Show-PwshProfileChord` runs standalone any time regardless.
 - **`-NoBanner`** — render no startup banner. Use this to suppress the banner rather than clearing
   `-BannerText` (which rejects empty); banner params passed alongside it are warned-and-ignored.
 

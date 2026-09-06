@@ -75,7 +75,7 @@ function Get-PwshProfileWiringCatalog {
         [pscustomobject]@{
             Group = 'Keybindings'; Label = 'Ctrl+G git pickers'
             Setting = 'FzfGitKeyBindings'; On = $true; Off = $false
-            Help = '`Ctrl+G` — **PSFzf**''s fzf-powered git pickers (branches, commits, changed files, stashes). Off by default because **lazygit** already covers git. `Ctrl+T` (files) and `Ctrl+R` (history) are bound either way.'
+            Help = '`Ctrl+G` — **PSFzf**''s fzf-powered git pickers, chosen by a second chord: branches, files, hashes, pull requests, stashes, tags. Off by default because **lazygit** already covers git. `Ctrl+T` (files) and `Ctrl+R` (history) are bound either way.'
         }
     )
 }

@@ -46,6 +46,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-DockerCompletion { }
         Mock -ModuleName $script:Module Enable-1PasswordCompletion { }
         Mock -ModuleName $script:Module Enable-GithubCliCompletion { }
+        Mock -ModuleName $script:Module Show-PwshProfileChord { }
     }
 
     Context 'runs the full startup' {
@@ -426,6 +427,25 @@ Describe 'Initialize-PwshProfile' {
             Mock -ModuleName $script:Module Enable-Uv { }
             Initialize-PwshProfile -WarningVariable warnings -WarningAction SilentlyContinue
             $warnings | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'chord guidance' {
+        It 'stays silent by default' {
+            Initialize-PwshProfile
+            Should -Invoke -ModuleName $script:Module Show-PwshProfileChord -Times 0 -Exactly
+        }
+
+        It 'prints once when -ShowChordGuidance is passed' {
+            Initialize-PwshProfile -ShowChordGuidance
+            Should -Invoke -ModuleName $script:Module Show-PwshProfileChord -Times 1 -Exactly
+        }
+
+        It 'forwards the resolved fzf settings so the guidance matches this session' {
+            Initialize-PwshProfile -ShowChordGuidance -FzfGitKeyBindings -FzfTabChord 'Ctrl+j'
+            Should -Invoke -ModuleName $script:Module Show-PwshProfileChord -Times 1 -Exactly -ParameterFilter {
+                $FzfGitKeyBindings -eq $true -and $FzfTabChord -eq 'Ctrl+j'
+            }
         }
     }
 

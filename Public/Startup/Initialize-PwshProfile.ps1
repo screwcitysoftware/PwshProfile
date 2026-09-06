@@ -114,14 +114,21 @@ function Initialize-PwshProfile {
         time. Defaults to the selected theme's branding.
 
     .PARAMETER FzfGitKeyBindings
-        Bind PSFzf's Ctrl+G git chords (fzf pickers for branches, commits, files). Off by default,
-        since lazygit already covers git workflows. Enable-Fzf drops the chords when git isn't on
-        PATH.
+        Bind PSFzf's Ctrl+G,Ctrl+<key> git chords (fzf pickers for branches, files, hashes, pull
+        requests, stashes, and tags). Off by default, since lazygit already covers git workflows.
+        Enable-Fzf drops the chords when git isn't on PATH.
 
     .PARAMETER FzfTabChord
         The PSReadLine chord for PSFzf's fuzzy tab-completion picker; Tab itself stays MenuComplete.
         Defaults to 'Ctrl+Spacebar', and Enable-Fzf also binds 'Ctrl+@' to the same picker (many
         terminals emit the same byte for both).
+
+    .PARAMETER ShowChordGuidance
+        Print Show-PwshProfileChord once at the end of startup — every chord this profile actually
+        wires up for this session (fzf's Ctrl+T/Ctrl+R/Ctrl+Spacebar always, Ctrl+G only when
+        -FzfGitKeyBindings is on, Initialize-PSReadline's Up/Down/Tab/Alt+w/Alt+( always), plus a
+        couple of related defaults that aren't this module's choice. Off by default;
+        Show-PwshProfileChord runs standalone any time regardless.
 
     .PARAMETER NoBanner
         Render no startup banner. Use this rather than clearing -BannerText, which rejects empty.
@@ -270,6 +277,10 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$FzfTabChord = 'Ctrl+Spacebar',
 
+        # Off by default; the wizard surfaces this as an explicit question rather than a silent default.
+        [Parameter()]
+        [switch]$ShowChordGuidance,
+
         [Parameter()]
         [switch]$NoBanner,
 
@@ -417,5 +428,12 @@ function Initialize-PwshProfile {
     if ($script:StartupInstall.Count -gt 0) {
         Write-Warning ("Installed $($script:StartupInstall -join ', ') during startup — this normally " +
             'happens during setup. Run Install-PwshProfile to install new tools ahead of time.')
+    }
+
+    # Sits after every Invoke-Step has cleared its spinner, same as the notice above -- a Format-*
+    # render mid-step would tear it. Forwards the same fzf settings Enable-Fzf just wired up, so the
+    # guidance reflects this session's actual configuration rather than a fresh-install default.
+    if ($ShowChordGuidance) {
+        Show-PwshProfileChord -FzfGitKeyBindings:$FzfGitKeyBindings -FzfTabChord $FzfTabChord
     }
 }

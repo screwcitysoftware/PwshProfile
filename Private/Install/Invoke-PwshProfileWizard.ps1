@@ -311,6 +311,11 @@ function Invoke-PwshProfileWizard {
             'Which chord should trigger it? Press Enter to keep `Ctrl+Spacebar` (also binds `Ctrl+@`, which many terminals emit identically).'
         ) -Accent $s.Accent -Code $s.Code
         $s.Settings.FzfTabChord = Read-SpectreText -Message 'PSFzf tab-completion picker chord' -DefaultAnswer $s.Settings.FzfTabChord
+
+        Write-PwshProfilePromptHelp @(
+            'Print a **chord reference** once at the end of every startup — every keybinding this profile wires up (fzf''s pickers, `Initialize-PSReadline`''s bindings), plus a couple of related defaults that aren''t this module''s choice (**PSFzf**''s own `Alt+C`). Off by default; run `Show-PwshProfileChord` any time regardless.'
+        ) -Accent $s.Accent -Code $s.Code
+        $s.Settings.ShowChordGuidance = [bool](Read-SpectreConfirm -Message 'Show a keyboard-chord reference at every startup?' -Color $s.Accent -DefaultAnswer $(if ($s.Settings.ShowChordGuidance) { 'y' } else { 'n' }))
     }
 
     # --- Step: Nerd Font (optional) ---------------------------------------------------------
@@ -452,6 +457,9 @@ function Invoke-PwshProfileWizard {
             }
             if ($set.FzfTabChord -and $set.FzfTabChord -ne 'Ctrl+Spacebar') {
                 "[$code]tab: $(ConvertTo-EscapedText $set.FzfTabChord)[/]"
+            }
+            if ($set.ShowChordGuidance) {
+                "[$code]chord guidance: on[/]"
             }
         )
         $featuresLine = if ($wiringParts.Count -gt 0) { $wiringParts -join " [grey]·[/] " }

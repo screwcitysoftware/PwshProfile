@@ -69,8 +69,9 @@ function Enable-Fzf {
         Enable-Fd sets both that and $env:FZF_ALT_C_COMMAND. fd is invoked later, at key-press time.
 
     .PARAMETER GitKeyBindings
-        Registers PSFzf's Ctrl+G,Ctrl+<key> fuzzy-git chords (files, branches, hashes, tags, stashes).
-        Guarded by Test-CommandAvailable so a git-less machine isn't left with dead chords.
+        Registers PSFzf's Ctrl+G,Ctrl+<key> fuzzy-git chords: B branches, F files, H hashes,
+        P pull requests, S stashes, T tags. Guarded by Test-CommandAvailable so a git-less machine
+        isn't left with dead chords.
 
     .EXAMPLE
         Enable-Fzf
