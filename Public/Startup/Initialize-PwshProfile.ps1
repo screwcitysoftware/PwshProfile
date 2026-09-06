@@ -285,19 +285,22 @@ function Initialize-PwshProfile {
 
     # A flag for a tool that isn't enabled is a no-op, so warn rather than throw or silently ignore.
     # Build-PwshProfileInitializeCall only emits these for enabled tools, so only hand-edits trip it.
-    $paramTool = [ordered]@{
-        ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat'; ReplaceCat = 'Bat'
-        ReplaceMore = 'Less'; FdColors = 'Fd'; FzfColors = 'Fzf'
-        FzfGitKeyBindings = 'Fzf'; FzfTabChord = 'Fzf'
-    }
-    foreach ($p in $paramTool.Keys) {
-        if ($PSBoundParameters.ContainsKey($p) -and $enabled -notcontains $paramTool[$p]) {
-            Write-Warning "-$p was supplied but $($paramTool[$p]) is not enabled; ignoring -$p."
+    #
+    # The param -> tool coupling is the schema's Tool column, the same one gating what Build emits, so
+    # the two cannot disagree about which tool owns a parameter. Note this reads the FULL schema, not
+    # -Wizard: FdColors and FzfColors are runtime-only (never written to a profile) but are still
+    # tool-owned parameters worth warning about.
+    $settingSchema = Get-PwshProfileSettingSchema
+    foreach ($row in $settingSchema | Where-Object Tool) {
+        if ($PSBoundParameters.ContainsKey($row.Name) -and $enabled -notcontains $row.Tool) {
+            Write-Warning "-$($row.Name) was supplied but $($row.Tool) is not enabled; ignoring -$($row.Name)."
         }
     }
     # Banner params are moot when no banner will render — either -NoBanner, or a banner text that
     # resolved empty (an unset $env:COMPUTERNAME), which is suppressed below rather than thrown.
-    $bannerParam = 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath'
+    # Includes BannerFontPath, which Build never emits — the schema's Banner column covers every
+    # banner parameter, and the Emit column is what separates the ones a profile can carry.
+    $bannerParam = @(($settingSchema | Where-Object Banner).Name)
     $bannerIgnored = if ($NoBanner) { 'with -NoBanner; ignoring it (no banner is rendered)' }
     elseif ([string]::IsNullOrWhiteSpace($BannerText)) { 'but no banner text resolved (banner suppressed); ignoring it' }
     if ($bannerIgnored) {
