@@ -48,7 +48,7 @@ function Get-PwshProfileToolCatalog {
     .EXAMPLE
         Get-PwshProfileToolCatalog -Token
 
-        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Ripgrep','Less','Lazygit').
+        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Ripgrep','Less','Lazygit','Uv').
     #>
     [CmdletBinding(DefaultParameterSetName = 'Grouped')]
     param(
@@ -102,6 +102,9 @@ function Get-PwshProfileToolCatalog {
         [pscustomobject]@{ Label = 'lazygit (git TUI)'; Token = 'Lazygit'; Install = 'winget'
             PackageId = 'JesseDuffield.lazygit'; Exe = 'lazygit.exe'
             Help = '**lazygit** (git TUI) — a full-screen terminal UI for git: stage hunks, branch, rebase, and stash without leaving the shell.' }
+        [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; Install = 'winget'
+            PackageId = 'astral-sh.uv'; Exe = 'uv.exe'
+            Help = '**uv** (Python toolchain) — one fast binary for Python packages, virtualenvs, and interpreters; `uvx` runs a tool without installing it.' }
     )
 
     if ($Token) {

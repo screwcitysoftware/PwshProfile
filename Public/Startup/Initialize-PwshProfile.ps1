@@ -9,7 +9,7 @@ function Initialize-PwshProfile {
           2. "Core" (always renders): the `which` alias, git, PSReadLine, oh-my-posh, Terminal-Icons,
              posh-git, and the shell completions (winget, Azure CLI, Tailscale, Docker, 1Password,
              GitHub CLI — registration only; they detect external CLIs and install nothing).
-          3. "WinGet": zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, and lazygit. Order matters
+          3. "WinGet": zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, and uv. Order matters
              twice — git leads Core so it is on PATH for posh-git and lazygit, and fd follows fzf so
              it can wire fzf to use fd as its file source.
 
@@ -351,7 +351,9 @@ function Initialize-PwshProfile {
         Invoke-Step "ripgrep" { Enable-Ripgrep }
         # No init-time dependency on the other tools, so its position is free.
         Invoke-Step "less" { Enable-Less -Options $LessOptions -SetPager:$SetPager -ReplaceMore:$ReplaceMore }
-        # Standalone git TUI: no shell init, no completion, no dependencies — kept last.
+        # Standalone git TUI: no shell init, no completion, no dependencies.
         Invoke-Step "lazygit" { Enable-Lazygit }
+        # Standalone Python toolchain; no init-time dependency, so its position is free — kept last.
+        Invoke-Step "uv" { Enable-Uv }
     }
 }

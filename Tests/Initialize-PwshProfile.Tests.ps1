@@ -39,6 +39,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Ripgrep { }
         Mock -ModuleName $script:Module Enable-Less { }
         Mock -ModuleName $script:Module Enable-Lazygit { }
+        Mock -ModuleName $script:Module Enable-Uv { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
         Mock -ModuleName $script:Module Enable-AzureCliCompletion { }
         Mock -ModuleName $script:Module Enable-TailscaleCompletion { }
@@ -76,6 +77,8 @@ Describe 'Initialize-PwshProfile' {
                 -ParameterFilter { -not $ReplaceMore -and -not $SetPager -and $Options -eq '-R -F -i' }
             # lazygit enables (install-only, no arguments).
             Should -Invoke -ModuleName $script:Module Enable-Lazygit -Times 1 -Exactly
+            # uv enables (install + uv/uvx completion, no arguments).
+            Should -Invoke -ModuleName $script:Module Enable-Uv -Times 1 -Exactly
             # Completions register (under Core).
             Should -Invoke -ModuleName $script:Module Enable-WingetCompletion -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-AzureCliCompletion -Times 1 -Exactly
@@ -229,7 +232,8 @@ Describe 'Initialize-PwshProfile' {
             # is invoked once per startup.
             Initialize-PwshProfile
             foreach ($fn in 'Enable-Zoxide', 'Enable-Fzf', 'Enable-FastNodeManager', 'Enable-Xh',
-                'Enable-Jq', 'Enable-Bat', 'Enable-Fd', 'Enable-Ripgrep', 'Enable-Less', 'Enable-Lazygit') {
+                'Enable-Jq', 'Enable-Bat', 'Enable-Fd', 'Enable-Ripgrep', 'Enable-Less', 'Enable-Lazygit',
+                'Enable-Uv') {
                 Should -Invoke -ModuleName $script:Module $fn -Times 1 -Exactly
             }
             Should -Invoke -ModuleName $script:Module Initialize-PSReadline -Times 1 -Exactly

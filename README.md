@@ -47,7 +47,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, and lazygit through the
+  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, and uv through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -299,6 +299,22 @@ conflicts without leaving the keyboard. Launch it in any repo:
 lazygit             # open the TUI in the current repo (press ? for keybindings, q to quit)
 ```
 
+### uv — Python packages, environments, and interpreters
+
+One fast binary in place of pip, pip-tools, pipx, venv, and pyenv. It creates and manages a project's
+virtual environment for you, so `uv run` works without ever activating one:
+
+```powershell
+uv init myproj              # start a project (pyproject.toml + a lockfile)
+uv add requests             # add a dependency and update the lock
+uv run script.py            # run inside the project env, syncing it first
+uv python install 3.13      # install an interpreter, no system Python required
+uvx ruff check .            # run a tool in a throwaway env, nothing installed
+```
+
+uv is standalone — it never aliases or replaces `python`, `pip`, or `py`. `uvx` tab-completes; `uv`
+itself doesn't, because its completer is large enough to cost ~244 ms of every shell startup.
+
 ## Themes
 
 The module bundles two oh-my-posh themes under `Assets/Themes`, both built on the same palette-keyed
@@ -400,6 +416,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Ripgrep.ps1
 │   │   ├── Enable-Less.ps1
 │   │   ├── Enable-Lazygit.ps1
+│   │   ├── Enable-Uv.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   ├── Select-Fzf.ps1                 # pipe objects through fzf; returns the selected object(s) (bundles its private Invoke-FzfRaw seam in-file)
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
@@ -650,9 +667,9 @@ configure how each tool is wired, not whether it is present.
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
 model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
-installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit — fzf
+installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, uv — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias run alongside them,
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI, uv a standalone Python toolchain). git, oh-my-posh, and the `which` alias run alongside them,
 outside the tool catalog. Both sections always render. `Install-PwshProfile` installs the CLIs during
 setup, so at startup each install step short-circuits on `Get-Command` and costs almost nothing; a tool
 that is genuinely missing is installed here instead. Each section renders its own spinner
@@ -931,7 +948,7 @@ startup continues.
 Enable-Git
 ```
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Ripgrep`, `Enable-Less`, `Enable-Lazygit`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Ripgrep`, `Enable-Less`, `Enable-Lazygit`, `Enable-Uv`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -1056,6 +1073,18 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   puts `lazygit.exe` on PATH. lazygit is a self-contained TUI you launch by typing `lazygit`, with
   no built-in shell completion, so this is install-only — there's no Initialize work and no
   completion to register (like `Enable-Jq`).
+- **`Enable-Uv`** — installs `astral-sh.uv` (Astral's single-binary Python package and project
+  manager — dependency resolution, per-project virtual environments, interpreter installs, and
+  throwaway tool runs via `uvx`) and puts `uv.exe`, `uvx.exe`, and `uvw.exe` on PATH. In Initialize
+  it registers a completer for **`uvx` only**. A PowerShell completer is bound to a command name, so
+  `uv` would need its own — but `uv`'s is ~754 KB of generated PowerShell and costs about **244 ms of
+  every shell startup** to produce and parse, against ~49 ms for `uvx` and ~42 ms for ripgrep. That
+  made it the single most expensive step in the profile, so it's deliberately skipped; `uv` itself
+  does not tab-complete. (`uvw`, the console-less variant, is left uncompleted too.) Takes no
+  parameters. **uv is standalone —
+  it never aliases or replaces `python`, `pip`, or `py`.** Like ripgrep it isn't themed: it has no
+  color environment variable, and its defaults live in `pyproject.toml`/`uv.toml` files you own. It
+  has no init-time dependency on the other tools, so its position in the startup order is free.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
@@ -1069,6 +1098,7 @@ Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
 Enable-Ripgrep
 Enable-Less -Options '-R -F -i' -SetPager -ReplaceMore
 Enable-Lazygit
+Enable-Uv
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -1174,7 +1204,7 @@ runs with `--delimiter` / `--with-nth=2..` so the index column is hidden and `--
 the display **and the fuzzy search** to the text column (no `--nth` — it would re-index the
 post-`--with-nth` view and break matching), then the selected line's leading index maps back to the
 original object. It's invoked with `--ansi` and
-inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-ripgrep-enable-less-enable-lazygit) has themed fzf the
+inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-ripgrep-enable-less-enable-lazygit-enable-uv) has themed fzf the
 picker matches your prompt palette automatically. Requires `fzf` on PATH (it warns and returns nothing
 otherwise); an empty pipeline or an Esc cancel also returns nothing — it never throws.
 
@@ -1321,7 +1351,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit,
+- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, uv,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never
