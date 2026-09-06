@@ -81,7 +81,10 @@ function Show-PwshProfileToolInventory {
             if ($row.Installed) { Write-SpectreHost "  [$Color]✓[/] $label  [grey]already installed[/]" }
             else { Write-SpectreHost "  [$Color]↓[/] $label  [grey]will install[/]" }
         }
+        # The count stays attached to the rows it summarizes; the trailing blank separates the whole
+        # block from whatever the caller prints next -- in the Winget step, its settings rows.
         Write-SpectreHost "  [grey]$count[/]"
+        Write-SpectreHost ''
     }
     else {
         $plain = @(
@@ -89,8 +92,8 @@ function Show-PwshProfileToolInventory {
                 $mark = if ($row.Installed) { '[installed]' } else { '[will install]' }
                 "  $("$($row.Label)".PadRight($width))  $mark"
             }
-            ''
             "  $count"
+            ''
         ) -join [Environment]::NewLine
         Write-Host $plain
     }
