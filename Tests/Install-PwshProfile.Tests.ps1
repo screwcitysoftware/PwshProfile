@@ -904,6 +904,25 @@ Describe 'Invoke-PwshProfileWizard' {
         }
     }
 
+    It 'shows the tool inventory in the Winget step, before its change gate' {
+        # Ordering is the point: the list frames the winget settings question rather than trailing it
+        # -- scope and progress bar matter precisely because that is what they get applied to. It is
+        # also the earliest the plan can be seen, since the install runs after the review screen.
+        InModuleScope $script:Module {
+            $script:WingetOrder = [System.Collections.Generic.List[string]]::new()
+            Mock Show-PwshProfileToolInventory { $script:WingetOrder.Add('inventory') } -RemoveParameterType 'Color'
+            Mock Read-PwshProfileSettingChange {
+                if ($Message -eq 'Change these winget settings?') { $script:WingetOrder.Add('gate') }
+                $false
+            } -RemoveParameterType 'Accent'
+
+            $null = Invoke-PwshProfileWizard
+
+            $script:WingetOrder | Should -Contain 'inventory'
+            $script:WingetOrder.IndexOf('inventory') | Should -BeLessThan $script:WingetOrder.IndexOf('gate')
+        }
+    }
+
     It 'seeds the winget settings from Get-WingetSettingDefault and keeps the floated current values' {
         InModuleScope $script:Module {
             $s = Invoke-PwshProfileWizard
@@ -1013,10 +1032,6 @@ Describe 'Install-PwshProfile' {
         # The installer now installs the tool CLIs itself. Stub the shared winget helper so the suite
         # never touches winget -- without this every run would attempt the whole catalog.
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
-        # Stub the pre-install inventory panel too: unmocked it renders into the test output and walks
-        # $env:PATH once per catalog tool on every single test. Its own behavior lives in
-        # Tests/ToolInventory.Tests.ps1; the cases below only care that it is called, and when.
-        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { }
         Mock -ModuleName $script:Module Invoke-PwshProfileWizard {
             @{
                 BannerText = 'Screw City'; BannerColor = '#c9aaff'; BannerAlignment = 'Left'
@@ -1142,54 +1157,72 @@ Describe 'Install-PwshProfile' {
         Should -Invoke -ModuleName $script:Module Set-WingetSetting -Times 0 -Exactly
     }
 
-    It 'shows the tool inventory BEFORE opening the install step' {
-        # Ordering is the whole point. Invoke-Step's nested calls only mutate the live spinner, so
-        # the install collapses to one summary line -- the inventory is what tells you what is about
-        # to happen. It must render outside the step: writing to the host mid-spinner tears it.
-        $script:Order = [System.Collections.Generic.List[string]]::new()
-        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { $script:Order.Add('inventory') }
-        Mock -ModuleName $script:Module Invoke-Step {
-            if ($Description -like 'Tools (*') { $script:Order.Add('step') }
-            & $ScriptBlock
-        }
-
-        Install-PwshProfile -Path $script:Dest | Out-Null
-
-        $script:Order | Should -Contain 'inventory'
-        $script:Order.IndexOf('inventory') | Should -BeLessThan $script:Order.IndexOf('step')
-    }
-
-    It 'shows no inventory under -WhatIf' {
-        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { }
-        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
-        Install-PwshProfile -Path $script:Dest -WhatIf | Out-Null
-        Should -Invoke -ModuleName $script:Module Show-PwshProfileToolInventory -Times 0 -Exactly
-    }
-
     It 'installs quietly, so setup does not trip the startup-installed notice' {
         # Installing IS the expected work here; the notice exists to flag the opposite case.
-        Mock -ModuleName $script:Module Show-PwshProfileToolInventory { }
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Install-PwshProfile -Path $script:Dest | Out-Null
         Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 0 -Exactly `
             -ParameterFilter { -not $Quiet }
     }
 
-    It 'installs every winget tool in the catalog, from the catalog metadata' {
+    It 'opens a top-level step per package it actually installs' {
+        # The point of the whole arrangement: TOP-LEVEL, so each writes its own permanent line with
+        # real elapsed time. Nested, they would only mutate the transient spinner and leave nothing
+        # behind -- which is the opaque single line this replaces.
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
+            @(
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; Installed = $false }
+                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; Installed = $true }
+            )
+        }
 
         Install-PwshProfile -Path $script:Dest | Out-Null
 
-        $expected = & (Get-Module $script:Module) { @((Get-PwshProfileToolCatalog)['WinGet']) }
-        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe `
-            -Times $expected.Count -Exactly
-        foreach ($tool in $expected) {
-            Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 1 -Exactly `
-                -ParameterFilter { $Id -eq $tool.PackageId -and $Exe -eq $tool.Exe }
-        }
-        # Install-time chrome is a gear, independent of the runtime step icon being configured.
         Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
-            -ParameterFilter { $Description -like 'Tools (*packages)' -and $Icon -eq ':gear:' }
+            -ParameterFilter { $Description -eq 'Installing uv (Python toolchain)' -and $Icon -eq ':gear:' }
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 1 -Exactly `
+            -ParameterFilter { $Id -eq 'astral-sh.uv' -and $Exe -eq 'uv.exe' }
+    }
+
+    It 'gives an already-present tool no line and no install call' {
+        # Nine `[ 3ms]` lines for tools that were already there would be noise, and the helper would
+        # short-circuit on Get-Command anyway.
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
+            @(
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; Installed = $false }
+                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; Installed = $true }
+            )
+        }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 0 -Exactly `
+            -ParameterFilter { $Description -like '*zoxide*' }
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 0 -Exactly `
+            -ParameterFilter { $Id -eq 'a.zoxide' }
+    }
+
+    It 'renders one reassuring line when every tool is already present' {
+        # Silence would read as "did it skip the tools?". The body re-runs the short-circuit for all
+        # of them, so the line carries a real elapsed time rather than 0ms.
+        Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
+        Mock -ModuleName $script:Module Get-PwshProfileToolInventory {
+            @(
+                [pscustomobject]@{ Label = 'uv (Python toolchain)'; Token = 'Uv'; PackageId = 'astral-sh.uv'; Exe = 'uv.exe'; Installed = $true }
+                [pscustomobject]@{ Label = 'zoxide (smart cd)'; Token = 'Zoxide'; PackageId = 'a.zoxide'; Exe = 'zoxide.exe'; Installed = $true }
+            )
+        }
+
+        Install-PwshProfile -Path $script:Dest | Out-Null
+
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 1 -Exactly `
+            -ParameterFilter { $Description -eq 'Tools — all 2 already present' -and $Icon -eq ':gear:' }
+        Should -Invoke -ModuleName $script:Module Invoke-Step -Times 0 -Exactly `
+            -ParameterFilter { $Description -like 'Installing *' }
+        # Still verified, so a tool that vanished since the probe is caught.
+        Should -Invoke -ModuleName $script:Module Install-WingetPackageSafe -Times 2 -Exactly
     }
 
     It 'installs no tools under -WhatIf' {

@@ -529,7 +529,17 @@ The wizard walks one forward pass, then lets you revise anything before committi
    (**defaulting to No**) offers to set **`MesloLGM Nerd Font`** as your Windows Terminal default font
    via [`Set-WindowsTerminalFont`](#set-windowsterminalfont) — applied to `settings.json` when you
    submit (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
-2. **Winget** — a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
+2. **Winget** — first, **what winget is about to install**: a check for each tool already on this
+   machine, a down-arrow for each one setup will fetch, and a count.
+
+   ```text
+     ✓ zoxide (smart cd)        already installed
+     ✓ bat (cat replacement)    already installed
+     ↓ uv (Python toolchain)    will install
+     8 present · 3 to install
+   ```
+
+   Then a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
    settings: default install **scope** (`user` / `machine`), **progress-bar** style, whether to
    **anonymize displayed paths**, and whether to **suppress install notes**. It shows your current
    values first (noting any that differ from the recommended default) and asks whether to change them
@@ -578,23 +588,25 @@ The wizard walks one forward pass, then lets you revise anything before committi
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
 
-Before the tools are installed it shows you exactly what that will involve — a check for each tool
-already on this machine, a down-arrow for each one it's about to fetch:
-
-```text
-╭─◆ Tools ──────────────────────────────────────╮
-│  ✓ zoxide (smart cd)        already installed  │
-│  ✓ bat (cat replacement)    already installed  │
-│  ↓ uv (Python toolchain)    will install       │
-│                                                │
-│  8 present · 3 to install                      │
-╰────────────────────────────────────────────────╯
-```
-
 The same counts appear on the review screen, so a first run on a fresh machine doesn't surprise you
 with a long download after you've already committed. The review screen's **Submit**/**Cancel** is the
 gate — there's no separate "install these?" prompt, since declining wouldn't avoid the work anyway
 (startup would just install them later, more slowly and with less to show for it).
+
+Each package that actually gets fetched gets its own timed line, so a slow download is attributable
+rather than hidden inside one opaque step:
+
+```text
+⚙ Installing lazygit (git TUI)........................ [ 8421ms]
+⚙ Installing uv (Python toolchain).................... [12043ms]
+```
+
+Tools already present get no line — they cost a single `Get-Command` each. When there's nothing at
+all to fetch, you get one line saying so:
+
+```text
+⚙ Tools — all 11 already present...................... [   41ms]
+```
 
 On submit it applies the one-time machine actions — the Nerd Font install, the winget client settings,
 **the tool CLIs** (one timed step per package, after the winget settings so your scope and progress-bar

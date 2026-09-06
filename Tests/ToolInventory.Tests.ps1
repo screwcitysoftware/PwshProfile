@@ -59,20 +59,29 @@ Describe 'Show-PwshProfileToolInventory' {
         )
     }
 
-    # The rendered panel goes to the HOST via Out-Host, so it can't be captured from a stream --
-    # asserting on what is handed to Format-SpectrePanel is both possible and closer to the point:
-    # that string is exactly the content the panel draws.
     It 'marks present rows with a check and missing rows with a down-arrow' {
+        InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
+            param($R)
+            Mock Write-SpectreHost { }
+            Show-PwshProfileToolInventory -Tool $R
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*✓*zoxide*' }
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly -ParameterFilter { $Message -like '*↓*uv (Python toolchain)*' }
+            # Deliberately not a cross: a tool that simply hasn't been fetched yet is the expected
+            # state on a clean machine, not a failure.
+            Should -Invoke Write-SpectreHost -Times 0 -Exactly -ParameterFilter { $Message -like '*✗*' }
+        }
+    }
+
+    It 'renders rows, not a panel' {
+        # It draws inside the wizard's Winget step, under that step's own header panel -- a panel
+        # nested in a panel reads wrong, and Format-SpectrePanel would also need an Out-Host to stop
+        # its rendered string leaking into the caller's return value.
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
             Mock Format-SpectrePanel { } -RemoveParameterType 'Color'
             Show-PwshProfileToolInventory -Tool $R
-            Should -Invoke Format-SpectrePanel -Times 1 -Exactly -ParameterFilter { $Data -like '*✓*zoxide*' }
-            Should -Invoke Format-SpectrePanel -Times 1 -Exactly -ParameterFilter { $Data -like '*↓*uv (Python toolchain)*' }
-            # Deliberately not a cross: a tool that simply hasn't been fetched yet is the expected
-            # state on a clean machine, not a failure.
-            Should -Invoke Format-SpectrePanel -Times 0 -Exactly -ParameterFilter { $Data -like '*✗*' }
+            Should -Invoke Format-SpectrePanel -Times 0 -Exactly
         }
     }
 
@@ -80,10 +89,9 @@ Describe 'Show-PwshProfileToolInventory' {
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
-            Mock Format-SpectrePanel { } -RemoveParameterType 'Color'
             Show-PwshProfileToolInventory -Tool $R
-            Should -Invoke Format-SpectrePanel -Times 1 -Exactly `
-                -ParameterFilter { $Data -like '*1 present*1 to install*' }
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly `
+                -ParameterFilter { $Message -like '*1 present*1 to install*' }
         }
     }
 
@@ -91,21 +99,23 @@ Describe 'Show-PwshProfileToolInventory' {
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
             Mock Write-SpectreHost { }
-            Mock Format-SpectrePanel { } -RemoveParameterType 'Color'
             $all = @($R | ForEach-Object { $_.Installed = $true; $_ })
             Show-PwshProfileToolInventory -Tool $all
-            Should -Invoke Format-SpectrePanel -Times 1 -Exactly `
-                -ParameterFilter { $Data -like '*all 2 already installed*' -and $Data -notlike '*to install*' }
+            Should -Invoke Write-SpectreHost -Times 1 -Exactly `
+                -ParameterFilter { $Message -like '*all 2 already installed*' }
+            Should -Invoke Write-SpectreHost -Times 0 -Exactly `
+                -ParameterFilter { $Message -like '*to install*' -and $Message -notlike '*already installed*' }
         }
     }
 
-    It 'writes to the host, never to the pipeline' {
-        # Format-SpectrePanel emits its rendered string to the PIPELINE, so without the internal
-        # Out-Host the panel would leak into the caller's return value -- the same bug the wizard's
-        # step-header has a regression test for.
+    It 'returns nothing to the pipeline' {
+        # Rows go straight to the console via Write-SpectreHost. Guarded because the obvious
+        # alternative -- Format-SpectrePanel -- emits its rendered string to the PIPELINE, and would
+        # silently leak into whatever the caller returns.
         InModuleScope $script:Module -Parameters @{ R = $script:Rows } {
             param($R)
-            $captured = Show-PwshProfileToolInventory -Tool $R 6> $null
+            Mock Write-SpectreHost { }
+            $captured = Show-PwshProfileToolInventory -Tool $R
             $captured | Should -BeNullOrEmpty
         }
     }

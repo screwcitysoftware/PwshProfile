@@ -343,7 +343,13 @@ function Invoke-PwshProfileWizard {
     $stepWinget = {
         param($s, $i, $total)
         Write-PwshProfileStepHeader -Title 'Winget' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
-            -Body 'Tunes the **winget** client itself — the defaults in its `settings.json` that apply whenever you install packages. Applied once now; pre-filled from your current winget settings.'
+            -Body '**winget** is what installs the CLI tools below. This tunes the client itself — the defaults in its `settings.json` that apply whenever it installs a package. Applied once now; pre-filled from your current winget settings.'
+
+        # The tools winget is about to handle, shown BEFORE the settings so they frame the question
+        # rather than trailing it -- the scope and progress-bar answers matter precisely because this
+        # is what they will be applied to. Also the earliest point the plan can be seen: the install
+        # itself happens after the review screen, by which time you have already committed.
+        Show-PwshProfileToolInventory -Color $s.Accent
 
         # Show the current values (flagging any off the recommendation), then gate before prompting.
         $rec = Get-WingetSettingRecommended

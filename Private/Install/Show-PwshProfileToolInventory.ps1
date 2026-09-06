@@ -1,17 +1,22 @@
 function Show-PwshProfileToolInventory {
     <#
     .SYNOPSIS
-        Renders the tool inventory as a panel — a check for each tool already present, a down-arrow
-        for each one the install is about to fetch.
+        Renders the tool inventory as indented rows — a check for each tool already present, a
+        down-arrow for each one setup is about to fetch.
+
+        Display-only. Turns Get-PwshProfileToolInventory's rows into the same two-space-indent row
+        style Read-PwshProfileSettingChange uses, so the wizard's Winget step can say what winget is
+        about to install before asking about winget's settings.
 
     .DESCRIPTION
-        Display-only. Turns Get-PwshProfileToolInventory's rows into a rounded panel so the install
-        phase says what it is about to do, instead of collapsing into one summary line with no
-        indication of what was already there.
+        Rows rather than a panel: this renders INSIDE the Winget step, under that step's own header
+        panel, and a panel nested in a panel reads wrong. Writing rows directly also sidesteps the
+        Format-SpectrePanel trap — that emits its rendered string to the pipeline, so it needs an
+        Out-Host or it leaks into the caller's return value. Write-SpectreHost goes to the console.
 
-        MUST be called BEFORE Invoke-Step opens the install step, never inside it. Writing to the host
-        while a step's spinner is live tears the render — the same hazard Install-PwshProfile already
-        works around with `6> $null` on two of its other steps.
+        MUST NOT be called inside a running Invoke-Step: writing to the host while a spinner is live
+        tears the render, the same hazard Install-PwshProfile works around with `6> $null` on two of
+        its steps. The wizard runs before any step opens, so that is satisfied there.
 
         The glyphs are ✓ (present) and ↓ (will install), deliberately not ✗. A cross reads as a
         failure, and a tool that simply has not been fetched yet on a clean machine is the expected
@@ -29,13 +34,13 @@ function Show-PwshProfileToolInventory {
         calling it, so the common case is a bare invocation.
 
     .PARAMETER Color
-        Panel border and glyph color. Defaults to the installer's fixed accent, which is intentionally
-        decoupled from the prompt theme being configured.
+        Glyph color. Defaults to the installer's fixed accent, which is intentionally decoupled from
+        the prompt theme being configured.
 
     .EXAMPLE
         Show-PwshProfileToolInventory
 
-        Probes the catalog and renders the panel.
+        Probes the catalog and renders the rows.
 
     .EXAMPLE
         Show-PwshProfileToolInventory -Tool $inventory
@@ -43,9 +48,9 @@ function Show-PwshProfileToolInventory {
         Renders an inventory already gathered, avoiding a second PATH walk.
 
     .NOTES
-        Format-SpectrePanel emits its rendered string to the PIPELINE rather than the console, so the
-        `| Out-Host` is load-bearing: without it the panel leaks into the caller's return value. The
-        wizard has a regression test for exactly that leak.
+        Called from the wizard's Winget step, which is where the plan is most useful: before the
+        review screen, and next to the winget settings it explains the need for. The apply phase
+        reports actuals instead, one top-level Invoke-Step per package it genuinely installs.
     #>
     [CmdletBinding()]
     param(
@@ -69,19 +74,14 @@ function Show-PwshProfileToolInventory {
     else { "$($present.Count) present · $($missing.Count) to install" }
 
     if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) {
-        $lines = @(
-            foreach ($row in $rows) {
-                # Pad BEFORE escaping: escaping can lengthen the string (a '[' doubles), so padding
-                # afterwards would count escape characters and misalign the state column.
-                $label = Get-SpectreEscapedTextSafe -Text ("$($row.Label)".PadRight($width))
-                if ($row.Installed) { "  [$Color]✓[/] $label  [grey]already installed[/]" }
-                else { "  [$Color]↓[/] $label  [grey]will install[/]" }
-            }
-            ''
-            "  [grey]$count[/]"
-        ) -join [Environment]::NewLine
-
-        $lines | Format-SpectrePanel -Header '◆ Tools' -Border Rounded -Color $Color -Expand | Out-Host
+        foreach ($row in $rows) {
+            # Pad BEFORE escaping: escaping can lengthen the string (a '[' doubles), so padding
+            # afterwards would count escape characters and misalign the state column.
+            $label = Get-SpectreEscapedTextSafe -Text ("$($row.Label)".PadRight($width))
+            if ($row.Installed) { Write-SpectreHost "  [$Color]✓[/] $label  [grey]already installed[/]" }
+            else { Write-SpectreHost "  [$Color]↓[/] $label  [grey]will install[/]" }
+        }
+        Write-SpectreHost "  [grey]$count[/]"
     }
     else {
         $plain = @(

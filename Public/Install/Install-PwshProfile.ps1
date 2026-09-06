@@ -180,23 +180,35 @@ function Install-PwshProfile {
     # Skipped under -WhatIf. A tool that is already present costs one Get-Command; a failed install
     # warns from Install-WingetPackageSafe and startup installs it later, so nothing here throws.
     if (-not $WhatIfPreference) {
-        $wingetTools = @((Get-PwshProfileToolCatalog)['WinGet'])
-        if ($wingetTools.Count -gt 0) {
-            # Say what is about to happen BEFORE opening the step. Invoke-Step's nested calls only
-            # mutate the live spinner, which Spectre erases, so the install would otherwise collapse
-            # into a single summary line that can hide minutes of downloading. This must stay outside
-            # the step: writing to the host while a spinner is live tears the render.
-            Show-PwshProfileToolInventory -Tool (Get-PwshProfileToolInventory)
+        # Re-probe rather than reusing what the wizard's Winget step showed: several steps and the
+        # review screen sit in between, and Install-WingetPackageSafe patches $env:Path as it goes.
+        $inventory = @(Get-PwshProfileToolInventory)
+        $missing = @($inventory | Where-Object { -not $_.Installed })
 
-            Invoke-Step "Tools ($($wingetTools.Count) packages)" -Icon ':gear:' {
-                foreach ($tool in $wingetTools) {
-                    # Nested step per package, so a slow first-time install is attributable.
-                    # -Quiet: installing here is the expected thing, so it must not feed the
-                    # startup-installed notice, which exists to flag the opposite.
-                    Invoke-Step $tool.Token {
-                        Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
-                            -CallerName 'Install-PwshProfile' -Quiet
-                    }
+        if ($inventory.Count -gt 0 -and $missing.Count -eq 0) {
+            # Nothing to fetch. One reassuring line rather than silence; the body re-runs the
+            # short-circuit for every tool so the line carries a real elapsed time, and so a tool
+            # that vanished between the probe and here is still caught.
+            Invoke-Step "Tools — all $($inventory.Count) already present" -Icon ':gear:' {
+                foreach ($tool in $inventory) {
+                    Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
+                        -CallerName 'Install-PwshProfile' -Quiet
+                }
+            }
+        }
+        else {
+            # One TOP-LEVEL step per package that actually needs fetching, so each writes its own
+            # permanent line with real elapsed time and a slow download is attributable. Nested,
+            # these would only mutate the transient spinner and leave nothing behind -- which is the
+            # exact problem this replaces. Tools already present get no line at all: the helper
+            # short-circuits on Get-Command, and nine `[ 3ms]` lines would be noise.
+            #
+            # -Quiet: installing here is the expected work, so it must not feed the
+            # startup-installed notice, which exists to flag the opposite.
+            foreach ($tool in $missing) {
+                Invoke-Step "Installing $($tool.Label)" -Icon ':gear:' {
+                    Install-WingetPackageSafe -Id $tool.PackageId -Exe $tool.Exe `
+                        -CallerName 'Install-PwshProfile' -Quiet
                 }
             }
         }
