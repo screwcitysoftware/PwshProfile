@@ -1329,16 +1329,23 @@ Get-Process | Select-Fzf -Display { "{0} ({1})" -f $_.Name, $_.Id } -Multiple -P
 ### `Show-PwshProfileReadme`
 
 Renders this README straight from the installed module so the docs are one command away from any
-session. By default it prints to the console via `Show-Markdown`; pass `-Open` to hand `README.md`
-to the application registered for `.md` files instead (via `Invoke-Item`). Throws if the bundled
-README can't be found.
+session. By default it prints to the console via `Show-Markdown`, using the chosen bundled theme's
+header/code colors (PowerShell's own `Show-Markdown` defaults — reverse-video headers, a hardcoded
+gray-background code block — render badly against most terminal color schemes); the session's prior
+markdown-rendering settings are restored afterward, since `Set-MarkdownOption` would otherwise leak
+into any other `Show-Markdown` call for the rest of the session. Pass `-Open` to hand `README.md` to
+the application registered for `.md` files instead (via `Invoke-Item`); `-Theme` has no effect in
+that case. Throws if the bundled README can't be found.
 
+- **`-Theme`** — the bundled theme (tab-completes) whose header/code colors to render with, default
+  `screwcity`.
 - **`-Open`** — open the README in your default Markdown application instead of rendering it in the
   console.
 
 ```powershell
-Show-PwshProfileReadme          # render in the console with Show-Markdown
-Show-PwshProfileReadme -Open    # open README.md in the default Markdown app
+Show-PwshProfileReadme                     # render in the console with the screwcity theme's colors
+Show-PwshProfileReadme -Theme forestcity   # render with the Forest City theme's colors
+Show-PwshProfileReadme -Open               # open README.md in the default Markdown app
 ```
 
 ## Development
