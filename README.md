@@ -401,8 +401,10 @@ ScrewCitySoftware.PwshProfile/
 │       └── Import-ModuleSafe.ps1
 ├── Private/                             # internal helpers (loaded, not exported)
 │   ├── Install/                         # Install/Uninstall helpers: marker + block builders, the
-│   │   └── *PwshProfile*.ps1       #   wizard, feature tree, file writer, defaults, call builder, and
-│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser)
+│   │   └── *PwshProfile*.ps1       #   wizard, feature tree, file writer, defaults, call builder,
+│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser), and
+│   │                               #   Get-PwshProfileSettingSchema (source of truth for the
+│   │                               #   settable parameters and their metadata)
 │   ├── Startup/                         # opt-in resolution helpers (shared by startup + the wizard)
 │   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool token set
 │   │   └── Confirm-PwshProfileEnableAll.ps1   # bare-call "enable all?" confirm (guarded, no-hang)
