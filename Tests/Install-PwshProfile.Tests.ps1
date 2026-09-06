@@ -701,11 +701,11 @@ Describe 'Invoke-PwshProfileWizard' {
     }
 
 
-    It 'carries every prior setting through, including the two the wizard never prompts for' {
-        # BatTheme and BatStyle have no prompt anywhere in the wizard -- they exist purely as
-        # pass-through of the -PriorSetting re-seed list, so this is their only coverage. That list
-        # is about to become a projection of the settings schema, and a projection that quietly
-        # dropped them would otherwise go unnoticed.
+    It 'carries every prior setting through the re-seed' {
+        # Guards the -PriorSetting re-seed list, now a projection of the settings schema: a projection
+        # that quietly dropped a key would otherwise go unnoticed. All three reach a prompt pre-filled
+        # with the seeded value and the catch-all Read-SpectreText mock returns that default, so the
+        # values coming back unchanged is the re-seed working end to end.
         InModuleScope $script:Module {
             $prior = @{ BatTheme = 'Nord'; BatStyle = 'full'; ZoxideCommand = 'z' }
             $s = Invoke-PwshProfileWizard -PriorSetting $prior
@@ -745,6 +745,55 @@ Describe 'Invoke-PwshProfileWizard' {
             $s.Enable | Should -Not -Contain 'Bat'
             $s.ReplaceCat | Should -BeFalse
             Should -Invoke Read-SpectreConfirm -Times 0 -Exactly -ParameterFilter { $Message -eq 'Replace the built-in cat (Get-Content) with bat?' }
+        }
+    }
+
+    It 'prompts for the bat theme and style when bat is enabled' {
+        InModuleScope $script:Module {
+            Mock Read-SpectreText { 'Nord' } -ParameterFilter { $Message -eq 'bat syntax theme' }
+            Mock Read-SpectreText { 'full' } -ParameterFilter { $Message -eq 'bat style components' }
+
+            $s = Invoke-PwshProfileWizard
+            $s.Enable | Should -Contain 'Bat'
+            $s.BatTheme | Should -Be 'Nord'
+            $s.BatStyle | Should -Be 'full'
+        }
+    }
+
+    It 'pre-fills the bat prompts from the selected theme, so Enter keeps the branded values' {
+        InModuleScope $script:Module {
+            # The catch-all Read-SpectreText mock returns -DefaultAnswer, which is what pressing Enter
+            # does. screwcity's branded bat theme is Dracula; BatStyle has a static default.
+            $s = Invoke-PwshProfileWizard
+            $s.BatTheme | Should -Be 'Dracula'
+            $s.BatStyle | Should -Be 'numbers,changes,header'
+        }
+    }
+
+    It 'resets the bat settings (and skips their prompts) when bat is unchecked' {
+        InModuleScope $script:Module {
+            # Deselecting a tool on a re-run must not leave the prior run's values behind: Build gates
+            # -BatTheme on Bat being enabled, so a stale value would sit in the settings invisibly and
+            # reappear the moment bat was re-enabled.
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+
+            $s = Invoke-PwshProfileWizard -PriorSetting @{ BatTheme = 'Nord'; BatStyle = 'full' }
+            $s.Enable | Should -Not -Contain 'Bat'
+            $s.BatTheme | Should -Be 'Dracula'
+            $s.BatStyle | Should -Be 'numbers,changes,header'
+            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'bat syntax theme' }
+            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq 'bat style components' }
+        }
+    }
+
+    It 'resets the zoxide command (and skips its prompt) when zoxide is unchecked' {
+        InModuleScope $script:Module {
+            Mock Read-PwshProfileFeatureTree { @('PSReadLine', 'TerminalIcons', 'PoshGit', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Completions') } -RemoveParameterType 'Color'
+
+            $s = Invoke-PwshProfileWizard -PriorSetting @{ ZoxideCommand = 'z' }
+            $s.Enable | Should -Not -Contain 'Zoxide'
+            $s.ZoxideCommand | Should -Be 'cd'
+            Should -Invoke Read-SpectreText -Times 0 -Exactly -ParameterFilter { $Message -eq "zoxide's jump command (replaces cd)" }
         }
     }
 

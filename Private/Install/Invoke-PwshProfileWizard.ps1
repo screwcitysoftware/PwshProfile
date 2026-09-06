@@ -25,10 +25,11 @@ function Invoke-PwshProfileWizard {
           2. Winget: a curated set of winget client settings (install scope, progress bar, anonymize
              paths, suppress install notes), pre-filled from the live settings.json and gated behind a
              single "change these?" prompt that defaults to No.
-          3. Theme: a bundled oh-my-posh theme or a custom path. The bundled choice seeds the banner
-             color and step icon that later prompts pre-fill from; a custom path seeds neutral ones.
-             Re-picking a theme preserves any color/icon already customized. It then offers the
-             matching Windows Terminal color scheme, and if accepted, whether to make it the default.
+          3. Theme: a bundled oh-my-posh theme or a custom path. The bundled choice seeds every branded
+             setting later prompts pre-fill from (banner color, step icon, bat theme); a custom path
+             seeds neutral ones. Re-picking a theme preserves any of those already customized. It then
+             offers the matching Windows Terminal color scheme, and if accepted, whether to make it
+             the default.
           4. Banner: shows the current config and gates the per-setting prompts behind the same
              "change these?" pattern. Clearing the banner text hides the banner — since BannerText must
              be non-empty, a cleared text becomes -NoBanner rather than a shown-but-blank half-state.
@@ -320,6 +321,10 @@ function Invoke-PwshProfileWizard {
             ) -Accent $s.Accent -Code $s.Code
             $s.Settings.ZoxideCommand = Read-SpectreText -Message "zoxide's jump command (replaces cd)" -DefaultAnswer $s.Settings.ZoxideCommand
         }
+        else {
+            # Same reasoning as the bat block: a deselected tool must not leave a stale value behind.
+            $s.Settings.ZoxideCommand = $s.Def.ZoxideCommand
+        }
 
         if ($selected -contains 'Bat') {
             Write-PwshProfilePromptHelp @(
@@ -327,10 +332,26 @@ function Invoke-PwshProfileWizard {
                 'Replace the built-in `cat` (an alias for `Get-Content`) with **bat**, so `cat file` renders highlighted? Plain redirection and piping still work.'
             ) -Accent $s.Accent -Code $s.Code
             $s.Settings.ReplaceCat = [bool](Read-SpectreConfirm -Message 'Replace the built-in cat (Get-Content) with bat?' -Color $s.Accent -DefaultAnswer 'y')
+
+            # Pre-filled from the selected theme's branding, so pressing Enter keeps bat matching the
+            # prompt. A text prompt rather than a menu on purpose: the wizard runs before bat is
+            # installed, so `bat --list-themes` has nothing to enumerate yet.
+            Write-PwshProfilePromptHelp @(
+                'The syntax-highlighting theme **bat** uses, from `bat --list-themes`. It is pre-filled to match your prompt theme; `ansi` follows your terminal''s own colors.'
+            ) -Accent $s.Accent -Code $s.Code
+            $s.Settings.BatTheme = Read-SpectreText -Message 'bat syntax theme' -DefaultAnswer $s.Settings.BatTheme
+
+            Write-PwshProfilePromptHelp @(
+                'Which parts **bat** draws around your file: a comma-separated list of `numbers`, `changes` (git marks), `header`, `grid`, `rule`, `snip`. Use `full` for everything or `plain` for none.'
+            ) -Accent $s.Accent -Code $s.Code
+            $s.Settings.BatStyle = Read-SpectreText -Message 'bat style components' -DefaultAnswer $s.Settings.BatStyle
         }
         else {
-            # bat is opted out, so the cat-override setting is moot — keep it off.
+            # bat is opted out, so its settings are moot — return them to the defaults rather than
+            # leaving stale values the review panel would still show.
             $s.Settings.ReplaceCat = $false
+            $s.Settings.BatTheme = $s.Def.BatTheme
+            $s.Settings.BatStyle = $s.Def.BatStyle
         }
 
         if ($selected -contains 'Less') {
@@ -517,6 +538,7 @@ function Invoke-PwshProfileWizard {
             "[bold]Banner:[/]     $bannerLine"
             "[bold]Step icon:[/]  [$code]$(ConvertTo-EscapedText $set.StepIcon)[/]"
             "[bold]Features:[/]   $featuresLine"
+            if ($batOn) { "[bold]bat:[/]        [$code]$(ConvertTo-EscapedText $set.BatTheme)[/] [grey]/[/] [$code]$(ConvertTo-EscapedText $set.BatStyle)[/]" }
             "[bold]Nerd Fonts:[/] $fontsLine"
             "[bold]WT font:[/]    $wtFontLine"
             "[bold]WT scheme:[/]  $wtSchemeLine"
