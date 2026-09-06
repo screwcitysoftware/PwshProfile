@@ -47,7 +47,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, and lazygit through the
+  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, and lazygit through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -216,6 +216,22 @@ fd pattern ./src          # search within a specific path
 
 fd is standalone — it never replaces `Get-ChildItem` / `ls`.
 
+### ripgrep — fast content search
+
+fd's counterpart: where fd searches file *names*, `rg` searches file *contents*. It walks the tree
+recursively, respects `.gitignore`, and skips binaries — fast enough to grep a whole repo as you type:
+
+```powershell
+rg Invoke-Step            # every match under the current directory, with file:line
+rg -i todo                # case-insensitive (rg is case-sensitive by default)
+rg --type ps1 function    # only PowerShell files (rg --type-list shows all types)
+rg -l Enable-             # just the file names that match
+```
+
+ripgrep is standalone — it never replaces `Select-String` / `sls`. It isn't themed either: rg has no
+color environment variable, and its only knob for default flags (colors, `--smart-case`, and the rest)
+is a config file you point `$env:RIPGREP_CONFIG_PATH` at yourself.
+
 ### bat — `cat` with highlighting
 
 Prints files with syntax highlighting, line numbers, and git change marks, paging long files through
@@ -377,6 +393,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Jq.ps1
 │   │   ├── Enable-Bat.ps1
 │   │   ├── Enable-Fd.ps1
+│   │   ├── Enable-Ripgrep.ps1
 │   │   ├── Enable-Less.ps1
 │   │   ├── Enable-Lazygit.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
@@ -512,7 +529,7 @@ The wizard walks one forward pass, then lets you revise anything before committi
 6. **Features** (opt-in) — first a **mode** choice: *pick specific tools*, or *enable everything
    including tools added in future updates* (emits `-EnableAll`). "Specific" shows a grouped tree under
    two sections — **Core** (PSReadLine, Terminal-Icons, posh-git, shell completions) and **WinGet** (the
-   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit). On a re-run it **pre-checks your prior
+   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit). On a re-run it **pre-checks your prior
    selection**; on a clean first run **Core is pre-checked and WinGet is left unchecked** (so the
    light-install Core stuff is on by default, but each winget install is an explicit opt-in). Tools added
    to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
@@ -611,7 +628,7 @@ call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-En
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
 model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
-installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit — fzf
+installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
 fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias always run; everything
 else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
@@ -667,7 +684,7 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
 - **`-Enable`** — the tools to enable (opt-in): any of `PSReadLine`, `TerminalIcons`, `PoshGit`,
-  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Lazygit`, `Completions`. Only the listed tools run
+  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Ripgrep`, `Less`, `Lazygit`, `Completions`. Only the listed tools run
   (and the auto-installing ones install), so a tool added in a later module version never installs
   unless you add it here. `-Enable @()` enables nothing. oh-my-posh and the `which` alias always run
   and are not tokens.
@@ -891,7 +908,7 @@ startup continues.
 Enable-Git
 ```
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`, `Enable-Lazygit`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Ripgrep`, `Enable-Less`, `Enable-Lazygit`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -988,6 +1005,15 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
   `ls`/`eza`.) Enabled after `Enable-Fzf`
   so `fzf.exe` is on PATH when integration is evaluated.
+- **`Enable-Ripgrep`** — installs `BurntSushi.ripgrep.MSVC` (a very fast recursive search of file
+  *contents* that respects `.gitignore` — the content-search counterpart to fd's filename search) and
+  puts `rg.exe` on PATH. In Initialize it registers ripgrep's own PowerShell completer, which it
+  spells `rg --generate complete-powershell` — **not** fd's `--gen-completions powershell`. Takes no
+  parameters. **ripgrep is standalone — it never aliases or replaces `Select-String`/`sls`.** Like
+  less it isn't themed, but for a different reason: rg exposes no color environment variable at all,
+  and its only knob for default flags (colors, `--smart-case`, …) is a config file pointed at by
+  `$env:RIPGREP_CONFIG_PATH` — writing that file is left to you rather than done at startup. It has
+  no init-time dependency on the other tools, so its position in the startup order is free.
 - **`Enable-Less [-Options <string>] [-ReplaceMore]`** — installs `jftuga.less` (GNU less compiled
   standalone for Windows — a full-featured pager with color, search, and backward scroll, far beyond
   the built-in `more.com`). In Initialize it sets `$env:LESS` to `-Options` (default `-R -F -i`: raw
@@ -1011,6 +1037,7 @@ Enable-Xh
 Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
 Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
+Enable-Ripgrep
 Enable-Less -ReplaceMore
 Enable-Lazygit
 ```
@@ -1118,7 +1145,7 @@ runs with `--delimiter` / `--with-nth=2..` so the index column is hidden and `--
 the display **and the fuzzy search** to the text column (no `--nth` — it would re-index the
 post-`--with-nth` view and break matching), then the selected line's leading index maps back to the
 original object. It's invoked with `--ansi` and
-inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-less-enable-lazygit) has themed fzf the
+inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-ripgrep-enable-less-enable-lazygit) has themed fzf the
 picker matches your prompt palette automatically. Requires `fzf` on PATH (it warns and returns nothing
 otherwise); an empty pipeline or an Esc cancel also returns nothing — it never throws.
 
@@ -1265,7 +1292,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit,
+- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never

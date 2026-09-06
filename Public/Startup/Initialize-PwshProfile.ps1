@@ -10,7 +10,7 @@ function Initialize-PwshProfile {
              posh-git, and the shell completions (winget, Azure CLI, Tailscale, Docker, 1Password,
              GitHub CLI — registration only; they detect external CLIs and install nothing).
           3. "WinGet" (only when at least one winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat,
-             fd, less, and lazygit. Order matters twice — git leads Core so it is on PATH for posh-git
+             fd, ripgrep, less, and lazygit. Order matters twice — git leads Core so it is on PATH for posh-git
              and lazygit, and fd follows fzf so it can wire fzf to use fd as its file source.
 
         The two groups mirror the install model: WinGet = the CLIs installed via WinGet, Core =
@@ -105,7 +105,7 @@ function Initialize-PwshProfile {
 
     .PARAMETER Enable
         The tools to enable, from the Get-PwshProfileToolCatalog set: 'PSReadLine', 'TerminalIcons',
-        'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit'.
+        'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Ripgrep', 'Less', 'Lazygit'.
         Only the listed tools run, so a tool added in a later module version never installs until you
         add it here. Pass -Enable @() to enable nothing.
 
@@ -243,7 +243,7 @@ function Initialize-PwshProfile {
         # ValidateSet mirrors Get-PwshProfileToolCatalog -Token; Tests/ToolCatalog.Tests.ps1 keeps them
         # in sync. No default, so PSBoundParameters separates "passed empty" from "not passed".
         [Parameter()]
-        [ValidateSet('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit')]
+        [ValidateSet('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Ripgrep', 'Less', 'Lazygit')]
         [string[]]$Enable,
 
         [Parameter()]
@@ -372,6 +372,8 @@ function Initialize-PwshProfile {
             if ($enabled -contains 'Bat')    { Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat } }
             # After fzf so fzf.exe is on PATH when -IntegrateFzf is evaluated.
             if ($enabled -contains 'Fd')     { Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf:($enabled -contains 'Fzf') } }
+            # fd's content-search counterpart; no init-time dependency, so its position is free.
+            if ($enabled -contains 'Ripgrep') { Invoke-Step "ripgrep" { Enable-Ripgrep } }
             # No init-time dependency on the other tools, so its position is free.
             if ($enabled -contains 'Less')   { Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore } }
             # Standalone git TUI: no shell init, no completion, no dependencies — kept last.

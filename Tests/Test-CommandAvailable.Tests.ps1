@@ -109,7 +109,7 @@ Describe 'Test-CommandAvailable' {
             # This is the assertion that matters. A false negative here would silently skip a tool the
             # user actually has installed -- no error, just a feature quietly not working -- so the
             # cheap probe must never disagree with real command resolution on these names.
-            $names = 'oh-my-posh.exe', 'bat.exe', 'fd.exe', 'fzf.exe', 'less.exe', 'xh.exe',
+            $names = 'oh-my-posh.exe', 'bat.exe', 'fd.exe', 'rg.exe', 'fzf.exe', 'less.exe', 'xh.exe',
                      'xhs.exe', 'zoxide.exe', 'fnm.exe', 'git', 'az', 'docker', 'tailscale',
                      'op', 'gh', 'lazygit', 'scsdefinitelymissing'
             foreach ($name in $names) {

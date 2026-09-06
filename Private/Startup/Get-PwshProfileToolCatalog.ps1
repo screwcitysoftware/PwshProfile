@@ -40,7 +40,7 @@ function Get-PwshProfileToolCatalog {
     .EXAMPLE
         Get-PwshProfileToolCatalog -Token
 
-        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Less','Lazygit').
+        Returns @('PSReadLine','TerminalIcons','PoshGit','Completions','Zoxide','Fzf','Fnm','Xh','Jq','Bat','Fd','Ripgrep','Less','Lazygit').
 
     .EXAMPLE
         Get-PwshProfileToolCatalog -DefaultEnabled
@@ -82,6 +82,8 @@ function Get-PwshProfileToolCatalog {
             Help = '**bat** (cat replacement) — a `cat` with syntax highlighting and git integration; its theme blends with the prompt. You can replace the built-in `cat` with it.' }
         [pscustomobject]@{ Label = 'fd (file finder)'; Token = 'Fd'; Install = 'winget'
             Help = '**fd** (file finder) — a fast, friendly `find` alternative that respects `.gitignore`; its colors blend with the prompt and, with fzf, drive fzf''s file search. Standalone — it does not replace `Get-ChildItem`.' }
+        [pscustomobject]@{ Label = 'ripgrep (fast grep)'; Token = 'Ripgrep'; Install = 'winget'
+            Help = '**ripgrep** (fast grep) — a very fast recursive search of file *contents* that respects `.gitignore` — the content-search counterpart to fd. Standalone — it does not replace `Select-String`.' }
         [pscustomobject]@{ Label = 'less (pager)'; Token = 'Less'; Install = 'winget'
             Help = '**less** (pager) — a full-featured pager (color, search, backward scroll) that replaces the limited `more.com`; it is what lets `bat` page with color. You can route `help`/`more` and color CLIs through it.' }
         [pscustomobject]@{ Label = 'lazygit (git TUI)'; Token = 'Lazygit'; Install = 'winget'

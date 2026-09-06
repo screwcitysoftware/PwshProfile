@@ -36,6 +36,7 @@ Describe 'Initialize-PwshProfile' {
         Mock -ModuleName $script:Module Enable-Jq { }
         Mock -ModuleName $script:Module Enable-Bat { }
         Mock -ModuleName $script:Module Enable-Fd { }
+        Mock -ModuleName $script:Module Enable-Ripgrep { }
         Mock -ModuleName $script:Module Enable-Less { }
         Mock -ModuleName $script:Module Enable-Lazygit { }
         Mock -ModuleName $script:Module Enable-WingetCompletion { }
@@ -71,6 +72,8 @@ Describe 'Initialize-PwshProfile' {
             # fd enables with the screwcity LS_COLORS blend and fzf integration on.
             Should -Invoke -ModuleName $script:Module Enable-Fd -Times 1 -Exactly `
                 -ParameterFilter { $LsColors -like '*di=1;38;2;201;170;255*' -and $IntegrateFzf }
+            # ripgrep enables (install + completion only, no arguments).
+            Should -Invoke -ModuleName $script:Module Enable-Ripgrep -Times 1 -Exactly
             # less enables with the pager-override left off.
             Should -Invoke -ModuleName $script:Module Enable-Less -Times 1 -Exactly `
                 -ParameterFilter { -not $ReplaceMore }
