@@ -1,3 +1,9 @@
+# Parameters this function used to accept and no longer does. Declared here, at file top outside the
+# function (the same module-state shape Invoke-Step uses), so that "add the name here when you retire
+# a parameter" is a findable instruction rather than folklore. Naming them buys a targeted message:
+# a retired name means the caller's profile block is stale, which has a different fix from a typo.
+$script:RetiredParameter = @('Enable', 'EnableAll')
+
 function Initialize-PwshProfile {
     <#
     .SYNOPSIS
@@ -120,6 +126,15 @@ function Initialize-PwshProfile {
     .PARAMETER NoBanner
         Render no startup banner. Use this rather than clearing -BannerText, which rejects empty.
         Banner params passed alongside it are warned about and ignored.
+
+    .PARAMETER LegacyArgument
+        Not passed directly. Collects any argument the parameter binder could not match, so that a
+        retired parameter warns rather than throwing. A profile block written by an older version of
+        the module — every one of them passed -Enable or -EnableAll, which no longer exist — would
+        otherwise die on a ParameterBindingException before this function's body ran, leaving the
+        shell with no prompt, no tools and no completions. Retired names get a message naming
+        Install-PwshProfile; anything else is reported as a possible typo. Both are warnings, so
+        startup always continues.
 
     .EXAMPLE
         Initialize-PwshProfile
@@ -256,8 +271,37 @@ function Initialize-PwshProfile {
         [string]$FzfTabChord = 'Ctrl+Spacebar',
 
         [Parameter()]
-        [switch]$NoBanner
+        [switch]$NoBanner,
+
+        # Absorbs anything the binder can't match, so a profile block written by an older version of
+        # the module warns instead of dying on a ParameterBindingException. Without this, a retired
+        # parameter throws BEFORE the body runs -- no banner, no prompt, no tools, nothing -- which
+        # is exactly the "never throw out of profile startup" rule this module is built on.
+        [Parameter(ValueFromRemainingArguments)]
+        [object[]]$LegacyArgument
     )
+
+    # Report anything the binder could not match, then carry on. Guard on $null, NOT on .Count: with
+    # no remaining arguments $LegacyArgument is $null, and $null.Count throws under
+    # Set-StrictMode -Version Latest (which the suite and CI run), so the naive check would make this
+    # shim the very thing it exists to prevent. @($null).Count is 1, so that is no use either.
+    if ($null -ne $LegacyArgument) {
+        $caught = @($LegacyArgument | Where-Object { $null -ne $_ } | ForEach-Object { "$_" })
+        # A retired parameter arrives as its own element ('-Enable'), with any value following as a
+        # separate one; only the flag-shaped elements are worth naming back to the user.
+        $flags = @($caught | Where-Object { $_ -like '-*' } | ForEach-Object { $_.TrimStart('-') })
+        $retired = @($flags | Where-Object { $_ -in $script:RetiredParameter })
+        if ($retired.Count -gt 0) {
+            Write-Warning ("Initialize-PwshProfile ignored retired parameter(s): -$($retired -join ', -'). " +
+                'Your profile block was written by an older version of the module and every tool now ' +
+                'runs regardless — run Install-PwshProfile to regenerate it.')
+        }
+        else {
+            $shown = if ($flags.Count -gt 0) { @($flags | ForEach-Object { "-$_" }) } else { $caught }
+            Write-Warning ("Initialize-PwshProfile ignored unrecognized argument(s): $($shown -join ', '). " +
+                'Check for a typo, or run Install-PwshProfile to regenerate your profile block.')
+        }
+    }
 
     # Resolve the oh-my-posh config and matching branding. A custom theme has no bundled branding, so
     # it falls back to screwcity ($Theme keeps its default even in the Custom parameter set).

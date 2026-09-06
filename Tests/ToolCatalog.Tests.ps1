@@ -57,6 +57,11 @@ Describe 'Get-PwshProfileToolCatalog' {
     It 'has no tool-selection parameters left on Initialize-PwshProfile' {
         # Every tool always runs. This is a tripwire against reintroducing an opt-in parameter without
         # also restoring the catalog<->ValidateSet anti-drift check that used to guard it.
+        #
+        # Still absent by design even though old profiles pass them: they are absorbed by
+        # Initialize-PwshProfile's ValueFromRemainingArguments catch-all and named in
+        # $script:RetiredParameter, so a stale block warns rather than throwing. That shim adds no
+        # parameter by these names, which is why this assertion survives it unchanged.
         $p = (Get-Command Initialize-PwshProfile).Parameters
         $p.ContainsKey('Enable') | Should -BeFalse
         $p.ContainsKey('EnableAll') | Should -BeFalse

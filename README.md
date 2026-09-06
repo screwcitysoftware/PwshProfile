@@ -733,6 +733,18 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-NoBanner`** — render no startup banner. Use this to suppress the banner rather than clearing
   `-BannerText` (which rejects empty); banner params passed alongside it are warned-and-ignored.
 
+**An argument it doesn't recognize is warned about and ignored, never thrown.** Startup that throws
+leaves you with no prompt, no tools and no completions at all, so an unmatched argument can't be
+allowed to abort it. A parameter this module used to accept and has since retired says so and names
+`Install-PwshProfile`; anything else is reported as a possible typo. If you see either, regenerate
+your profile block:
+
+```powershell
+WARNING: Initialize-PwshProfile ignored retired parameter(s): -EnableAll. Your profile block was
+written by an older version of the module and every tool now runs regardless — run
+Install-PwshProfile to regenerate it.
+```
+
 Every parameter is optional, and a wizard-generated call carries only the ones you changed — so an
 install that customized nothing writes the bare call.
 

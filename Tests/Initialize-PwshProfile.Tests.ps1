@@ -334,6 +334,62 @@ Describe 'Initialize-PwshProfile' {
         }
     }
 
+    Context 'retired and unrecognized arguments' {
+        It 'emits no warning for a normal call' {
+            # THE regression guard. With no remaining arguments $LegacyArgument is $null, and
+            # $null.Count throws under Set-StrictMode -Version Latest -- which this suite runs. A
+            # .Count-based guard would make the shim throw on every single startup, which is the exact
+            # failure it exists to prevent. Keep this first.
+            Initialize-PwshProfile -WarningVariable warnings -WarningAction SilentlyContinue
+            $warnings | Should -BeNullOrEmpty
+        }
+
+        It 'does not throw on a retired parameter' {
+            # Every profile block written before the tool-selection parameters were retired passes
+            # -Enable or -EnableAll. Binding would fail before the body ran, so startup would produce
+            # nothing at all -- no prompt, no tools -- violating "never throw out of profile startup".
+            # Note: no -WarningVariable here. A scriptblock is its own scope, so a -WarningVariable
+            # set inside one never reaches the test; the warning text is asserted separately below.
+            { Initialize-PwshProfile -EnableAll -WarningAction SilentlyContinue } | Should -Not -Throw
+        }
+
+        It 'warns about a retired parameter and still runs startup' {
+            Initialize-PwshProfile -EnableAll -WarningVariable warnings -WarningAction SilentlyContinue
+            "$warnings" | Should -BeLike '*-EnableAll*'
+            "$warnings" | Should -BeLike '*Install-PwshProfile*'
+            # Startup still actually ran.
+            Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
+        }
+
+        It 'swallows a retired parameter''s value along with the flag' {
+            Initialize-PwshProfile -Enable Zoxide, Bat -WarningVariable warnings -WarningAction SilentlyContinue
+            "$warnings" | Should -BeLike '*-Enable*'
+            Should -Invoke -ModuleName $script:Module Enable-OhMyPosh -Times 1 -Exactly
+        }
+
+        It 'still binds the valid parameters alongside a retired one' {
+            Initialize-PwshProfile -Theme forestcity -EnableAll -ReplaceCat `
+                -WarningVariable warnings -WarningAction SilentlyContinue
+            Should -Invoke -ModuleName $script:Module Enable-Bat -Times 1 -Exactly `
+                -ParameterFilter { $Theme -eq 'gruvbox-dark' -and $ReplaceCat }
+        }
+
+        It 'reports an unrecognized argument as a possible typo, not a stale profile' {
+            # Different cause, different fix: a typo needs correcting, a retired name needs a re-run.
+            Initialize-PwshProfile -BannerColur Green -WarningVariable warnings -WarningAction SilentlyContinue
+            "$warnings" | Should -BeLike '*-BannerColur*'
+            "$warnings" | Should -BeLike '*typo*'
+        }
+
+        It 'does not let a typo''s value land on the positional -BannerText' {
+            # -BannerText is Position 0, so the danger is `-BannerColur Green` quietly renaming the
+            # banner to "Green". The binder absorbs the flag and its value together instead.
+            Initialize-PwshProfile -BannerColur Green -WarningVariable warnings -WarningAction SilentlyContinue
+            Should -Invoke -ModuleName $script:Module Write-Figlet -Times 1 -Exactly `
+                -ParameterFilter { $Text -ne 'Green' }
+        }
+    }
+
     Context 'validation' {
         It 'rejects a non-existent -CustomTheme path' {
             { Initialize-PwshProfile -CustomTheme 'X:\does\not\exist.omp.json' } | Should -Throw
