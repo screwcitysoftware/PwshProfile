@@ -389,15 +389,18 @@ function Initialize-PwshProfile {
     Invoke-Step "WinGet" -Icon $StepIcon {
         Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand }
         Invoke-Step "fzf" {
-            # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell) and uses fd
-            # for traversal. -GitKeyBindings is opt-in (lazygit covers git); Enable-Fzf drops it when
-            # git isn't on PATH. -Height overrides PSFzf's inline 40% default with an adaptive one.
-            # -TabExpansionChord leaves Tab as MenuComplete. The Ctrl+T preview is scoped to
-            # $env:FZF_CTRL_T_OPTS by Enable-Fzf and inherits $env:BAT_THEME.
+            # PSFzf supplies the Ctrl+T/Ctrl+R/Alt+C bindings (fzf ships none for PowerShell) and uses
+            # fd for traversal. -DirectoryChord is passed explicitly (rather than left to PSFzf's own
+            # one-time import-time default) so it's re-asserted on every reload the same way
+            # -ProviderChord/-HistoryChord already are -- otherwise Initialize-PSReadline's -EditMode
+            # reset wipes it on a reload with nothing to rebind it. -GitKeyBindings is opt-in (lazygit
+            # covers git); Enable-Fzf drops it when git isn't on PATH. -Height overrides PSFzf's inline
+            # 40% default with an adaptive one. -TabExpansionChord leaves Tab as MenuComplete. The
+            # Ctrl+T preview is scoped to $env:FZF_CTRL_T_OPTS by Enable-Fzf and inherits $env:BAT_THEME.
             Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' `
                 -PreviewCommand 'bat --color=always --style=numbers {}' `
-                -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord $FzfTabChord `
-                -UseFd -GitKeyBindings:$FzfGitKeyBindings
+                -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -DirectoryChord 'Alt+c' `
+                -TabExpansionChord $FzfTabChord -UseFd -GitKeyBindings:$FzfGitKeyBindings
         }
         Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager }
         Invoke-Step "xh" { Enable-Xh -ReplaceHttp:$ReplaceHttp }

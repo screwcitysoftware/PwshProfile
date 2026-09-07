@@ -117,4 +117,20 @@ Describe 'Enable-Fzf' {
         Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
             -ParameterFilter { $Key -eq 'Ctrl+j' }
     }
+
+    It 'imports PSFzf and re-asserts Alt+C via Set-PsFzfOption when -DirectoryChord is given' {
+        # PSFzf only binds this chord as a one-time module-load side effect, which a reload's no-op
+        # re-import never re-triggers -- Set-PsFzfOption must be the thing that restores it every call.
+        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'Set-PsFzfOption' }
+        Mock -ModuleName $script:Module Set-PsFzfOption { }
+        Enable-Fzf -DirectoryChord 'Alt+c'
+        Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 1 -Exactly
+        Should -Invoke -ModuleName $script:Module Set-PsFzfOption -Times 1 -Exactly `
+            -ParameterFilter { $PSReadlineChordSetLocation -eq 'Alt+c' }
+    }
+
+    It 'does not import PSFzf when -DirectoryChord is empty and nothing else needs it' {
+        Enable-Fzf -DirectoryChord ''
+        Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 0 -Exactly
+    }
 }

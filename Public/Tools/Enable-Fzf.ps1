@@ -55,6 +55,16 @@ function Enable-Fzf {
         The PSReadLine chord for PSFzf's fuzzy history search (e.g. 'Ctrl+r'), overriding PSReadLine's
         native reverse-search on that chord. Empty leaves it unbound.
 
+    .PARAMETER DirectoryChord
+        The PSReadLine chord for PSFzf's fuzzy directory picker / cd (e.g. 'Alt+c'). PSFzf binds this
+        itself as a one-time side effect of its own module import, which only fires the first time
+        PSFzf loads in the process — a profile reload's Import-Module PSFzf is a no-op and never
+        re-runs it, so a chord bound that way is silently lost after Initialize-PSReadline's
+        -EditMode reset wipes the key map on the next reload. Passing it here instead makes
+        Set-PsFzfOption re-assert it on every Enable-Fzf call, the same way -ProviderChord/
+        -HistoryChord already do, so it survives a reload rather than depending on PSFzf's one-time
+        import behavior. Empty leaves it unbound.
+
     .PARAMETER TabExpansionChord
         A PSReadLine chord bound to PSFzf's Invoke-FzfTabCompletion, opening a fuzzy picker over
         PowerShell's native completion candidates — paths, cmdlet/parameter names, and every registered
@@ -65,8 +75,9 @@ function Enable-Fzf {
 
     .PARAMETER UseFd
         Calls Set-PsFzfOption -EnableFd so PSFzf uses fd for its own traversal. In practice this
-        governs only PSFzf's directory lookup (Alt+C) — Ctrl+T prefers $env:FZF_DEFAULT_COMMAND, and
-        Enable-Fd sets both that and $env:FZF_ALT_C_COMMAND. fd is invoked later, at key-press time.
+        governs only PSFzf's directory lookup (-DirectoryChord, typically Alt+C) — Ctrl+T prefers
+        $env:FZF_DEFAULT_COMMAND, and Enable-Fd sets both that and $env:FZF_ALT_C_COMMAND. fd is
+        invoked later, at key-press time.
 
     .PARAMETER GitKeyBindings
         Registers PSFzf's Ctrl+G,Ctrl+<key> fuzzy-git chords: B branches, F files, H hashes,
@@ -81,8 +92,8 @@ function Enable-Fzf {
     .EXAMPLE
         Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff' -Style full -Height '~100%' `
             -PreviewCommand 'bat --color=always --style=numbers {}' `
-            -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord 'Ctrl+Spacebar' `
-            -UseFd -GitKeyBindings
+            -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -DirectoryChord 'Alt+c' `
+            -TabExpansionChord 'Ctrl+Spacebar' -UseFd -GitKeyBindings
 
         Themes fzf, gives the Ctrl+T picker a bat preview, and binds the full PSFzf chord set.
 
@@ -117,6 +128,9 @@ function Enable-Fzf {
 
         [Parameter()]
         [string]$HistoryChord,
+
+        [Parameter()]
+        [string]$DirectoryChord,
 
         [Parameter()]
         [string]$TabExpansionChord,
@@ -177,6 +191,10 @@ function Enable-Fzf {
             $psfzf = @{}
             if (-not [string]::IsNullOrWhiteSpace($ProviderChord)) { $psfzf.PSReadlineChordProvider = $ProviderChord }
             if (-not [string]::IsNullOrWhiteSpace($HistoryChord))  { $psfzf.PSReadlineChordReverseHistory = $HistoryChord }
+            # Re-asserted here (not left to PSFzf's own one-time import-time default) so it survives
+            # a reload: PSFzf only binds this as top-level module-load script that runs once per
+            # process, and Import-ModuleSafe's non-forced re-import is a no-op on a second call.
+            if (-not [string]::IsNullOrWhiteSpace($DirectoryChord)) { $psfzf.PSReadlineChordSetLocation = $DirectoryChord }
             if ($UseFd) { $psfzf.EnableFd = $true }
             if (Test-FzfGitKeyBindingGate -GitKeyBindings:$GitKeyBindings) { $psfzf.GitKeyBindings = $true }
             # -TabExpansionChord needs PSFzf too, so fold it into the "do we need PSFzf?" decision.
