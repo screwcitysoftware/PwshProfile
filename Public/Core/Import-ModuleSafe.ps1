@@ -65,7 +65,10 @@ function Import-ModuleSafe {
         [string]$Repository = 'PSGallery'
     )
 
-    if (-not (Get-Module -ListAvailable -Name $Name)) {
+    # Test-ModuleAvailable rather than Get-Module -ListAvailable: the latter parses every manifest on
+    # PSModulePath (~50ms) to answer a question two cheap checks settle in ~0.3ms, and this runs about
+    # five times per shell start.
+    if (-not (Test-ModuleAvailable -Name $Name)) {
         try {
             Install-PSResource -Name $Name -Repository $Repository -Scope $Scope -TrustRepository -ErrorAction Stop
         }
@@ -79,19 +82,18 @@ function Import-ModuleSafe {
         Import-Module $Name -ErrorAction Stop
     }
     catch {
+        $importError = $_
         if ($Repair) {
             # Best-effort recovery, then one retry; only warn if the retry also fails.
             & $Repair
             try {
                 Import-Module $Name -ErrorAction Stop
+                $importError = $null
             }
-            catch {
-                Write-Warning "Import-ModuleSafe: could not import '$Name': $($_.Exception.Message)"
-                return
-            }
+            catch { $importError = $_ }
         }
-        else {
-            Write-Warning "Import-ModuleSafe: could not import '$Name': $($_.Exception.Message)"
+        if ($importError) {
+            Write-Warning "Import-ModuleSafe: could not import '$Name': $($importError.Exception.Message)"
             return
         }
     }

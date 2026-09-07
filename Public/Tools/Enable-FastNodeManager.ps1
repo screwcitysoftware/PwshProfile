@@ -17,11 +17,22 @@ function Enable-FastNodeManager {
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction (6.2+), which fires
         after *any* location change — `cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..` —
         so it works whether or not zoxide is enabled and regardless of zoxide's jump command.
-        On every filesystem change it runs `fnm use --silent-if-unchanged`: fnm resolves the
-        version recursively (the strategy set by `fnm env`), reverting to the default version
-        outside a Node project, and emits nothing unless the active version actually changes — so
-        moving around a non-Node tree is silent and produces no error. It chains any pre-existing
-        LocationChangedAction and is guarded against re-registering on profile reload.
+        Spawning fnm costs roughly 41ms, and paying that on every `cd` is latency you feel, so the
+        hook first walks up for the files fnm itself reads — `.nvmrc`, `.node-version`, `package.json` —
+        at about 2ms, stamping each with its write time, and runs `fnm use --silent-if-unchanged`
+        only when that stamp changes. Unchanged means fnm would resolve identically.
+
+        Three details make the gate correct. It compares the stamp rather than merely checking
+        whether a version file exists, because fnm reverts to the default on the way OUT of a
+        project — skipping there would strand the project's version after you cd away. It includes
+        the write time, so bumping a pinned version is picked up on the next cd rather than only
+        after leaving and re-entering. And it stamps every version file up the chain, since a nearer
+        `package.json` without an `engines.node` field does not stop fnm resolving a `.nvmrc`
+        further up. Moving inside one project without editing, or between two non-Node directories,
+        is skipped.
+
+        It chains any pre-existing LocationChangedAction and is guarded against re-registering on
+        profile reload.
 
         If the install doesn't produce fnm.exe on PATH, a warning is emitted (with winget's
         captured output) and Initialize is skipped (guarded by Get-Command) so profile startup
@@ -43,43 +54,66 @@ function Enable-FastNodeManager {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command fnm.exe -ErrorAction SilentlyContinue) {
-            # Run in the global scope (not this module's) so the emitted env/completion helpers
-            # aren't tagged to the module — see Private/Invoke-InGlobalScope.ps1.
+        if (Test-CommandAvailable -Name 'fnm.exe') {
+            # Global scope so the emitted env/completion helpers aren't tagged to this module.
             Invoke-InGlobalScope (fnm env --version-file-strategy=recursive --shell powershell | Out-String)
             Invoke-InGlobalScope (fnm completions --shell powershell | Out-String)
 
-            # Auto-switch the node version on every directory change via PowerShell's
-            # LocationChangedAction (fires for cd, z/cdi, Set-Location, Push-Location, .., etc.),
-            # so it works without zoxide and regardless of zoxide's --cmd. Run in the global scope
-            # so the handler and its $global:__fnm_loc_base capture aren't tagged to the module and
-            # resolve when the hook fires later from the prompt. This matches fnm's own --use-on-cd
-            # integration: a thin `fnm use --silent-if-unchanged` on each change.
-            #
-            # Capture any pre-existing handler ONCE (guarded by $global:__fnm_loc_hooked) so a
-            # profile reload doesn't re-capture our own wrapper and stack fnm calls. The base is
-            # Enable-Zoxide's LocationChangedAction (it runs first and also hooks here) or $null;
-            # either way fnm chains onto it so both fire. But always (re)install the wrapper, so
-            # reloading the profile in a live session repairs or updates the hook rather than leaving
-            # a stale one frozen behind the guard.
+            # Auto-switch the node version on directory change via LocationChangedAction (fires for
+            # cd, z/cdi, Set-Location, Push-Location, .., etc.), so it works without zoxide and
+            # regardless of zoxide's --cmd. Global scope so the handler and its globals resolve when
+            # the hook fires later from the prompt.
+            # Capture the pre-existing handler once ($global:__fnm_loc_hooked) so a reload doesn't
+            # re-capture our own wrapper and stack fnm calls, but always reinstall the wrapper so a
+            # reload repairs it. The base is Enable-Zoxide's handler (it runs first) or $null.
             Invoke-InGlobalScope @'
 if (-not (Get-Variable -Name __fnm_loc_hooked -Scope Global -ErrorAction SilentlyContinue)) {
     $global:__fnm_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
     $global:__fnm_loc_hooked = $true
 }
+if (-not (Get-Variable -Name __fnm_last_version_stamp -Scope Global -ErrorAction SilentlyContinue)) {
+    $global:__fnm_last_version_stamp = $null
+}
 $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     param($source, $eventArgs)
     # The captured base is an EventHandler delegate (the property's type), so call .Invoke.
     if ($null -ne $global:__fnm_loc_base) { $global:__fnm_loc_base.Invoke($source, $eventArgs) }
-    # Switch the node version for the new directory. fnm resolves the version recursively (the
-    # FNM_VERSION_FILE_STRATEGY set by `fnm env`); outside a Node project it falls back to the
-    # default version, and with --silent-if-unchanged it emits nothing to stdout/stderr unless the
-    # active version actually changes — so no version-file gate is needed (verified on fnm 1.39).
-    # Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op. Pipe through Out-Host:
-    # PowerShell discards stdout emitted inside a LocationChangedAction, and fnm writes its
-    # "Using Node vX.X.X" confirmation to stdout — so without Out-Host the switch is invisible.
+
+    # Guard on the FileSystem provider so cd into Registry:/Cert: is a no-op.
     $new = $eventArgs.NewPath
-    if ($new -and $new.Provider.Name -eq 'FileSystem') {
+    if (-not $new -or $new.Provider.Name -ne 'FileSystem') { return }
+
+    # Stamp what fnm would see, walking up as its recursive strategy does. Spawning fnm costs ~41ms on
+    # EVERY directory change; this walk costs ~2ms. The file list must cover at least what fnm reads --
+    # verified as .nvmrc, .node-version and package.json (engines.node). Erring wide only costs a
+    # redundant spawn; erring narrow leaves the wrong node version active.
+    #
+    # Every version file up the chain is stamped, not just the nearest: a closer package.json without
+    # an engines.node field does not stop fnm resolving a .nvmrc further up, so tracking only the first
+    # match would miss an edit to the file actually in effect. The write time is part of the stamp so
+    # bumping a pinned version is picked up on the next cd, rather than only after leaving and
+    # re-entering the project.
+    $parts = [System.Collections.Generic.List[string]]::new()
+    $dir = $new.ProviderPath
+    while ($dir) {
+        foreach ($name in '.nvmrc', '.node-version', 'package.json') {
+            $candidate = Join-Path $dir $name
+            if ([System.IO.File]::Exists($candidate)) {
+                $parts.Add($candidate + '|' + [System.IO.File]::GetLastWriteTimeUtc($candidate).Ticks)
+            }
+        }
+        $parent = Split-Path $dir -Parent
+        if (-not $parent -or $parent -eq $dir) { break }
+        $dir = $parent
+    }
+    $stamp = $parts -join "`n"
+
+    # Only call fnm when that stamp changes. Unchanged means fnm would resolve identically, so the
+    # spawn is pure cost. Crucially an empty stamp still differs from a non-empty one, so this fires on
+    # the way OUT of a project -- the transition that reverts to the default version. A naive "skip
+    # when no version file" would leave the project's version active after you cd away.
+    if ($stamp -ne $global:__fnm_last_version_stamp) {
+        $global:__fnm_last_version_stamp = $stamp
         fnm use --silent-if-unchanged | Out-Host
     }
 }

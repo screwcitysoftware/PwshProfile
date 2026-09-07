@@ -41,16 +41,14 @@ function Enable-OhMyPosh {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command oh-my-posh.exe -ErrorAction SilentlyContinue) {
+        if (Test-CommandAvailable -Name 'oh-my-posh.exe') {
             if (-not $Configuration) {
                 $defaultTheme = Get-BundledThemePath
                 if (Test-Path $defaultTheme) { $Configuration = $defaultTheme }
             }
             $configArgs = if ($Configuration) { '--config', $Configuration } else { @() }
-            # Run in the global scope (not this module's) so the prompt function and helpers
-            # aren't tagged to the module — see Private/Invoke-InGlobalScope.ps1.
-            # Suppress stderr (2>$null) so a warning from oh-my-posh can't paint into the live
-            # Invoke-Step spinner; only the init script (stdout) is captured and run.
+            # Global scope so the prompt function and helpers aren't tagged to this module. Suppress
+            # stderr so an oh-my-posh warning can't paint into the live Invoke-Step spinner.
             Invoke-InGlobalScope (oh-my-posh init pwsh @configArgs 2>$null | Out-String)
         }
     }

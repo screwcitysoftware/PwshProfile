@@ -8,7 +8,7 @@ function Enable-Lazygit {
           - Install: if lazygit.exe isn't on PATH, installs it with winget (JesseDuffield.lazygit, a
             portable package) and patches the current session's PATH so the exe is usable
             immediately.
-          - Initialize: a Get-Command-guarded no-op. lazygit is a self-contained full-screen TUI you
+          - Initialize: a no-op. lazygit is a self-contained full-screen TUI you
             launch by typing `lazygit` — it ships no PowerShell shell-init or tab-completion script
             (unlike the Cobra CLIs that emit `<cmd> completion powershell`), so there's nothing to
             run. The substep exists only to keep the install/initialize shape consistent with the
@@ -34,9 +34,6 @@ function Enable-Lazygit {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command lazygit.exe -ErrorAction SilentlyContinue) {
-            # No-op: lazygit has no PowerShell init/completion script to run. Just having lazygit.exe
-            # on PATH is enough to launch the TUI directly.
-        }
+        # No-op: lazygit has no PowerShell init script; the exe on PATH launches the TUI.
     }
 }

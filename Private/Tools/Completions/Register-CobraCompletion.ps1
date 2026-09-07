@@ -46,7 +46,7 @@ function Register-CobraCompletion {
         [string[]]$CompletionArgument = @('completion', 'powershell')
     )
 
-    if (Get-Command $Command -ErrorAction SilentlyContinue) {
+    if (Test-CommandAvailable -Name $Command) {
         Invoke-InGlobalScope (& $Command @CompletionArgument | Out-String)
     }
 }

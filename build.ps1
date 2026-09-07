@@ -4,23 +4,37 @@
     Lint, test, stage, and publish the ScrewCitySoftware.PwshProfile module.
 
 .DESCRIPTION
-    A dependency-free task runner: each value passed to -Task maps to an Invoke-<Task>
+    A self-contained task runner: each value passed to -Task maps to an Invoke-<Task>
     function, and the tasks run in the order given. There is intentionally no build
-    framework (psake / Invoke-Build) — the module's ethos is dependency-light, so the
-    dispatch is a plain switch over a handful of functions.
+    framework (psake / Invoke-Build) — the dispatch is a plain switch over a handful of
+    functions. The Build task does use ModuleBuilder to compile the module (see build.psd1);
+    everything else is stock PowerShell.
 
     Tasks:
-      Bootstrap  Install the dev dependencies (Pester, PSScriptAnalyzer) if missing.
+      Bootstrap  Install the dev dependencies pinned in RequiredModules.psd1 (Pester,
+                 PSScriptAnalyzer, ModuleBuilder) if missing, and restore the dotnet local
+                 tool pinned in .config/dotnet-tools.json (GitVersion.Tool).
       Analyze    Run PSScriptAnalyzer over Public/ and Private/; fail on any finding.
       Test       Run the Pester suite under Tests/ and emit NUnit XML to Output/.
-      Build      Stage only the shippable files into Output/<ModuleName>/ and validate
-                 the staged manifest. CLAUDE.md, Tests/, .github/, build.ps1 never ship.
+      Build      Stage only the shippable files into Output/<ModuleName>/, stamp the
+                 GitVersion-computed SemVer onto the staged manifest, and validate it.
+                 CLAUDE.md, Tests/, .github/, build.ps1 never ship.
       Publish    Publish the staged module to the PowerShell Gallery. Requires the
                  PSGALLERY_API_KEY environment variable.
+      Version    Print the GitVersion-computed SemVer and exit — a quick standalone check
+                 that doesn't require Analyze/Test/Build to run first.
 
     The default chain (Bootstrap -> Analyze -> Test -> Build) is what CI runs and what
     you should run locally before cutting a release. Publish is intentionally excluded
     from the default so it never fires by accident.
+
+    Versioning: the source manifest's ModuleVersion is a static placeholder ('0.0.1') —
+    it is never what ships. GitVersion computes the real SemVer from git tag/commit
+    history (see GitVersion.yml) and the Build task stamps it onto the *staged* manifest
+    only, via Update-ModuleManifest. The release recipe is: push a vX.Y.Z tag at the
+    release commit, cut a GitHub Release from it — since GitVersion resolves an exactly-
+    tagged commit's version as that tag, the computed version equals the tag by
+    construction, which is what lets publish.yml verify it instead of hand-maintaining it.
 
 .PARAMETER Task
     One or more tasks to run, in order. Defaults to Bootstrap, Analyze, Test, Build.
@@ -34,17 +48,21 @@
     Lints and tests without staging — what the CI workflow runs on pull requests.
 
 .EXAMPLE
+    ./build.ps1 -Task Version
+    Prints the GitVersion-computed SemVer for the current commit without building anything.
+
+.EXAMPLE
     $env:PSGALLERY_API_KEY = '<key>'; ./build.ps1 -Task Build, Publish
     Stages then publishes to the PowerShell Gallery.
 
 .NOTES
     Used by .github/workflows/ci.yml (Bootstrap/Analyze/Test) and publish.yml
-    (Analyze/Test/Build/Publish on a published GitHub release).
+    (Bootstrap/Analyze/Test/Build/Publish on a published GitHub release).
 #>
 [CmdletBinding()]
 param(
     [Parameter(Position = 0)]
-    [ValidateSet('Bootstrap', 'Analyze', 'Test', 'Build', 'Publish')]
+    [ValidateSet('Bootstrap', 'Analyze', 'Test', 'Build', 'Publish', 'Version')]
     [string[]]$Task = @('Bootstrap', 'Analyze', 'Test', 'Build')
 )
 
@@ -58,14 +76,15 @@ $OutputRoot       = Join-Path $RepoRoot 'Output'
 $StagePath        = Join-Path $OutputRoot $ModuleName
 $TestsPath        = Join-Path $RepoRoot 'Tests'
 $AnalyzerSettings = Join-Path $RepoRoot 'PSScriptAnalyzerSettings.psd1'
+$ComputedVersion  = $null   # Get-ComputedVersion's cache; declared here so reading it before the
+                            # first call doesn't throw under Set-StrictMode.
 
-# Dev dependencies pinned to EXACT versions so "clean locally" == "clean in CI". The GitHub
-# windows image preinstalls these, and a different analyzer version surfaces different findings;
-# pinning removes that drift (Bootstrap force-installs the exact version when it's absent).
-$DevDependencies = @{
-    Pester           = '5.7.1'
-    PSScriptAnalyzer = '1.25.0'
-}
+# Dev dependencies pinned to EXACT versions so "clean locally" == "clean in CI", read from
+# RequiredModules.psd1 rather than hardcoded here. The GitHub windows image preinstalls these,
+# and a different analyzer version surfaces different findings; pinning removes that drift
+# (Bootstrap force-installs the exact version when it's absent). GitVersion.Tool is pinned
+# separately in .config/dotnet-tools.json — it's a dotnet tool, not a PowerShell module.
+$DevDependencies = Import-PowerShellDataFile -Path (Join-Path $RepoRoot 'RequiredModules.psd1')
 
 function Write-Banner {
     param([Parameter(Mandatory)][string]$Message)
@@ -98,6 +117,12 @@ function Invoke-Bootstrap {
             # Bracket = NuGet exact-version range, so we get this version and no other.
             Install-PSResource -Name $name -Version "[$version]" -TrustRepository
         }
+    }
+
+    Write-Host '    restoring dotnet local tools (GitVersion.Tool, see .config/dotnet-tools.json)' -ForegroundColor DarkGray
+    dotnet tool restore
+    if ($LASTEXITCODE -ne 0) {
+        throw 'dotnet tool restore failed.'
     }
 }
 
@@ -145,38 +170,209 @@ function Invoke-Test {
     Write-Host "    $($result.PassedCount) test(s) passed" -ForegroundColor Green
 }
 
+function Get-ComputedVersion {
+    <#
+        Computes the module's real SemVer from git tag/commit history via GitVersion (pinned in
+        .config/dotnet-tools.json, restored by Invoke-Bootstrap), returning the clean
+        Major.Minor.Patch (valid for a manifest's ModuleVersion) and a Prerelease tag sanitized
+        for PowerShell's manifest charset.
+
+        GitVersion's own PreReleaseTag separates its label/number with a dot (e.g. 'vNext.1'),
+        but Update-ModuleManifest's -Prerelease only accepts 'a-zA-Z0-9' plus an optional leading
+        hyphen — a dot throws "contains invalid characters" — so non-alphanumerics are stripped
+        rather than passed through verbatim.
+
+        Cached for the life of the process: the git history a single build.ps1 invocation sees
+        cannot change mid-run, and a task like `-Task Version, Build` would otherwise shell out to
+        GitVersion (a full history walk) twice for the same answer.
+    #>
+    param()
+
+    if ($script:ComputedVersion) { return $script:ComputedVersion }
+
+    $json = dotnet tool run dotnet-gitversion $RepoRoot /output json
+    if ($LASTEXITCODE -ne 0) {
+        throw "GitVersion failed: $json"
+    }
+    $computed = $json | ConvertFrom-Json
+
+    $script:ComputedVersion = [pscustomobject]@{
+        MajorMinorPatch = $computed.MajorMinorPatch
+        Prerelease      = if ($computed.PreReleaseTag) { $computed.PreReleaseTag -replace '[^a-zA-Z0-9]', '' } else { '' }
+    }
+    $script:ComputedVersion
+}
+
+function Format-ComputedVersionDisplay {
+    <# The "Major.Minor.Patch[-Prerelease]" display string, shared by Invoke-Version and Invoke-Build. #>
+    param([Parameter(Mandatory)]$Version)
+
+    if ($Version.Prerelease) { "$($Version.MajorMinorPatch)-$($Version.Prerelease)" } else { "$($Version.MajorMinorPatch)" }
+}
+
+function Invoke-Version {
+    $version = Get-ComputedVersion
+    Write-Banner "Version: $(Format-ComputedVersionDisplay -Version $version)"
+}
+
 function Invoke-Build {
-    Write-Banner "Build: staging $ModuleName -> $StagePath"
+    Assert-Dependency -Name 'ModuleBuilder' -Version $DevDependencies['ModuleBuilder']
+    Import-Module ModuleBuilder -RequiredVersion $DevDependencies['ModuleBuilder']
+    Write-Banner "Build: compiling $ModuleName -> $StagePath"
 
-    if (Test-Path $OutputRoot) {
-        Remove-Item -Path $OutputRoot -Recurse -Force
-    }
-    New-Item -ItemType Directory -Path $StagePath -Force | Out-Null
+    Remove-OutputRoot
 
-    # Only the shippable set — Tests/, CLAUDE.md, .github/, build.ps1, etc. never ship.
-    $shippable = @(
-        "$ModuleName.psd1"
-        "$ModuleName.psm1"
-        'Public'
-        'Private'
-        'Assets'
-        'README.md'
-        'LICENSE'
-    )
-    foreach ($item in $shippable) {
-        $src = Join-Path $RepoRoot $item
-        if (-not (Test-Path $src)) {
-            throw "Expected to stage '$item' but it was not found at $src"
-        }
-        Copy-Item -Path $src -Destination $StagePath -Recurse -Force
+    # ModuleBuilder compiles every Private/ then Public/ function into a single .psm1, which avoids
+    # ~9ms of fixed dot-source overhead per file at import — this module is imported on every shell
+    # start. See build.psd1 for the settings; notably Prefix.ps1 / Suffix.ps1 are shared verbatim with
+    # the dev loader in the source .psm1, so the two cannot drift.
+    #
+    # Preferred over a hand-rolled merge because it also hoists `using` statements to the top of the
+    # compiled file (a naive concatenation breaks the moment a source file gains one), regenerates
+    # FunctionsToExport from Public/**/*.ps1, and emits #Region markers naming the source file and
+    # line offset — so Convert-LineNumber can map a stack trace in the built module back to the file
+    # it came from.
+    $built = Invoke-ModuleBuildWithRetry
+
+    # ModuleBuilder copies sibling .psd1 files out of the source folder; the analyzer config is dev
+    # tooling and has no business in the gallery package.
+    $strays = @('PSScriptAnalyzerSettings.psd1')
+    foreach ($stray in $strays) {
+        $strayPath = Join-Path $StagePath $stray
+        if (Test-Path $strayPath) { Remove-Item -LiteralPath $strayPath -Force }
     }
+
+    # The source manifest's ModuleVersion is a static placeholder ('0.0.1') — GitVersion computes
+    # the real SemVer from git tag/commit history and it is stamped onto the staged manifest only,
+    # never the source one (which keeps its hand-authored formatting/comments untouched).
+    $version = Get-ComputedVersion
+    Write-Host "    GitVersion computed $(Format-ComputedVersionDisplay -Version $version)" -ForegroundColor DarkGray
+    $manifestParams = @{
+        Path          = $built.Path
+        ModuleVersion = $version.MajorMinorPatch
+        ErrorAction   = 'Stop'
+    }
+    if ($version.Prerelease) { $manifestParams.Prerelease = $version.Prerelease }
+    Update-ModuleManifest @manifestParams
 
     # The staged manifest must be valid before we ever try to publish it.
-    $stagedManifest = Join-Path $StagePath "$ModuleName.psd1"
-    $null = Test-ModuleManifest -Path $stagedManifest -ErrorAction Stop
+    $null = Test-ModuleManifest -Path $built.Path -ErrorAction Stop
+
+    # The compiled module is a different artifact from the source tree the tests import, so prove it
+    # actually loads and exports what the manifest promises before it can be published.
+    Assert-StagedModule -Manifest $built.Path
 
     $count = (Get-ChildItem -Path $StagePath -Recurse -File).Count
     Write-Host "    staged $count file(s)" -ForegroundColor Green
+}
+
+
+function Invoke-WithRetry {
+    <#
+        Runs $Body, retrying up to $MaxAttempt times with an increasing delay between attempts.
+        Shared by Invoke-ModuleBuildWithRetry and Remove-OutputRoot, both patching around a transient
+        Windows file-handle race (an indexer/AV/ModuleBuilder handle briefly still open on a
+        just-written file). $OnRetry, if given, runs after the delay, right before the next attempt.
+    #>
+    param(
+        [Parameter(Mandatory)]
+        [scriptblock]$Body,
+
+        [Parameter()]
+        [int]$MaxAttempt = 4,
+
+        [Parameter()]
+        [int]$DelayMilliseconds = 250,
+
+        [Parameter()]
+        [scriptblock]$OnRetry
+    )
+
+    foreach ($attempt in 1..$MaxAttempt) {
+        try {
+            return & $Body
+        }
+        catch {
+            if ($attempt -eq $MaxAttempt) { throw }
+            Start-Sleep -Milliseconds ($DelayMilliseconds * $attempt)
+            if ($OnRetry) { & $OnRetry $attempt }
+        }
+    }
+}
+
+function Invoke-ModuleBuildWithRetry {
+    <#
+        Runs Build-Module, retrying from a clean output directory on a transient file lock.
+
+        ModuleBuilder writes the compiled .psm1 and then re-reads it in the same pass, and on Windows
+        that can collide with whatever still has the freshly written file open — the indexer, AV, or
+        ModuleBuilder's own handle. It surfaces as "The process cannot access the file ... because it
+        is being used by another process."
+
+        It is load-sensitive rather than deterministic: back-to-back builds run clean on an idle
+        machine, and failed roughly a quarter of the time while a dozen other pwsh processes were
+        alive. That makes it exactly the kind of thing to retry rather than diagnose per-run, and it
+        is not specific to a ModuleBuilder version (3.1.8 and 3.2.18 both build clean when idle).
+    #>
+    param()
+
+    Invoke-WithRetry -MaxAttempt 4 -DelayMilliseconds 250 -Body {
+        Build-Module -SourcePath (Join-Path $RepoRoot 'build.psd1') -Passthru -ErrorAction Stop
+    } -OnRetry {
+        param($Attempt)
+        Write-Host "    build attempt $Attempt hit a file lock; retrying" -ForegroundColor DarkYellow
+        # The stale handle is usually ModuleBuilder's own FileStream awaiting finalization, and the
+        # retry runs in this same process — so without forcing finalizers the next attempt hits
+        # exactly the same lock.
+        [System.GC]::Collect()
+        [System.GC]::WaitForPendingFinalizers()
+        Remove-OutputRoot
+    }
+}
+
+function Remove-OutputRoot {
+    <#
+        Deletes the staging directory, retrying briefly on failure.
+
+        Windows can hold a handle on a just-written file for a moment after the writing process is
+        done with it (the indexer and AV both do this), which surfaces as "The directory is not empty"
+        on an immediate recursive delete. Measured at roughly one failure in six on back-to-back
+        builds, so a couple of short retries turns a flaky build into a reliable one.
+    #>
+    param()
+
+    if (-not (Test-Path $OutputRoot)) { return }
+
+    Invoke-WithRetry -MaxAttempt 5 -DelayMilliseconds 100 -Body {
+        Remove-Item -Path $OutputRoot -Recurse -Force -ErrorAction Stop
+    }
+}
+
+function Assert-StagedModule {
+    <#
+        Imports the staged module in a clean child process and checks it exports exactly what the
+        manifest declares. The Pester suite runs against the repo tree, so without this the merged
+        artifact would never be loaded before publish.
+    #>
+    param([Parameter(Mandatory)][string]$Manifest)
+
+    $expected = @((Import-PowerShellDataFile -Path $Manifest).FunctionsToExport) | Sort-Object
+    $actual = @(pwsh -NoProfile -NoLogo -Command "
+        Import-Module '$Manifest' -Force -ErrorAction Stop
+        (Get-Command -Module '$ModuleName').Name | Sort-Object
+    ")
+    if ($LASTEXITCODE -ne 0) {
+        throw "The staged module at $Manifest failed to import."
+    }
+
+    $missing = @($expected | Where-Object { $_ -notin $actual })
+    $extra = @($actual | Where-Object { $_ -notin $expected })
+    if ($missing -or $extra) {
+        throw ("Staged module exports do not match the manifest." +
+            $(if ($missing) { " Missing: $($missing -join ', ')." }) +
+            $(if ($extra) { " Unexpected: $($extra -join ', ')." }))
+    }
+    Write-Host "    staged module imports and exports all $($expected.Count) function(s)" -ForegroundColor Green
 }
 
 function Invoke-Publish {

@@ -29,7 +29,7 @@ function Get-FzfVersion {
     param()
 
     try {
-        if (-not (Get-Command fzf.exe -ErrorAction SilentlyContinue)) { return $null }
+        if (-not (Test-CommandAvailable -Name 'fzf.exe')) { return $null }
         $out = (fzf --version 2>$null) | Out-String
         if ($out -match '(\d+)\.(\d+)') {
             return [version]("{0}.{1}" -f $Matches[1], $Matches[2])

@@ -6,8 +6,8 @@ function Get-BundledThemePath {
     .DESCRIPTION
         Single source of truth for the location of a bundled theme (Assets/Themes/<Name>.omp.json),
         reused by Enable-OhMyPosh, Initialize-PwshProfile, Get-OhMyPoshTheme, and Export-OhMyPoshTheme
-        so the path is resolved one way. $PSScriptRoot here is Private/Prompt/, so '..\..' reaches the
-        module root and 'Assets/Themes' the theme folder beneath it.
+        so the path is resolved one way. Paths hang off $script:ModuleRoot (set once in the .psm1) rather
+        than $PSScriptRoot, so they hold whether the module is dot-sourced per file or shipped merged.
 
         The path is returned whether or not the file exists; callers decide how to handle a missing
         file (Enable-OhMyPosh falls back to oh-my-posh's own default; the Get/Export functions
@@ -34,5 +34,5 @@ function Get-BundledThemePath {
         [string]$Name = 'screwcity'
     )
 
-    Join-Path $PSScriptRoot '..' '..' 'Assets' 'Themes' "$Name.omp.json"
+    Join-Path $script:ModuleRoot 'Assets' 'Themes' "$Name.omp.json"
 }

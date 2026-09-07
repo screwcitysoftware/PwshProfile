@@ -17,6 +17,7 @@ function Invoke-StepInternal {
     .EXAMPLE
         Invoke-StepInternal -Description 'Install' -ScriptBlock { winget install ... } -Icon ':nut_and_bolt:'
     #>
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$Description,

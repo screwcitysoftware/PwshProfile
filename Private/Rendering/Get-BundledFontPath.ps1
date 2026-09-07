@@ -7,8 +7,8 @@ function Get-BundledFontPath {
         Single source of truth for the location of the module's bundled FIGlet fonts
         (Assets/Fonts/*.flf), the companion to Get-BundledThemePath. Reused by Write-Figlet (to
         resolve a -Font name to its .flf) and Show-FigletFont (to enumerate the folder), so
-        the path is resolved one way. $PSScriptRoot here is Private/Rendering/, so '..\..' reaches
-        the module root and 'Assets/Fonts' the font folder beneath it.
+        the path is resolved one way. Paths hang off $script:ModuleRoot (set once in the .psm1) rather
+        than $PSScriptRoot, so they hold whether the module is dot-sourced per file or shipped merged.
 
         With a -Name, returns the path to that font's file (Assets/Fonts/<Name>.flf); without one,
         returns the Assets/Fonts directory itself. The path is returned whether or not it exists;
@@ -35,7 +35,7 @@ function Get-BundledFontPath {
         [string]$Name
     )
 
-    $fontsDir = Join-Path $PSScriptRoot '..' '..' 'Assets' 'Fonts'
+    $fontsDir = Join-Path $script:ModuleRoot 'Assets' 'Fonts'
     if ([string]::IsNullOrWhiteSpace($Name)) {
         return $fontsDir
     }

@@ -24,6 +24,63 @@ Describe 'Install-WingetPackageSafe' -Skip:(-not $HasWinGetClient) {
         }
     }
 
+    It 'records nothing when the tool was already present' {
+        # The startup notice must fire only when startup genuinely installed something. A tool that
+        # was already there is the normal case and has to stay silent.
+        InModuleScope ScrewCitySoftware.PwshProfile {
+            $script:StartupInstall.Clear()
+            Mock Import-ModuleSafe { }
+            Mock Install-WinGetPackage { }
+            Install-WingetPackageSafe -Id 'x.y' -Exe 'pwsh.exe' -CallerName 'Test'
+            $script:StartupInstall.Count | Should -Be 0
+        }
+    }
+
+    It 'records a package it actually installed' {
+        InModuleScope ScrewCitySoftware.PwshProfile {
+            $script:StartupInstall.Clear()
+            Mock Import-ModuleSafe { }
+            Mock Install-WinGetPackage { [pscustomobject]@{ Status = 'Ok'; InstallerErrorCode = 0 } }
+            # Absent going in, present coming out -- the shape of a real install.
+            Mock Test-CommandAvailable { $false }
+            # Default mock: the function also probes for the Install-WinGetPackage cmdlet itself, so a
+            # filter-only mock leaves that call unmatched. Truthy for any name covers both.
+            Mock Get-Command { [pscustomobject]@{ Name = $Name } }
+            Install-WingetPackageSafe -Id 'vendor.newtool' -Exe 'newtool.exe' -PathDir 'C:\nope' -CallerName 'Test'
+            @($script:StartupInstall) | Should -Be @('vendor.newtool')
+            $script:StartupInstall.Clear()
+        }
+    }
+
+    It 'records nothing under -Quiet, so the installer does not trip the notice' {
+        InModuleScope ScrewCitySoftware.PwshProfile {
+            $script:StartupInstall.Clear()
+            Mock Import-ModuleSafe { }
+            Mock Install-WinGetPackage { [pscustomobject]@{ Status = 'Ok'; InstallerErrorCode = 0 } }
+            Mock Test-CommandAvailable { $false }
+            # Default mock: the function also probes for the Install-WinGetPackage cmdlet itself, so a
+            # filter-only mock leaves that call unmatched. Truthy for any name covers both.
+            Mock Get-Command { [pscustomobject]@{ Name = $Name } }
+            Install-WingetPackageSafe -Id 'vendor.newtool' -Exe 'newtool.exe' -PathDir 'C:\nope' `
+                -CallerName 'Install-PwshProfile' -Quiet
+            $script:StartupInstall.Count | Should -Be 0
+        }
+    }
+
+    It 'records nothing when the install failed to produce the exe' {
+        # It already warns in this case; recording it as installed would then claim a success that
+        # did not happen, and send the user to re-run setup for the wrong reason.
+        InModuleScope ScrewCitySoftware.PwshProfile {
+            $script:StartupInstall.Clear()
+            Mock Import-ModuleSafe { }
+            Mock Install-WinGetPackage { [pscustomobject]@{ Status = 'Failed'; InstallerErrorCode = 1 } }
+            Mock Test-CommandAvailable { $false }
+            Install-WingetPackageSafe -Id 'vendor.missing' -Exe 'nosuchtool.exe' -PathDir 'C:\nope' `
+                -CallerName 'Test' -WarningAction SilentlyContinue
+            $script:StartupInstall.Count | Should -Be 0
+        }
+    }
+
     It 'defaults -PathDir to the WinGet Links directory when omitted' {
         InModuleScope ScrewCitySoftware.PwshProfile {
             Mock Import-ModuleSafe { }

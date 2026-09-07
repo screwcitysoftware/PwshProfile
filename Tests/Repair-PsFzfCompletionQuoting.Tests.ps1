@@ -13,10 +13,9 @@ Describe 'Repair-PsFzfCompletionQuoting' {
 
     Context 'with a stand-in PSFzf module loaded' {
         BeforeEach {
-            # A single dynamic stand-in named PSFzf carrying the original (un-trimmed) helper:
-            # quotes anything containing whitespace, including a trailing "complete" space — the
-            # behavior the patch corrects. Defined literally here (not via a passed-in scriptblock)
-            # so the function lands in the dynamic module's own scope.
+            # A dynamic stand-in named PSFzf carrying the original, un-trimmed helper: it quotes
+            # anything containing whitespace, including a trailing space — the behavior the patch
+            # corrects. Defined literally so the function lands in the dynamic module's own scope.
             Remove-Module PSFzf -Force -ErrorAction SilentlyContinue
             New-Module -Name PSFzf {
                 function FixCompletionResult($str, [switch]$AlwaysQuote) {

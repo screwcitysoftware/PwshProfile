@@ -5,58 +5,72 @@ function Install-PwshProfile {
 
     .DESCRIPTION
         Walks you through a PwshSpectreConsole wizard and writes a marker-wrapped bootstrap block — a
-        tools snapshot comment plus a tailored Initialize-PwshProfile call (which auto-loads the module
-        when it runs, so no import line is needed) — into a profile file (by default $PROFILE). It is the
-        one-time setup companion to Initialize-PwshProfile, which then runs every session from that block.
+        guidance comment plus a tailored Initialize-PwshProfile call — into a profile file
+        ($PROFILE by default). No import line is needed: invoking Initialize-PwshProfile auto-loads the
+        module. This is the one-time setup companion to Initialize-PwshProfile, which then runs every
+        session from that block.
 
-        On a re-run it parses the existing block to default each prompt to your previous choices and to
-        flag tools added to the module since (shown "(new)" and starting unchecked).
+        The wizard makes one forward pass — an optional Nerd Font install, winget client settings
+        (opened by the full list of CLI packages setup will install), a disclosure-only step naming the
+        PowerShell Gallery modules the profile installs on demand, theme, an optional banner, the step
+        icon, and the per-tool options — then lands on a review screen where any step can be re-edited
+        before submitting, or the whole setup cancelled without writing. On a re-run it parses the existing block to default each prompt to your previous
+        choices.
 
-        Note: this wires the module into your profile *file*; it does not install the module itself
-        from the gallery (use Install-PSResource ScrewCitySoftware.PwshProfile for that).
+        The Nerd Font install (NerdFonts module, CurrentUser scope, no admin), the winget settings, the
+        tool CLIs, and the Windows Terminal font/scheme are one-time machine actions applied at the end
+        of the run, not part of the bootstrap block — so re-running re-applies them, and -WhatIf
+        previews without touching anything.
 
-        The wizard walks one forward pass — an optional Nerd Font install, a set of winget client
-        settings, theme, an optional banner (a yes/no that gates the text/color/alignment/font
-        prompts), the step icon, and a Features step (pick specific tools from an opt-in tree, or enable
-        everything including future additions; oh-my-posh is always on) — then lands on a review screen
-        where any step can be re-edited before submitting, or the whole setup cancelled without writing. The Nerd
-        Font install uses the NerdFonts module (CurrentUser scope, no admin required), defaulting to
-        the recommended Meslo + CascadiaCode pairing. The winget settings (default install scope,
-        progress-bar style, anonymize-displayed-paths, suppress-install-notes) are pre-filled from
-        the current settings.json and merged back into it via Set-WingetSetting at the end of the
-        run — a one-time machine action, not part of the bootstrap block (so re-running the wizard
-        re-applies them; -WhatIf previews without touching settings.json).
+        It finishes by offering to apply the new settings to the current session (default yes),
+        re-running the Initialize-PwshProfile call it just generated so the prompt and tools update
+        without opening a new shell. Deliberately that call rather than dot-sourcing the whole profile
+        file: the latter would also re-execute the user's own profile code, which carries no
+        idempotency contract of its own, to apply a change entirely inside the managed block.
+        The offer is NOT limited to runs that changed the block: a re-run answering every prompt the
+        same way writes an identical block and reports AlreadyPresent, and that is exactly the run
+        after which a reload matters most, since the run may still have installed tools this session
+        started without. Only BareImportPresent (nothing written, by design) and -WhatIf skip it.
+        Declining leaves the file exactly as written. Note the wiring switches are one-way
+        in-session: turning one ON applies here, turning one OFF still needs a new shell, since the
+        enablers only ever set their alias or environment variable. A failure to apply warns rather
+        than failing the install, which has already succeeded by then.
+
+        Installing the tools here rather than at startup is what keeps the first shell fast: every
+        Enable-* Install substep then short-circuits on Get-Command. The packages come from
+        Get-PwshProfileToolCatalog's winget rows — git and oh-my-posh included, so nothing arrives
+        unannounced at first startup — not from calling the Enable-* functions, which would also wire
+        this session (aliasing cat, rebinding cd) in the middle of setup. Each row's PathDir/Scope is
+        forwarded, which is what puts the two full installers in their own directories rather than the
+        shared portable Links dir.
 
         Your existing profile code is never destroyed:
           - A new file (and its parent directory) is created if needed.
-          - An existing managed block is replaced in place, so the command is safe to re-run to
-            change options.
-          - Any other existing content is left intact, with the block prepended above it.
-          - A profile that already contains a bare 'Import-Module ScrewCitySoftware.PwshProfile'
-            (no markers) is left untouched unless -Force is given.
+          - An existing managed block is replaced in place, so this is safe to re-run.
+          - Any other content is left intact, with the block prepended above it.
+          - A profile with a bare 'Import-Module ScrewCitySoftware.PwshProfile' and no markers is left
+            untouched unless -Force is given.
 
-        This is a user-invoked setup command (not silent startup), so genuine errors throw. It is
-        interactive-only: when the Spectre prompt cmdlets are unavailable it warns that an interactive
-        session is required and makes no changes (rather than guessing at a configuration).
+        This wires the module into your profile *file*; it does not install the module itself from the
+        gallery (use Install-PSResource for that). Being a user-invoked setup command rather than
+        silent startup, genuine errors throw. It is interactive-only: without the Spectre prompt
+        cmdlets it warns that an interactive session is required and makes no changes.
 
     .PARAMETER Path
         The profile file to configure. Defaults to $PROFILE (current user, current host). Pass an
-        explicit path to target another profile (e.g. the all-hosts profile or the VS Code host
-        profile).
+        explicit path to target another profile, e.g. the all-hosts or VS Code host profile.
 
     .PARAMETER Force
         When the target already contains a bare module import but no managed markers, prepend the
         managed block anyway instead of treating the file as already wired.
 
     .PARAMETER PassThru
-        Emit a result object ([pscustomobject] with Path, Action, and Changed). By default the
-        command writes the file and returns nothing.
+        Emit a result object with Path, Action, and Changed. By default the command returns nothing.
 
     .EXAMPLE
         Install-PwshProfile
 
-        Runs the wizard and writes the bootstrap into $PROFILE, creating it (and its directory) if
-        needed.
+        Runs the wizard and writes the bootstrap into $PROFILE, creating it and its directory if needed.
 
     .EXAMPLE
         Install-PwshProfile -WhatIf
@@ -76,10 +90,10 @@ function Install-PwshProfile {
     .NOTES
         $PROFILE is host-specific — the VS Code and ISE hosts use different files than the default
         console. The file is written as UTF-8 without a BOM. Re-run any time to change settings; the
-        managed block is rewritten in place. Spectre prompts only render in an interactive console.
+        managed block is rewritten in place.
     #>
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSShouldProcess', '',
-        Justification = 'SupportsShouldProcess is declared so -WhatIf/-Confirm are accepted and flow via $WhatIfPreference into the gated writer Write-PwshProfileBlock (and the -not $WhatIfPreference guards on the font/winget steps); this function intentionally delegates rather than calling ShouldProcess itself. Covered by the -WhatIf tests.')]
+        Justification = 'SupportsShouldProcess is declared so -WhatIf/-Confirm are accepted and flow via $WhatIfPreference into the gated writer Write-PwshProfileBlock (and the -not $WhatIfPreference guards on the font, winget-settings, tool-install and Windows Terminal steps); this function intentionally delegates rather than calling ShouldProcess itself. Covered by the -WhatIf tests.')]
     [CmdletBinding(SupportsShouldProcess)]
     param(
         [Parameter(Position = 0)]
@@ -93,8 +107,7 @@ function Install-PwshProfile {
         [switch]$PassThru
     )
 
-    # The wizard's chrome uses fixed colors decoupled from the prompt theme being configured: the
-    # module's signature purple as the accent, soft cyan for code literals / paths.
+    # Wizard chrome, fixed and decoupled from the prompt theme being configured.
     $accent = '#c9aaff'
     $code = '#5fd7ff'
     $marker = Get-PwshProfileMarker
@@ -109,28 +122,19 @@ function Install-PwshProfile {
     }
 
     # Interactive-only: the wizard is the only way to make a tool choice, so without prompts there is
-    # nothing sensible to write. Warn and make no changes (no write on a first run; an existing block is
-    # left intact on a re-run) rather than guessing at a configuration.
+    # nothing sensible to write. Warn and change nothing rather than guessing at a configuration.
     $interactive = [bool](Get-Command Read-SpectreSelection -ErrorAction SilentlyContinue)
     if (-not $interactive) {
         Write-Warning 'Install-PwshProfile requires an interactive session (PwshSpectreConsole prompts are unavailable); no changes made. Run it in an interactive PowerShell to configure your profile.'
         return
     }
 
-    # On a re-run, parse the existing managed block so the wizard can default to the prior choices and
-    # flag tools added since (current catalog minus the recorded snapshot). A missing/old snapshot
-    # leaves $newTools empty so nothing is falsely flagged "(new)".
+    # On a re-run, parse the existing block so the wizard defaults to the prior choices. A block that
+    # can't be parsed leaves $priorSettings null and the wizard falls back to first-run defaults.
     $priorSettings = $null
-    $newTools = @()
     if ($reconfiguring) {
         $prior = Read-PwshProfileInstalledSetting -Path $Path
-        if ($prior) {
-            $priorSettings = $prior.Settings
-            $snapshot = @($prior.ToolSnapshot)
-            if ($snapshot.Count) {
-                $newTools = @(Get-PwshProfileToolCatalog -Token | Where-Object { $snapshot -notcontains $_ })
-            }
-        }
+        if ($prior) { $priorSettings = $prior.Settings }
     }
 
     Write-Figlet -Text 'Pwsh Profile' -Color $accent
@@ -145,7 +149,7 @@ function Install-PwshProfile {
     Format-PwshProfileHelpMarkup -Text $intro -Accent $accent -Code $code -Body default |
         Format-SpectrePanel -Header '◆ Profile setup' -Border Rounded -Color $accent -Expand | Out-Host
 
-    $settings = Invoke-PwshProfileWizard -Reconfiguring:$reconfiguring -PriorSetting $priorSettings -NewTool $newTools
+    $settings = Invoke-PwshProfileWizard -PriorSetting $priorSettings
 
     # The wizard returns $null when the user cancels at the review screen — write nothing.
     if ($null -eq $settings) {
@@ -160,15 +164,13 @@ function Install-PwshProfile {
         return
     }
 
-    # Optional Nerd Font install (a one-time machine action; not part of the profile bootstrap).
-    # Skipped under -WhatIf, since a preview must make no changes (this also installs a module).
+    # One-time machine action, not part of the bootstrap. Skipped under -WhatIf: a preview writes nothing.
     $fonts = @($settings.NerdFont | Where-Object { $_ })
     if ($fonts.Count -and -not $WhatIfPreference) {
         Invoke-Step "Nerd Fonts ($($fonts -join ', '))" -Icon ':gear:' {
             Import-ModuleSafe NerdFonts
             if (Get-Command Install-NerdFont -ErrorAction SilentlyContinue) {
-                # Standard variant = the 'MesloLGM Nerd Font' / 'CaskaydiaCove Nerd Font' families
-                # Show-NerdFontSetup recommends, and a smaller download than the default 'All'.
+                # The families Show-NerdFontSetup recommends, and a smaller download than 'All'.
                 Install-NerdFont -Name $fonts -Scope CurrentUser -Variant Standard
             }
             else {
@@ -177,9 +179,8 @@ function Install-PwshProfile {
         }
     }
 
-    # Apply the chosen winget client settings to winget's settings.json — a one-time machine action
-    # like the font install, not part of the profile bootstrap. Skipped under -WhatIf (a preview must
-    # make no changes), and only when the wizard supplied the winget keys.
+    # One-time machine action like the font install, not part of the bootstrap. Skipped under -WhatIf,
+    # and only when the wizard supplied the winget keys.
     if ($settings.ContainsKey('WingetScope') -and -not $WhatIfPreference) {
         Invoke-Step 'Winget settings' -Icon ':gear:' {
             Set-WingetSetting -Scope $settings.WingetScope -ProgressBar $settings.WingetProgressBar `
@@ -187,39 +188,94 @@ function Install-PwshProfile {
         }
     }
 
-    # Point Windows Terminal at the Meslo Nerd Font as its default profile font — a one-time machine
-    # action like the font install, not part of the profile bootstrap. Skipped under -WhatIf (a preview
-    # must make no changes), and only when the wizard opted in. Set-WindowsTerminalFont no-ops with a
-    # warning if Windows Terminal's settings.json can't be found.
+    # Install the tool CLIs up front, so the first shell after setup finds them already present and
+    # every Enable-* Install substep short-circuits on Get-Command. Deliberately AFTER the winget
+    # settings step -- scope and progress-bar preferences must be in place before installing through
+    # winget -- and deliberately NOT by calling the Enable-* functions, which would also *wire* this
+    # session (aliasing cat, rebinding cd) halfway through the wizard. The package metadata comes
+    # from the catalog instead; Tests/ToolCatalog.Tests.ps1 holds it to what the enablers pass.
+    #
+    # Skipped under -WhatIf. A tool that is already present costs one Get-Command; a failed install
+    # warns from Install-WingetPackageSafe and startup installs it later, so nothing here throws.
+    if (-not $WhatIfPreference) {
+        # Re-probe rather than reusing what the wizard's Winget step showed: several steps and the
+        # review screen sit in between, and Install-WingetPackageSafe patches $env:Path as it goes.
+        $inventory = @(Get-PwshProfileToolInventory)
+        $missing = @($inventory | Where-Object { -not $_.Installed })
+
+        # PathDir/Scope are forwarded only when the catalog row carries them, so a portable still
+        # takes the helper's shared-Links default. Not optional: git and oh-my-posh are full
+        # installers with destinations of their own, and omitting these would install the package
+        # correctly but append the wrong directory to $env:Path -- leaving the post-install re-check
+        # to warn about an install that actually worked.
+        function Get-ToolInstallArgument {
+            param($Tool)
+            $argument = @{
+                Id         = $Tool.PackageId
+                Exe        = $Tool.Exe
+                CallerName = 'Install-PwshProfile'
+                # Installing here is the expected work, so it must not feed the startup-installed
+                # notice, which exists to flag the opposite.
+                Quiet      = $true
+            }
+            if ($Tool.PathDir) { $argument['PathDir'] = $Tool.PathDir }
+            if ($Tool.Scope) { $argument['Scope'] = $Tool.Scope }
+            $argument
+        }
+
+        if ($inventory.Count -gt 0 -and $missing.Count -eq 0) {
+            # Nothing to fetch. One reassuring line rather than silence; the body re-runs the
+            # short-circuit for every tool so the line carries a real elapsed time, and so a tool
+            # that vanished between the probe and here is still caught.
+            Invoke-Step "Tools — all $($inventory.Count) already present" -Icon ':gear:' {
+                foreach ($tool in $inventory) {
+                    $installArgument = Get-ToolInstallArgument -Tool $tool
+                    Install-WingetPackageSafe @installArgument
+                }
+            }
+        }
+        else {
+            # One TOP-LEVEL step per package that actually needs fetching, so each writes its own
+            # permanent line with real elapsed time and a slow download is attributable. Nested,
+            # these would only mutate the transient spinner and leave nothing behind -- which is the
+            # exact problem this replaces. Tools already present get no line at all: the helper
+            # short-circuits on Get-Command, and a dozen `[ 3ms]` lines would be noise.
+            foreach ($tool in $missing) {
+                $installArgument = Get-ToolInstallArgument -Tool $tool
+                Invoke-Step "Installing $($tool.Label)" -Icon ':gear:' {
+                    Install-WingetPackageSafe @installArgument
+                }
+            }
+        }
+    }
+
+    # One-time machine action, not part of the bootstrap. Skipped under -WhatIf, and only when the
+    # wizard opted in. Set-WindowsTerminalFont no-ops with a warning if settings.json isn't found.
     if ($settings.ContainsKey('SetTerminalFont') -and $settings.SetTerminalFont -and -not $WhatIfPreference) {
         Invoke-Step 'Windows Terminal font' -Icon ':gear:' {
-            # Suppress the host feedback (stream 6) so it doesn't tear the live spinner; a settings.json
-            # not-found warning (stream 3) still flows through Invoke-Step's warning replay.
+            # Suppress host feedback (stream 6) so it can't tear the spinner; warnings (stream 3)
+            # still flow through Invoke-Step's replay.
             Set-WindowsTerminalFont -FontFace 'MesloLGM Nerd Font' 6> $null
         }
     }
 
-    # Install the matching Windows Terminal color scheme (optionally as the default) — a one-time machine
-    # action like the font set, not part of the profile bootstrap. Skipped under -WhatIf, and only when
-    # the wizard opted in. Resolve the theme defensively (as Build-PwshProfileInitializeCall does) since a
-    # custom theme leaves Theme as 'screwcity'. Install-WindowsTerminalScheme no-ops with a warning if
-    # Windows Terminal's settings.json can't be found.
+    # One-time machine action, not part of the bootstrap. Skipped under -WhatIf, and only when the
+    # wizard opted in. Resolve the theme defensively (as Build-PwshProfileInitializeCall does) since a
+    # custom theme leaves Theme as 'screwcity'.
     if ($settings.ContainsKey('InstallTerminalScheme') -and $settings.InstallTerminalScheme -and -not $WhatIfPreference) {
         Invoke-Step 'Windows Terminal scheme' -Icon ':gear:' {
             $schemeTheme = if ($settings.ContainsKey('Theme') -and $settings.Theme) { $settings.Theme } else { 'screwcity' }
             $schemeArgs = @{ Theme = $schemeTheme }
             if ($settings.ContainsKey('SetSchemeDefault') -and $settings.SetSchemeDefault) { $schemeArgs['SetDefault'] = $true }
-            # Suppress host feedback (stream 6) so it doesn't tear the spinner; a not-found warning
-            # (stream 3) still flows through Invoke-Step's warning replay.
+            # Suppress host feedback (stream 6); warnings (stream 3) still reach Invoke-Step's replay.
             Install-WindowsTerminalScheme @schemeArgs 6> $null
         }
     }
 
-    # Terminal-font guidance — display-only (runs under -WhatIf), shown every run so users know to
-    # point their terminal at a Nerd Font even if they declined the install. Pass -Font only when
-    # fonts were chosen so it names the installed families; otherwise it shows the recommended pairing.
+    # Display-only, so it runs under -WhatIf, and every run — users need to point their terminal at a
+    # Nerd Font even if they declined the install. -Font names the installed families when there are any.
     $fontSetupArgs = @{}
-    if ($fonts.Count) { $fontSetupArgs.Font = $fonts }
+    if ($fonts.Count -gt 0) { $fontSetupArgs.Font = $fonts }
     Show-NerdFontSetup @fontSetupArgs
 
     $call = Build-PwshProfileInitializeCall -Setting $settings
@@ -229,8 +285,8 @@ function Install-PwshProfile {
         $preview | Format-SpectrePanel -Header "Bootstrap for $Path" -Border Rounded -Color $accent -Expand | Out-Host
     }
 
-    # The writer carries SupportsShouldProcess, and -WhatIf/-Confirm flow into it via preference
-    # variables, so the actual write stays fully gated.
+    # The writer carries SupportsShouldProcess and -WhatIf/-Confirm reach it via preference variables,
+    # so the actual write stays fully gated.
     $writeArgs = @{ Path = $Path; InitializeCall = $call }
     if ($Force) { $writeArgs.Force = $true }
     $result = Write-PwshProfileBlock @writeArgs
@@ -249,6 +305,70 @@ function Install-PwshProfile {
         $header = if ($color -eq 'Green') { '✓ Done' } else { '! Heads up' }
         $pathMarkup = Format-PwshProfileHelpMarkup -Text ('`' + $result.Path + '`') -Code $code -Body default
         "[$color]$msg[/]`n$pathMarkup" | Format-SpectrePanel -Header $header -Border Rounded -Color $color -Expand | Out-Host
+    }
+
+    # The last thing standing between a finished install and a working prompt used to be the panel's
+    # "run . $PROFILE yourself" line -- in the one session already sitting right there. So offer it.
+    #
+    # It re-runs the generated Initialize-PwshProfile call, NOT `. $PROFILE`. Dot-sourcing the whole
+    # file would also re-execute the user's own profile code, which carries no idempotency contract of
+    # its own -- duplicate PATH appends, re-registered handlers, re-imported modules, whatever else
+    # they keep there -- to apply a change that is entirely inside the managed block. $call is what
+    # the wizard just built and what was just written, so running it applies exactly what changed and
+    # nothing else, and it is all code this module owns and has made reload-safe.
+    #
+    # Deliberately NOT gated on $result.Changed. The block text is only one of the things a run
+    # changes: it also installs the tool CLIs, the fonts, and the winget/Windows Terminal settings. A
+    # re-run that answers every prompt the same way writes a byte-identical block and reports
+    # AlreadyPresent -- and that is exactly the run after which a reload matters most, because this
+    # session's Enable-* steps ran at startup, before those tools existed. Gating on Changed made the
+    # offer vanish on the commonest re-run.
+    #
+    # BareImportPresent is the one outcome skipped: nothing was written, by design, and the file is a
+    # hand-written import this command deliberately left alone.
+    #
+    # -not $WhatIfPreference is load-bearing rather than belt-and-braces -- a preview must not offer
+    # to apply what it only pretended to write.
+    if (-not $WhatIfPreference -and $result.Action -ne 'BareImportPresent' -and
+        (Get-Command Read-SpectreConfirm -ErrorAction SilentlyContinue)) {
+        $reloadHint = @(
+            'Re-runs **Initialize-PwshProfile** with the settings you just chose, so your prompt and tools update without opening a new shell. Your own profile code is not re-run.'
+            if (-not $result.Changed) {
+                # Nothing new to write does not mean nothing new to apply: the run may still have
+                # installed tools this session started without.
+                'Worth it even though the block did not change, if this run installed a tool your shell started without.'
+            }
+            # Only on a re-run, and a real limitation rather than a hedge: the wiring switches are
+            # one-way in-session. -ReplaceCat / -ReplaceMore / -SetPager only ever *set* their alias
+            # or env var, and a changed zoxide command leaves the old name defined, so turning
+            # something ON applies here while turning it OFF genuinely needs a new shell.
+            if ($reconfiguring) { 'A setting you turned **off** still needs a new shell: re-running applies wiring but cannot undo it.' }
+        )
+        Write-PwshProfilePromptHelp $reloadHint -Accent $accent -Code $code
+        if (Read-SpectreConfirm -Message 'Apply these settings to this session now?' -Color $accent -DefaultAnswer 'y') {
+            # Through Invoke-InGlobalScope rather than running $call here: invoked from a module
+            # function, everything Initialize-PwshProfile defines would land in THAT function's scope
+            # and vanish on return -- the aliases, the prompt, the completers, all of it. This is the
+            # same global-scope seam the tool enablers use for tool init.
+            #
+            # $call needs no escaping: it is the command text this module generated, not user input.
+            # $null = because Invoke-InGlobalScope returns whatever the script emits -- unsuppressed,
+            # anything printed to the pipeline would leak into this command's own output and break the
+            # "returns nothing without -PassThru" contract.
+            #
+            # Not inside an Invoke-Step: Initialize-PwshProfile opens its own top-level steps, and
+            # nesting them under a live spinner would tear the render.
+            try {
+                $null = Invoke-InGlobalScope -Expression $call
+                Write-PwshProfilePromptAnswer 'Settings applied to this session' -Accent $accent
+            }
+            catch {
+                # Against this command's usual "genuine errors throw" rule, deliberately: the install
+                # has already succeeded by here, and a failure to apply the settings to this session
+                # must not turn a completed install into a failed one.
+                Write-Warning "Install-PwshProfile: applying the new settings to this session failed: $($_.Exception.Message). Restart your shell to pick them up."
+            }
+        }
     }
 
     if ($PassThru) { $result }

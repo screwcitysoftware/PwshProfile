@@ -1,13 +1,10 @@
-# The engine's top-level (global) session state, resolved once at import. Tool-init scripts
-# (zoxide, oh-my-posh, fnm, xh, Cobra completions) are run against this so the functions and
-# aliases they emit are created in the *real* global scope — not tagged to this module. A
-# plain Invoke-Expression from a module function would attribute every function it defines to
-# the module (even ones declared `function global:`), which is what made __zoxide_* and the
-# completion helpers surface in `Get-Command -Module ScrewCitySoftware.PwshProfile`.
-#
-# The session state lives behind private engine internals, so we reach it via reflection.
-# $null here means "couldn't resolve" — Invoke-InGlobalScope then degrades to a plain
-# Invoke-Expression so a future pwsh build that moves these internals can never break startup.
+# The engine's top-level (global) session state, resolved once at import. Tool-init scripts (zoxide,
+# oh-my-posh, fnm, xh, Cobra completions) run against this so the functions and aliases they emit land
+# in the real global scope. A plain Invoke-Expression from a module function tags everything it defines
+# to the module — even `function global:` ones — which is what leaked __zoxide_* and the completion
+# helpers into `Get-Command -Module ScrewCitySoftware.PwshProfile`. Reached by reflection since it is
+# engine-private; $null means "couldn't resolve", and Invoke-InGlobalScope then falls back to a plain
+# Invoke-Expression so a future pwsh build moving these internals can never break startup.
 $script:GlobalSessionState = $null
 try {
     $flags = [System.Reflection.BindingFlags]'NonPublic, Instance'

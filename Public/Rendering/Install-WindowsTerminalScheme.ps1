@@ -4,39 +4,31 @@ function Install-WindowsTerminalScheme {
         Adds a bundled theme's matching color scheme to Windows Terminal's settings.json.
 
     .DESCRIPTION
-        Writes the Windows Terminal color scheme that matches a bundled prompt theme into the user's
-        settings.json `schemes` array, so the terminal's own 16-color ANSI palette, background, and
-        cursor match the oh-my-posh prompt. The scheme colors come from the same source of truth as
-        the bat/fd/fzf colors — Get-BundledThemeBranding — and the scheme is named after the theme's
-        display name ('Screw City' / 'Forest City'), so it shows up under that name in Windows
-        Terminal's Settings -> Color schemes list.
+        Writes the Windows Terminal color scheme matching a bundled prompt theme into the user's
+        settings.json, so the terminal's own 16-color ANSI palette, background and cursor match the
+        oh-my-posh prompt. The colors come from the same source of truth as the bat/fd/fzf colors,
+        Get-BundledThemeBranding, and the scheme takes the theme's display name ('Screw City' /
+        'Forest City') so it reads clearly in Windows Terminal's Color schemes list.
 
-        By default the scheme is only registered (you then pick it per-profile in Windows Terminal, or
-        pass -SetDefault to also set it as profiles.defaults.colorScheme so it applies immediately).
+        By default the scheme is only registered, for you to pick per-profile; -SetDefault also sets it
+        as profiles.defaults.colorScheme so it applies immediately. The edit is idempotent — re-running
+        replaces the same-named scheme rather than duplicating it — and settings.json is backed up to
+        '<settings.json>.bak' first, since the parse-then-rewrite round-trip does not preserve // comments
+        or hand-formatting. Supports -WhatIf / -Confirm.
 
-        The edit is idempotent: re-running replaces the same-named scheme rather than duplicating it.
-        The original settings.json is backed up to '<settings.json>.bak' before the rewrite. Supports
-        -WhatIf / -Confirm.
-
-        If Windows Terminal's settings.json can't be found (Windows Terminal not installed, or never
-        launched), a warning is emitted and nothing is changed. Pass -SettingsPath to point at a
-        specific file.
-
-        JSONC note: settings.json may contain // comments; the parse -> rewrite round-trip does not
-        preserve comments or hand-formatting (the .bak backup is the safety net).
+        If settings.json can't be found (Windows Terminal not installed, or never launched), a warning
+        is emitted and nothing changes.
 
     .PARAMETER Theme
-        The bundled theme whose matching scheme to install (tab-completes): the default 'screwcity',
-        or any bundled theme (run Get-BundledThemeName for the full set). Custom/unknown themes fall
-        back to the Screw City scheme.
+        The bundled theme whose scheme to install (tab-completes), default 'screwcity'. Custom or
+        unknown themes fall back to the Screw City scheme.
 
     .PARAMETER SettingsPath
-        Optional path to the Windows Terminal settings.json to edit. Defaults to the first existing
-        of the stable, preview, and unpackaged install locations (Get-WindowsTerminalSettingsPath).
+        Optional path to the settings.json to edit. Defaults to the first existing of the stable,
+        preview, and unpackaged install locations.
 
     .PARAMETER SetDefault
-        Also set the scheme as profiles.defaults.colorScheme so it applies to all profiles
-        immediately, instead of only registering it for you to select.
+        Also set the scheme as profiles.defaults.colorScheme so it applies to all profiles immediately.
 
     .EXAMPLE
         Install-WindowsTerminalScheme
@@ -60,13 +52,9 @@ function Install-WindowsTerminalScheme {
         [Parameter(Position = 0)]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
-                if ($base) {
-                    Get-ChildItem -Path (Join-Path $base 'Assets' 'Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
-                        ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
-                        Where-Object { $_ -like "$wordToComplete*" } |
-                        ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-                }
+                # Completers run in the caller's scope; reach the shared completer through the module.
+                $module = Get-Module ScrewCitySoftware.PwshProfile
+                if ($module) { & $module { param($w) Get-BundledThemeCompletion -WordToComplete $w } $wordToComplete }
             })]
         [ValidateScript({ $_ -in (Get-BundledThemeName) },
             ErrorMessage = "'{0}' is not a bundled theme. Check Assets/Themes for the available themes.")]
@@ -79,13 +67,8 @@ function Install-WindowsTerminalScheme {
         [switch]$SetDefault
     )
 
-    if (-not $SettingsPath) {
-        $SettingsPath = Get-WindowsTerminalSettingsPath
-    }
-    if (-not $SettingsPath -or -not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
-        Write-Warning "Install-WindowsTerminalScheme: Windows Terminal settings.json not found. Is Windows Terminal installed and launched at least once? Pass -SettingsPath to override."
-        return
-    }
+    $SettingsPath = Resolve-WindowsTerminalSettingsPath -Path $SettingsPath -CallerName 'Install-WindowsTerminalScheme'
+    if (-not $SettingsPath) { return }
 
     $scheme = (Get-BundledThemeBranding -Name $Theme).TerminalScheme
     $schemeName = $scheme['name']

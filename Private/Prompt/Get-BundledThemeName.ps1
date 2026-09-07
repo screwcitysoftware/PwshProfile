@@ -24,7 +24,7 @@ function Get-BundledThemeName {
     [CmdletBinding()]
     param()
 
-    $dir = Join-Path $PSScriptRoot '..' '..' 'Assets' 'Themes'
+    $dir = Join-Path $script:ModuleRoot 'Assets' 'Themes'
     Get-ChildItem -Path $dir -Filter *.omp.json -ErrorAction SilentlyContinue |
         Sort-Object Name |
         ForEach-Object { $_.Name -replace '\.omp\.json$', '' }

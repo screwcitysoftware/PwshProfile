@@ -4,29 +4,27 @@ function Get-PwshProfileDefault {
         Returns the default profile-setup settings used by Install-PwshProfile, for a given theme.
 
     .DESCRIPTION
-        The single source of truth for the wizard's pre-filled answers and the baseline that
-        Build-PwshProfileInitializeCall compares against to decide which parameters are worth
-        emitting. The keys mirror the parameters of Initialize-PwshProfile that the wizard
-        can set:
+        The wizard's pre-filled answers, and the baseline Build-PwshProfileInitializeCall compares
+        against to decide which parameters are worth emitting.
 
-          Theme, CustomTheme, BannerText, BannerColor, BannerAlignment, BannerFont, StepIcon,
-          ZoxideCommand, BatTheme, BatStyle, ReplaceCat, ReplaceMore, FzfGitKeyBindings (bool),
-          FzfTabChord, NoBanner, Enable (string[]), EnableAll.
+        The key set is not written here: it is one entry per wizard-settable row of
+        Get-PwshProfileSettingSchema, so it cannot drift from what the call builder emits or the
+        parser reads back. This function owns the VALUES; the schema owns which keys exist.
 
         BannerText defaults to the literal '$env:COMPUTERNAME' for every theme (it interpolates to the
         machine name at startup) — matching Initialize-PwshProfile's runtime default, so a kept default
-        emits no -BannerText. The banner color, step icon, and bat theme are still seeded from the
-        selected theme via Get-BundledThemeBranding (a forestcity default carries the green/🌳/gruvbox-dark
-        identity, screwcity the purple/🔩/Dracula one). ReplaceCat, ReplaceMore, and NoBanner default to
-        $false (the baseline), so opting in emits -ReplaceCat / -ReplaceMore / -NoBanner. Tool selection is
-        opt-in: Enable defaults to an empty list (a first-run wizard starts with nothing checked, forcing an
-        explicit per-tool choice) and EnableAll defaults to $false. The remaining values are kept identical
-        to Initialize-PwshProfile's own parameter defaults. A fresh hashtable is returned on every call so
+        emits no -BannerText. The banner color, step icon, and bat theme are seeded from the selected
+        theme — the schema marks each with the branding member supplying it, so a forestcity default
+        carries the green/🌳/gruvbox-dark identity and screwcity the purple/🔩/Dracula one.
+        ReplaceCat, ReplaceMore, and NoBanner default to $false (the baseline), so opting in emits
+        -ReplaceCat / -ReplaceMore / -NoBanner. The remaining values are kept identical to
+        Initialize-PwshProfile's own parameter defaults. A fresh hashtable is returned on every call so
         callers can mutate it freely.
 
     .PARAMETER Theme
-        The bundled theme whose branding seeds the banner color/icon defaults. Defaults to 'screwcity'.
-        Unknown names fall back to the screwcity branding (see Get-BundledThemeBranding).
+        The bundled theme whose branding seeds the branded defaults (banner color, step icon, bat
+        theme — whichever rows carry a BrandingKey). Defaults to 'screwcity'; unknown names fall back
+        to the screwcity branding (see Get-BundledThemeBranding).
 
     .EXAMPLE
         Get-PwshProfileDefault
@@ -48,28 +46,23 @@ function Get-PwshProfileDefault {
 
     $branding = Get-BundledThemeBranding -Name $Theme
 
-    @{
-        Theme           = $Theme
-        CustomTheme     = ''
-        # Uniform across themes; the literal interpolates to the machine name at startup.
-        BannerText      = '$env:COMPUTERNAME'
-        BannerColor     = $branding.BannerColor
-        BannerAlignment = 'Left'
-        BannerFont      = 'ANSIShadow'
-        StepIcon        = $branding.StepIcon
-        ZoxideCommand   = 'cd'
-        BatTheme        = $branding.BatTheme
-        BatStyle        = 'numbers,changes,header'
-        ReplaceCat      = $false
-        ReplaceMore     = $false
-        # PSFzf keybinding tuning (only meaningful when Fzf is enabled). Git chords off by default
-        # (opt-in; lazygit covers git); the tab-completion picker chord defaults to Ctrl+Spacebar.
-        # Match Initialize-PwshProfile's defaults.
-        FzfGitKeyBindings = $false
-        FzfTabChord     = 'Ctrl+Spacebar'
-        NoBanner        = $false
-        # Opt-in: nothing selected by default (first-run wizard starts all-unchecked).
-        Enable          = @()
-        EnableAll       = $false
+    # One entry per wizard-settable row of the settings schema, so this cannot drift from what
+    # Build-PwshProfileInitializeCall emits or Read-PwshProfileInstalledSetting parses. A branded key
+    # takes its value from the selected theme (BrandingKey names the branding member, which is not
+    # always the setting name); everything else takes the schema's static default.
+    #
+    # A plain [hashtable], never [ordered]: Build-PwshProfileInitializeCall declares [hashtable]$Setting
+    # and the wizard calls .Clone() on this, which OrderedDictionary does not implement.
+    # Assign inside each branch rather than from an if-expression: an if used as an expression pipes
+    # its result, and Enable's empty-array default would unroll to $null on the way through.
+    $default = @{}
+    foreach ($row in Get-PwshProfileSettingSchema -Wizard) {
+        if ($row.BrandingKey) { $default[$row.Name] = $branding[$row.BrandingKey] }
+        else { $default[$row.Name] = $row.Default }
     }
+
+    # The one honest special case: Theme answers with the theme that was asked for, not the schema's
+    # 'screwcity' baseline.
+    $default.Theme = $Theme
+    $default
 }

@@ -1,11 +1,16 @@
 @{
     RootModule        = 'ScrewCitySoftware.PwshProfile.psm1'
-    ModuleVersion     = '0.7.3'
+
+    # Static placeholder — never what ships. GitVersion computes the real SemVer from git
+    # tag/commit history (see GitVersion.yml) and build.ps1's Build task stamps it onto the
+    # *staged* manifest only, via Update-ModuleManifest. Run `./build.ps1 -Task Version` to see
+    # what the current commit would compute to.
+    ModuleVersion     = '0.0.1'
     GUID              = '4382ebfd-1c06-4409-b7ee-89c3c386b6b0'
     Author            = 'Jason Rotello'
     CompanyName       = 'Screw City Software'   # "Screw City" = Rockford, Illinois (screw/fastener heritage)
     Copyright         = '(c) 2026 Jason Rotello / Screw City Software. Licensed under the MIT License.'
-    Description       = 'Reusable building blocks for PowerShell profile startup: timed startup steps, safe module imports, PSReadLine setup, and CLI tool enablers (git, oh-my-posh, zoxide, fzf/PSFzf, fnm, xh, jq, bat, fd, less, lazygit).'
+    Description       = 'Reusable building blocks for PowerShell profile startup: timed startup steps, safe module imports, PSReadLine setup, and CLI tool enablers (git, oh-my-posh, zoxide, fzf/PSFzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, uv).'
     PowerShellVersion = '7.4'
 
     # Explicit export list (no wildcards) so module discovery doesn't have to load the
@@ -34,8 +39,10 @@
         'Enable-Jq'
         'Enable-Bat'
         'Enable-Fd'
+        'Enable-Ripgrep'
         'Enable-Less'
         'Enable-Lazygit'
+        'Enable-Uv'
         'Enable-WingetCompletion'
         'Enable-AzureCliCompletion'
         'Enable-TailscaleCompletion'
@@ -45,6 +52,7 @@
         'Set-WingetSetting'
         'Select-Fzf'
         'Show-PwshProfileReadme'
+        'Show-PwshProfileChord'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()
@@ -52,7 +60,7 @@
 
     PrivateData       = @{
         PSData = @{
-            Tags         = @('profile', 'startup', 'PSReadLine', 'git', 'oh-my-posh', 'zoxide', 'fzf', 'PSFzf', 'fnm', 'xh', 'jq', 'bat', 'fd', 'less', 'lazygit')
+            Tags         = @('profile', 'startup', 'PSReadLine', 'git', 'oh-my-posh', 'zoxide', 'fzf', 'PSFzf', 'fnm', 'xh', 'jq', 'bat', 'fd', 'ripgrep', 'less', 'lazygit', 'uv')
             LicenseUri   = 'https://opensource.org/licenses/MIT'
             ProjectUri   = 'https://github.com/screwcitysoftware/PwshProfile'
             IconUri      = 'https://raw.githubusercontent.com/screwcitysoftware/PwshProfile/main/Assets/icon.png'

@@ -5,135 +5,94 @@ function Invoke-PwshProfileWizard {
         $null if the user cancels).
 
     .DESCRIPTION
-        Drives the PwshSpectreConsole prompts that collect the user's profile configuration and
-        returns a settings hashtable (the keys of Get-PwshProfileDefault, plus a NerdFont key
-        holding the chosen Nerd Font name(s) as an array, or $null when none were selected, a
-        SetTerminalFont boolean for whether to set the Windows Terminal default font, the
-        InstallTerminalScheme / SetSchemeDefault booleans for whether to install the matching Windows
-        Terminal color scheme and set it as the default, plus the WingetScope / WingetProgressBar /
-        WingetAnonymizePath / WingetDisableInstallNote keys carrying the chosen winget client settings).
-        If the user cancels at the review screen, it returns $null and Install-PwshProfile writes nothing.
+        Drives the PwshSpectreConsole prompts that collect the profile configuration and returns a
+        settings hashtable: the keys of Get-PwshProfileDefault, plus NerdFont (the chosen font names,
+        or $null), SetTerminalFont, InstallTerminalScheme / SetSchemeDefault, and the four Winget*
+        keys. Cancelling at the review screen returns $null and Install-PwshProfile writes nothing.
 
-        Each step opens with a rounded header panel (Write-PwshProfileStepHeader) carrying the step
-        title, a "N of M" progress counter, and a primary description; secondary prompts get inline
-        hint lines (Write-PwshProfilePromptHelp). Both run their text through Format-PwshProfileHelpMarkup,
-        so tool names and code literals are highlighted rather than flat grey — users unfamiliar with
-        the underlying tools (zoxide and its jump command especially) aren't left guessing.
+        Each step opens with a rounded header panel (Write-PwshProfileStepHeader) carrying the title, a
+        "N of M" counter, and a description; secondary prompts get inline hint lines
+        (Write-PwshProfilePromptHelp). Both run their text through Format-PwshProfileHelpMarkup so tool
+        names and code literals are highlighted rather than flat grey. Selection prompts clear
+        themselves on submit, unlike text prompts, so each choice is echoed afterward via
+        Write-PwshProfilePromptAnswer to keep a visible record.
 
-        Selection prompts (Read-SpectreSelection) clear themselves on submit, unlike the text prompts
-        that leave their answer on screen, so each selection's chosen value is echoed afterward via
-        Write-PwshProfilePromptAnswer (an accent check mark + the value) to keep a visible record.
+        One forward pass through the steps, then a review hub where any step can be re-edited before
+        submitting, or the whole thing cancelled:
 
-        The wizard makes one forward pass through the steps, then lands on a review hub where any
-        step can be re-edited before submitting, or the whole thing cancelled:
+          1. Nerd Fonts (optional): installs the recommended Meslo + CascadiaCode pair, then offers to
+             set 'MesloLGM Nerd Font' as the Windows Terminal default font.
+          2. Winget: the full list of CLI packages setup is about to install (Show-PwshProfileInventory
+             over Get-PwshProfileToolInventory), then a curated set of winget client settings (install
+             scope, progress bar, anonymize paths, suppress install notes), pre-filled from the live
+             settings.json and gated behind a single "change these?" prompt that defaults to No. The
+             list frames those questions rather than trailing them.
+          3. Modules: disclosure only — the PowerShell Gallery modules the profile installs on demand,
+             marked present, will-install, or conditional. Nothing to answer, so it ends on a bare
+             "press Enter" rather than a question it does not have.
+          4. Theme: a bundled oh-my-posh theme or a custom path. The bundled choice seeds every branded
+             setting later prompts pre-fill from (banner color, step icon, bat theme); a custom path
+             seeds neutral ones. Re-picking a theme preserves any of those already customized. It then
+             offers the matching Windows Terminal color scheme, and if accepted, whether to make it
+             the default.
+          5. Banner: shows the current config and gates the per-setting prompts behind the same
+             "change these?" pattern. Clearing the banner text hides the banner — since BannerText must
+             be non-empty, a cleared text becomes -NoBanner rather than a shown-but-blank half-state.
+          6. Step icon: always asked, since the icon marks every startup step whether or not there is a
+             banner. A curated shortcode menu with the current icon floated to the top, plus a custom
+             escape hatch.
+          7. Wiring: every tool is installed and enabled, so this asks only how they wire into the
+             shell. A grouped checkbox tree (Read-PwshProfileWiringTree, sourced from
+             Get-PwshProfileWiringCatalog) covers the binary choices — which commands get taken over,
+             and the Ctrl+G git chords — then the free-text settings a checkbox can't express follow:
+             bat's theme and style, less's options, and the fzf tab chord.
 
-          1. Nerd Fonts: optional, a single yes/no; on yes, ensures the NerdFonts module and installs
-             the recommended Meslo + CascadiaCode pair; on no, nothing is installed. Then a second
-             yes/no (default No) offers to set 'MesloLGM Nerd Font' as the Windows Terminal default
-             font, applied to settings.json at install time by Install-PwshProfile via
-             Set-WindowsTerminalFont.
-          2. Winget: a curated set of winget client settings (default install scope, progress-bar
-             style, anonymize-displayed-paths, suppress-install-notes). It first shows the current
-             values (pre-filled from the live settings.json via Get-WingetSettingDefault, flagging any
-             that differ from the recommendation) and asks whether to change them — defaulting to No,
-             via Read-PwshProfileSettingChange — only prompting per-setting on Yes. The values are
-             applied to settings.json at install time by Install-PwshProfile via Set-WingetSetting
-             (not baked into the bootstrap call).
-          3. Theme: pick a bundled oh-my-posh theme (screwcity / forestcity) or supply a custom theme
-             path. The bundled choice seeds the banner color and step icon the later prompts are
-             pre-filled with; a custom path seeds neutral color/icon (a neutral color, a generic icon)
-             so you define those fresh. The banner text defaults to the machine name regardless of
-             theme. Re-picking a theme later preserves any color/icon you already customized (only
-             still-default fields are re-seeded). It then asks whether to install the matching Windows
-             Terminal color scheme (default No) and, only if accepted, whether to set it as the default
-             color scheme (default Yes) — applied to settings.json at install time by Install-PwshProfile
-             via Install-WindowsTerminalScheme (a custom theme falls back to the neutral Screw City scheme).
-          4. Banner: shows the current banner config (shown/hidden plus text/color/alignment/font,
-             flagging anything off the theme default) and asks whether to change it — defaulting to No,
-             via Read-PwshProfileSettingChange. On Yes it asks a show/hide yes-no (no suppresses the
-             banner via -NoBanner and skips the theming sub-steps; yes prompts text, color, alignment,
-             and bundled font). Clearing the banner text also hides the banner — since BannerText must
-             be non-empty, a cleared text is treated like a declined banner (-NoBanner, default text
-             restored) rather than left as a shown-but-blank half-state.
-          5. Step icon: always asked (the icon marks every startup step, banner or not) — a curated
-             shortcode menu with the current icon floated to the top, plus a "custom shortcode" escape.
-          6. Features (opt-in): first a mode choice — pick specific tools, or enable everything
-             including tools added in future updates (-EnableAll). "Specific" shows a grouped tree
-             (Read-PwshProfileFeatureTree) under the Core / WinGet sections (shell completions sit under
-             Core). On a re-run it pre-checks the prior -Enable set; on a clean first run it pre-checks
-             the Core default-on set (WinGet left unchecked). Newly-added tools are tagged "(new)"; the
-             checked set becomes -Enable. oh-my-posh is always on and
-             not listed. If zoxide/bat/less/fzf end up enabled, their tuning prompts (jump command,
-             cat→bat, more→less, and fzf's git keybindings + tab-completion chord) follow.
+        The font, winget, and terminal-scheme choices are one-time machine actions applied by
+        Install-PwshProfile, not baked into the bootstrap call.
 
-        Then a review panel summarizes the choices and offers Submit / Edit <step> / Cancel.
-
-        Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and, when
-        they are not, warns that an interactive session is required and makes no changes.
-
-    .PARAMETER Reconfiguring
-        Indicates the target profile already contains a managed block, so the intro line can say it
-        is updating rather than creating. Purely cosmetic.
+        Assumes the Spectre prompt cmdlets are available — Install-PwshProfile guards that and warns
+        that an interactive session is required when they are not.
 
     .PARAMETER PriorSetting
-        On a re-run, the settings parsed from the existing managed block (via
-        Read-PwshProfileInstalledSetting). Used to seed the wizard so each prompt defaults to last
-        time's choice — the feature tree pre-checks the prior -Enable set, the mode prompt defaults to
-        the prior mode, and theme/banner/icon/tuning prompts pre-fill from it.
-
-    .PARAMETER NewTool
-        Tokens newly available since the prior setup (current catalog minus the recorded snapshot),
-        forwarded to the feature tree so they are tagged "(new)" and start unchecked.
+        On a re-run, the settings parsed from the existing block via Read-PwshProfileInstalledSetting,
+        used to seed every prompt with last time's choice.
 
     .EXAMPLE
         Invoke-PwshProfileWizard
 
-        Walks the user through the prompts and returns the resulting settings hashtable (or $null if
-        cancelled).
+        Walks the prompts and returns the resulting settings hashtable, or $null if cancelled.
     #>
     [CmdletBinding()]
     param(
         [Parameter()]
-        [switch]$Reconfiguring,
-
-        [Parameter()]
-        [hashtable]$PriorSetting,
-
-        [Parameter()]
-        [string[]]$NewTool = @()
+        [hashtable]$PriorSetting
     )
 
-    # Shared mutable state, passed by reference into every step so edits from the review hub stick.
-    # Settings is the hashtable returned to the caller; Def is the baseline for the *current* theme
-    # (drives pre-fills and the "still default?" preserve-edits check); Accent / Code are the
-    # installer's own UI colors — fixed at the module's signature purple and a soft cyan, and
-    # intentionally decoupled from the prompt theme being configured, so the wizard (panels, accents,
-    # code-literal highlighting) looks the same whichever theme you pick.
-    # Baseline defaults for the prior theme (so unspecified banner branding inherits that theme's
-    # identity on a re-run), then overlay the parsed prior choices so every prompt defaults to last
-    # time. On a first run PriorSetting is absent and this is just the screwcity defaults.
+    # Shared mutable state, passed by reference into every step so review-hub edits stick.
+    # Settings is returned to the caller; Def is the current theme's baseline (pre-fills and the
+    # "still default?" preserve-edits check); Accent/Code are the installer's own UI colors, fixed
+    # rather than following the theme being configured.
+    # Seed from the prior theme's defaults, then overlay the parsed prior choices so every prompt
+    # defaults to last time. On a first run PriorSetting is absent and this is just screwcity.
     $priorTheme = if ($PriorSetting -and $PriorSetting.ContainsKey('Theme') -and $PriorSetting.Theme) { $PriorSetting.Theme } else { 'screwcity' }
     $def = Get-PwshProfileDefault -Theme $priorTheme
     $settings = $def.Clone()
+    # Every setting a profile can carry, from the schema — so a parameter cannot be added to the
+    # bootstrap and then silently fail to survive a re-run. Deliberately not the install-time keys set
+    # just below (NerdFont, the Windows Terminal pair, the winget four): those are one-time machine
+    # actions that re-ask every run rather than being remembered.
     if ($PriorSetting) {
-        foreach ($k in 'Theme', 'CustomTheme', 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont',
-            'StepIcon', 'ZoxideCommand', 'BatTheme', 'BatStyle', 'ReplaceCat', 'ReplaceMore',
-            'FzfGitKeyBindings', 'FzfTabChord', 'NoBanner', 'Enable', 'EnableAll') {
+        foreach ($k in @((Get-PwshProfileSettingSchema -Wizard).Name)) {
             if ($PriorSetting.ContainsKey($k)) { $settings[$k] = $PriorSetting[$k] }
         }
     }
     $settings.NerdFont = $null
-    # Set the Windows Terminal default font (a one-time install-time action like NerdFont, not part of
-    # the bootstrap), so it isn't re-seeded from PriorSetting — the prompt re-defaults to Yes each run.
+    # Install-time actions, not part of the bootstrap — never re-seeded, so they re-ask every run.
     $settings.SetTerminalFont = $false
-    # Install the matching Windows Terminal color scheme (and optionally set it as the default) — also a
-    # one-time install-time action, likewise not re-seeded so its Theme-step prompts re-default to Yes.
     $settings.InstallTerminalScheme = $false
     $settings.SetSchemeDefault = $false
-    # winget client settings (applied to winget's settings.json at install time, like NerdFont — not
-    # part of the Initialize-PwshProfile bootstrap, so Build-PwshProfileInitializeCall ignores them).
-    # Seed from the live settings file: an explicitly-set value becomes the pre-fill, otherwise the
-    # module default (Get-WingetSettingDefault).
+    # winget client settings — applied at install time, not part of the bootstrap. Seeded from the
+    # live settings file: an explicit value pre-fills, otherwise the module default.
     $wingetDef = Get-WingetSettingDefault
     $settings.WingetScope = $wingetDef.Scope
     $settings.WingetProgressBar = $wingetDef.ProgressBar
@@ -142,10 +101,10 @@ function Invoke-PwshProfileWizard {
     $state = @{ Settings = $settings; Def = $def; Accent = '#c9aaff'; Code = '#5fd7ff' }
 
     # Escape a dynamic value for safe inclusion in Spectre markup (banner text, paths, …).
-    $esc = {
-        param($text)
-        if ([string]::IsNullOrEmpty("$text")) { return '' }
-        Get-SpectreEscapedTextSafe -Text "$text"
+    function ConvertTo-EscapedText {
+        param($Text)
+        if ([string]::IsNullOrEmpty("$Text")) { return '' }
+        Get-SpectreEscapedTextSafe -Text "$Text"
     }
 
     # --- Step: Theme ------------------------------------------------------------------------
@@ -160,18 +119,19 @@ function Invoke-PwshProfileWizard {
             }
             [pscustomobject]@{ Label = 'Custom path…'; Theme = $null; Custom = $true }
         )
-        # Float the current theme to the top so pressing Enter keeps it (the prior theme on a re-run,
-        # else the screwcity default).
+        # Float the current theme to the top so Enter keeps it.
         $cur = $s.Settings.Theme
         $themeChoices = @($themeChoices | Where-Object { $_.Theme -eq $cur }) +
                         @($themeChoices | Where-Object { $_.Theme -ne $cur })
         $pickTheme = Read-SpectreSelection -Message 'Choose an oh-my-posh theme' -Color $s.Accent -Choices $themeChoices -ChoiceLabelProperty Label
         Write-PwshProfilePromptAnswer $pickTheme.Label -Accent $s.Accent
 
-        # The branding (color/icon) the current fields were seeded from, so we only re-seed untouched
-        # ones. Banner text is theme-independent ($env:COMPUTERNAME default), so it's not re-seeded.
-        $neutral = @{ BannerColor = 'Silver'; StepIcon = ':gear:' }
-        $prevBranding = if ($s.Settings.CustomTheme) { $neutral } else { Get-BundledThemeBranding -Name $s.Settings.Theme }
+        # Every branded setting, and the branding the current values were seeded from, so only
+        # untouched ones get re-seeded. Driving this off the schema is what makes BatTheme ride along:
+        # it is branded exactly like BannerColor and StepIcon, and was previously left out of this
+        # list, so switching theme wrote the old theme's bat palette into the new theme's profile.
+        $themedRow = @(Get-PwshProfileSettingSchema -Wizard | Where-Object BrandingKey)
+        $prevBranding = if ($s.Settings.CustomTheme) { $null } else { Get-BundledThemeBranding -Name $s.Settings.Theme }
 
         if ($pickTheme.Custom) {
             do {
@@ -180,12 +140,11 @@ function Invoke-PwshProfileWizard {
                 $pathOk = $customPath -and (Test-Path -Path $customPath)
                 if (-not $pathOk) { Write-Warning "Theme path '$customPath' was not found; please try again." }
             } until ($pathOk)
-            # A custom theme has no bundled identity, so its color/icon baseline is NEUTRAL. The banner
-            # text keeps the uniform $env:COMPUTERNAME default. Theme stays 'screwcity' but is never
-            # emitted, since -CustomTheme takes precedence in the generated call.
+            # A custom theme has no bundled identity, so color/icon fall back to neutral. Theme stays
+            # 'screwcity' but is never emitted — -CustomTheme wins in the generated call.
             $newDef = Get-PwshProfileDefault
-            $newDef.BannerColor = 'Silver'; $newDef.StepIcon = ':gear:'
-            $newBranding = $neutral
+            foreach ($row in $themedRow) { $newDef[$row.Name] = $row.Neutral }
+            $newBranding = $null
             $s.Settings.Theme = 'screwcity'
             $s.Settings.CustomTheme = $customPath
         }
@@ -196,18 +155,20 @@ function Invoke-PwshProfileWizard {
             $s.Settings.CustomTheme = ''
         }
 
-        # Re-seed only the color/icon fields the user hasn't customized away from the old theme's
-        # values (banner text is theme-independent, so it's never re-seeded here).
-        foreach ($k in 'BannerColor', 'StepIcon') {
-            if ($s.Settings[$k] -eq $prevBranding[$k]) { $s.Settings[$k] = $newBranding[$k] }
+        # Re-seed only the branded fields the user hasn't customized away from the old theme. A null
+        # branding means the theme on that side was custom, which has no bundled identity — the row's
+        # Neutral stands in. Settings are keyed by Name and branding by BrandingKey: not the same
+        # namespace, which is why the schema names the member rather than assuming they match.
+        foreach ($row in $themedRow) {
+            $prev = if ($prevBranding) { $prevBranding[$row.BrandingKey] } else { $row.Neutral }
+            $next = if ($newBranding) { $newBranding[$row.BrandingKey] } else { $row.Neutral }
+            if ($s.Settings[$row.Name] -eq $prev) { $s.Settings[$row.Name] = $next }
         }
-        # Update the branding baseline (pre-fills + preserve-edits check) but leave the installer's
-        # UI accent fixed — it doesn't follow the selected prompt theme.
+        # New branding baseline for pre-fills; the installer's own UI accent stays fixed.
         $s.Def = $newDef
 
-        # Offer to install the matching Windows Terminal color scheme so the terminal's palette lines up
-        # with the prompt — asked every run. A custom theme has no matching scheme, so it falls back to
-        # the neutral Screw City scheme ($s.Settings.Theme is 'screwcity' for a custom pick).
+        # Offer the matching Windows Terminal scheme so the palette lines up with the prompt.
+        # A custom theme has none, so it falls back to the neutral Screw City scheme.
         $schemeName = (Get-BundledThemeBranding -Name $s.Settings.Theme).DisplayName
         $schemeHelp = if ($s.Settings.CustomTheme) {
             "A custom theme has no matching scheme, so this installs the neutral **$schemeName** Windows Terminal color scheme (it won''t match your custom prompt). Edits ``settings.json`` (backed up first); a no-op if Windows Terminal isn''t installed."
@@ -232,8 +193,7 @@ function Invoke-PwshProfileWizard {
         Write-PwshProfileStepHeader -Title 'Banner' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
             -Body 'A large figlet banner printed once when the shell starts up — purely decorative.'
 
-        # Show the current banner config, flagging anything off the theme default, then gate (default
-        # No) before prompting. Recommended baseline is the current theme's branding ($s.Def).
+        # Show the current config, flagging anything off the theme default, then gate before prompting.
         $shown = -not $s.Settings.NoBanner
         $rows = @([pscustomobject]@{ Label = 'Banner'; Value = $(if ($shown) { 'shown' } else { 'hidden' }); Recommended = 'shown' })
         if ($shown) {
@@ -251,18 +211,15 @@ function Invoke-PwshProfileWizard {
             Write-PwshProfilePromptHelp 'The text drawn in the banner. `$env:` variables are expanded, so `$env:COMPUTERNAME` shows the machine name. Press Enter to keep the default shown; clear it to hide the banner entirely.' -Accent $s.Accent -Code $s.Code
             $s.Settings.BannerText = Read-SpectreText -Message 'Banner text (supports $env: variables, e.g. $env:COMPUTERNAME)' -DefaultAnswer $s.Settings.BannerText -AllowEmpty
             if ([string]::IsNullOrWhiteSpace($s.Settings.BannerText)) {
-                # BannerText must be non-empty (Initialize-PwshProfile rejects empty), so treat a cleared
-                # text like a declined banner: restore the default text and suppress via -NoBanner, rather
-                # than leaving a "shown but blank" half-state. Skip the remaining theming prompts.
+                # Initialize-PwshProfile rejects an empty BannerText, so treat a cleared text as a
+                # declined banner (restore the default, suppress via -NoBanner) instead of a blank one.
                 $s.Settings.BannerText = $s.Def.BannerText
                 $s.Settings.NoBanner = $true
                 return
             }
             Write-PwshProfilePromptHelp 'Color of the banner text — a Spectre color name (e.g. `Aqua`) or a hex value (e.g. `#c9aaff`).' -Accent $s.Accent -Code $s.Code
             $s.Settings.BannerColor = Read-SpectreText -Message 'Banner color (Spectre color name or hex)' -DefaultAnswer $s.Settings.BannerColor
-            # Echo the chosen color as a swatch so the user sees what it looks like (Read-SpectreText
-            # leaves the raw value on screen; this adds the colored preview beneath it). Guarded like the
-            # other prompt-echo helpers so it no-ops when Spectre is unavailable.
+            # Echo a swatch under the raw value so the user sees the color. Guarded like the other echoes.
             if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) {
                 Write-SpectreHost "  [$($s.Accent)]✓[/] $(Format-PwshProfileColorValue $s.Settings.BannerColor)"
             }
@@ -281,7 +238,6 @@ function Invoke-PwshProfileWizard {
             }
         }
         else {
-            # No banner: suppress it via -NoBanner.
             $s.Settings.NoBanner = $true
         }
     }
@@ -319,96 +275,47 @@ function Invoke-PwshProfileWizard {
         }
     }
 
-    # --- Step: Features ---------------------------------------------------------------------
-    $stepFeatures = {
+    # --- Step: Wiring -----------------------------------------------------------------------
+    $stepWiring = {
         param($s, $i, $total)
-        Write-PwshProfileStepHeader -Title 'Features' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
-            -Body 'Choose which startup tools run (opt-in). **oh-my-posh** always draws the prompt; pick the rest.'
-        $catalog = Get-PwshProfileToolCatalog -Token
+        Write-PwshProfileStepHeader -Title 'Wiring' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
+            -Body 'Every tool is installed and enabled. These choose how they wire into your shell — which existing commands they take over, and how the themed ones look.'
 
-        # Selection mode: a specific set, or everything (including tools added in future updates). Float
-        # the prior mode to the top so pressing Enter keeps it.
-        $modeSpecific = 'Pick specific tools'
-        $modeAll = 'Enable everything, including tools added in future updates'
-        $modeChoices = if ($s.Settings.EnableAll) { @($modeAll, $modeSpecific) } else { @($modeSpecific, $modeAll) }
+        # The binary choices, all on one screen. Returns setting -> value for EVERY row, checked or
+        # not, so an unchecked box records a real "no" rather than leaving the prior run's value.
+        $chosen = Read-PwshProfileWiringTree -Setting $s.Settings -Color $s.Accent -CodeColor $s.Code
+        foreach ($key in $chosen.Keys) { $s.Settings[$key] = $chosen[$key] }
+
+        # Free-text settings a checkbox can't express, prompted after the tree.
+        #
+        # Pre-filled from the selected theme's branding, so pressing Enter keeps bat matching the
+        # prompt. A text prompt rather than a menu on purpose: the wizard still runs before the tool
+        # install step, so `bat --list-themes` has nothing to enumerate yet.
         Write-PwshProfilePromptHelp @(
-            '**Pick specific tools** — choose each tool yourself; nothing else installs, and tools added to the module later stay off until you re-run setup and select them.'
-            '**Enable everything** — install every current tool *and* automatically adopt any tool added in future module updates, with no prompt. Convenient, but opts into future installs.'
+            'The syntax-highlighting theme **bat** uses, from `bat --list-themes`. It is pre-filled to match your prompt theme; `ansi` follows your terminal''s own colors.'
         ) -Accent $s.Accent -Code $s.Code
-        $mode = Read-SpectreSelection -Message 'How should startup tools be selected?' -Color $s.Accent -Choices $modeChoices
-        Write-PwshProfilePromptAnswer $mode -Accent $s.Accent
+        $s.Settings.BatTheme = Read-SpectreText -Message 'bat syntax theme' -DefaultAnswer $s.Settings.BatTheme
 
-        if ($mode -eq $modeAll) {
-            # Everything on (and future tools auto-adopted); the tuning prompts below all apply.
-            $s.Settings.EnableAll = $true
-            $s.Settings.Enable = @($catalog)
-            $selected = @($catalog)
-        }
-        else {
-            $s.Settings.EnableAll = $false
-            # Seed the tree: a genuine prior -Enable (re-run) pre-checks that selection; otherwise
-            # (a first run, or a prior -EnableAll switching to specific) pre-check the clean-install
-            # default-on set — Core checked, WinGet unchecked. New tools are tagged (new).
-            $hasPriorEnable = ($PriorSetting -and $PriorSetting.ContainsKey('Enable'))
-            $seed = if ($hasPriorEnable) { @($s.Settings.Enable) } else { @(Get-PwshProfileToolCatalog -DefaultEnabled) }
-            $enabledMap = @{}
-            foreach ($t in $catalog) { $enabledMap[$t] = ($seed -contains $t) }
-            $selected = @(Read-PwshProfileFeatureTree -Enabled $enabledMap -New $NewTool -Color $s.Accent -CodeColor $s.Code)
-            # Store in canonical catalog order.
-            $s.Settings.Enable = @($catalog | Where-Object { $selected -contains $_ })
-        }
+        Write-PwshProfilePromptHelp @(
+            'Which parts **bat** draws around your file: a comma-separated list of `numbers`, `changes` (git marks), `header`, `grid`, `rule`, `snip`. Use `full` for everything or `plain` for none.'
+        ) -Accent $s.Accent -Code $s.Code
+        $s.Settings.BatStyle = Read-SpectreText -Message 'bat style components' -DefaultAnswer $s.Settings.BatStyle
 
-        if ($selected -contains 'Zoxide') {
-            Write-PwshProfilePromptHelp @(
-                '**zoxide** is a smarter `cd`: it remembers the directories you visit most and lets you jump to one by a partial name — e.g. `cd dev` jumps straight to `C:\Dev` from anywhere.'
-                'This sets the command name you type to do that. The default `cd` replaces the built-in cd (normal paths still work, it just gains the jump trick).'
-                'Prefer `z` to leave the built-in cd untouched and add a separate `z` command (the zoxide convention). Press Enter to keep `cd`.'
-            ) -Accent $s.Accent -Code $s.Code
-            $s.Settings.ZoxideCommand = Read-SpectreText -Message "zoxide's jump command (replaces cd)" -DefaultAnswer $s.Settings.ZoxideCommand
-        }
+        Write-PwshProfilePromptHelp @(
+            'The options **less** applies to every invocation, via `$env:LESS`. The default `-R -F -i` means: pass color through, quit if the text fits one screen, and search case-insensitively.'
+        ) -Accent $s.Accent -Code $s.Code
+        $s.Settings.LessOptions = Read-SpectreText -Message 'less options ($env:LESS)' -DefaultAnswer $s.Settings.LessOptions
 
-        if ($selected -contains 'Bat') {
-            Write-PwshProfilePromptHelp @(
-                '**bat** is a `cat` with syntax highlighting, line numbers, and git change marks; its colors are themed to match your prompt.'
-                'Replace the built-in `cat` (an alias for `Get-Content`) with **bat**, so `cat file` renders highlighted? Plain redirection and piping still work.'
-            ) -Accent $s.Accent -Code $s.Code
-            $s.Settings.ReplaceCat = [bool](Read-SpectreConfirm -Message 'Replace the built-in cat (Get-Content) with bat?' -Color $s.Accent -DefaultAnswer 'y')
-        }
-        else {
-            # bat is opted out, so the cat-override setting is moot — keep it off.
-            $s.Settings.ReplaceCat = $false
-        }
+        Write-PwshProfilePromptHelp @(
+            '**PSFzf** puts a fuzzy tab-completion picker on a chord; `Tab` itself stays `MenuComplete`.'
+            'Which chord should trigger it? Press Enter to keep `Ctrl+Spacebar` (also binds `Ctrl+@`, which many terminals emit identically).'
+        ) -Accent $s.Accent -Code $s.Code
+        $s.Settings.FzfTabChord = Read-SpectreText -Message 'PSFzf tab-completion picker chord' -DefaultAnswer $s.Settings.FzfTabChord
 
-        if ($selected -contains 'Less') {
-            Write-PwshProfilePromptHelp @(
-                '**less** is a full-featured pager (color, search, backward scroll) — far beyond the built-in `more.com`; it is also what lets **bat** page with color.'
-                'Make less the default pager? This sets `$env:PAGER` to less (so `help` and color CLIs page through it) and aliases `more` -> less. `more.com` stays available.'
-            ) -Accent $s.Accent -Code $s.Code
-            $s.Settings.ReplaceMore = [bool](Read-SpectreConfirm -Message 'Make less the default pager (replace more)?' -Color $s.Accent -DefaultAnswer 'y')
-        }
-        else {
-            # less is opted out, so the pager-override setting is moot — keep it off.
-            $s.Settings.ReplaceMore = $false
-        }
-
-        if ($selected -contains 'Fzf') {
-            Write-PwshProfilePromptHelp @(
-                '**PSFzf** can bind `Ctrl+G` chords for fzf-powered git pickers — branches, commits, changed files, stashes.'
-                'With **lazygit** available for full git workflows these are off by default. Enable the PSFzf git keybindings (`Ctrl+G`)? `Ctrl+T` (files) and `Ctrl+R` (history) stay on regardless.'
-            ) -Accent $s.Accent -Code $s.Code
-            $s.Settings.FzfGitKeyBindings = [bool](Read-SpectreConfirm -Message 'Enable PSFzf git keybindings (Ctrl+G)?' -Color $s.Accent -DefaultAnswer 'n')
-
-            Write-PwshProfilePromptHelp @(
-                '**PSFzf** puts a fuzzy tab-completion picker on a chord; `Tab` itself stays `MenuComplete`.'
-                'Which chord should trigger it? Press Enter to keep `Ctrl+Spacebar` (also binds `Ctrl+@`, which many terminals emit identically).'
-            ) -Accent $s.Accent -Code $s.Code
-            $s.Settings.FzfTabChord = Read-SpectreText -Message 'PSFzf tab-completion picker chord' -DefaultAnswer $s.Settings.FzfTabChord
-        }
-        else {
-            # fzf is opted out, so the keybinding tuning is moot — keep the defaults.
-            $s.Settings.FzfGitKeyBindings = $false
-            $s.Settings.FzfTabChord = 'Ctrl+Spacebar'
-        }
+        Write-PwshProfilePromptHelp @(
+            'Print a **chord reference** once at the end of every startup — every keybinding this profile wires up (fzf''s pickers, `Initialize-PSReadline`''s bindings), plus a couple of related defaults that aren''t this module''s choice (**PSFzf**''s own `Alt+C`). Off by default; run `Show-PwshProfileChord` any time regardless.'
+        ) -Accent $s.Accent -Code $s.Code
+        $s.Settings.ShowChordGuidance = [bool](Read-SpectreConfirm -Message 'Show a keyboard-chord reference at every startup?' -Color $s.Accent -DefaultAnswer $(if ($s.Settings.ShowChordGuidance) { 'y' } else { 'n' }))
     }
 
     # --- Step: Nerd Font (optional) ---------------------------------------------------------
@@ -423,8 +330,7 @@ function Invoke-PwshProfileWizard {
             Import-ModuleSafe NerdFonts
             if (Get-Command Get-NerdFont -ErrorAction SilentlyContinue) {
                 $names = @(Get-NerdFont | Select-Object -ExpandProperty Name)
-                # Meslo + CascadiaCode are the recommended pairing for oh-my-posh; keep only those
-                # actually present in the catalog ("if possible").
+                # Recommended pairing for oh-my-posh, minus anything absent from the catalog.
                 $recommended = @('Meslo', 'CascadiaCode') | Where-Object { $names -contains $_ }
                 if ($recommended.Count -gt 0) {
                     $s.Settings.NerdFont = $recommended
@@ -438,8 +344,7 @@ function Invoke-PwshProfileWizard {
             }
         }
 
-        # Offer to point Windows Terminal at the Meslo Nerd Font as its default profile font — asked
-        # every run (even if the install above was declined; the font may already be present).
+        # Asked every run, even if the install above was declined — the font may already be present.
         Write-PwshProfilePromptHelp 'Point **Windows Terminal** at `MesloLGM Nerd Font` as its default profile font so the prompt glyphs render right away. Edits its `settings.json` (backed up first); a no-op if Windows Terminal isn''t installed.' -Accent $s.Accent -Code $s.Code
         $s.Settings.SetTerminalFont = [bool](Read-SpectreConfirm -Message 'Set MesloLGM Nerd Font as the Windows Terminal default font?' -Color $s.Accent -DefaultAnswer 'n')
     }
@@ -448,10 +353,16 @@ function Invoke-PwshProfileWizard {
     $stepWinget = {
         param($s, $i, $total)
         Write-PwshProfileStepHeader -Title 'Winget' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
-            -Body 'Tunes the **winget** client itself — the defaults in its `settings.json` that apply whenever you install packages. Applied once now; pre-filled from your current winget settings.'
+            -Body '**winget** is what installs the CLI tools below. This tunes the client itself — the defaults in its `settings.json` that apply whenever it installs a package. Applied once now; pre-filled from your current winget settings.'
 
-        # Show the current values (flagging any off the recommendation), then gate (default No) before
-        # prompting. The current values are applied at install time either way.
+        # Every package winget is about to handle -- git and oh-my-posh included, which is the reason
+        # they are catalog rows now -- shown BEFORE the settings so they frame the question rather than
+        # trailing it: the scope and progress-bar answers matter precisely because this is what they
+        # will be applied to. Also the earliest point the plan can be seen, the install itself
+        # happening after the review screen, by which time you have already committed.
+        Show-PwshProfileInventory -Color $s.Accent
+
+        # Show the current values (flagging any off the recommendation), then gate before prompting.
         $rec = Get-WingetSettingRecommended
         $rows = @(
             [pscustomobject]@{ Label = 'Default scope';   Value = $s.Settings.WingetScope;       Recommended = $rec.Scope }
@@ -473,33 +384,43 @@ function Invoke-PwshProfileWizard {
         Write-PwshProfilePromptAnswer $s.Settings.WingetScope -Accent $s.Accent
 
         # Progress bar style — float the current value first.
-        Write-PwshProfilePromptHelp 'The bar **winget** shows while downloading/installing: `rainbow` is a cycling gradient, `accent` a solid accent-color bar, `retro` a plain ASCII bar, `disabled` none.' -Accent $s.Accent -Code $s.Code
-        $bars = @('accent', 'rainbow', 'retro', 'disabled')
+        Write-PwshProfilePromptHelp 'The bar **winget** shows while downloading/installing: `rainbow` is a cycling gradient, `accent` a solid accent-color bar, `retro` a plain ASCII bar, `sixel` a graphical bar on terminals that support it, `disabled` none.' -Accent $s.Accent -Code $s.Code
+        $bars = @('accent', 'rainbow', 'retro', 'sixel', 'disabled')
         if ($bars -contains $s.Settings.WingetProgressBar) {
             $bars = @($s.Settings.WingetProgressBar) + @($bars | Where-Object { $_ -ne $s.Settings.WingetProgressBar })
         }
         $s.Settings.WingetProgressBar = Read-SpectreSelection -Message 'Winget progress bar style' -Color $s.Accent -Choices $bars
         Write-PwshProfilePromptAnswer $s.Settings.WingetProgressBar -Accent $s.Accent
 
-        # Anonymize displayed paths.
         Write-PwshProfilePromptHelp 'Replace known folders with their environment-variable names (e.g. `%LOCALAPPDATA%`) in **winget** output — handy for screenshots and screen-sharing.' -Accent $s.Accent -Code $s.Code
         $s.Settings.WingetAnonymizePath = [bool](Read-SpectreConfirm -Message 'Anonymize known paths in winget output?' -Color $s.Accent -DefaultAnswer $(if ($s.Settings.WingetAnonymizePath) { 'y' } else { 'n' }))
 
-        # Suppress post-install notes.
         Write-PwshProfilePromptHelp 'Suppress the notes some packages print after a successful install, for quieter output.' -Accent $s.Accent -Code $s.Code
         $s.Settings.WingetDisableInstallNote = [bool](Read-SpectreConfirm -Message 'Suppress post-install notes?' -Color $s.Accent -DefaultAnswer $(if ($s.Settings.WingetDisableInstallNote) { 'y' } else { 'n' }))
     }
 
-    # Ordered step table — drives both the forward pass and the review hub's Edit choices. The two
-    # machine-setup steps (Nerd Fonts, Winget) lead; the prompt cosmetics follow. Theme must stay
+    # --- Step: PowerShell modules (disclosure only) -----------------------------------------
+    $stepModules = {
+        param($s, $i, $total)
+        Write-PwshProfileStepHeader -Title 'Modules' -Index $i -Total $total -Accent $s.Accent -Code $s.Code `
+            -Body 'The other half of what lands on your machine: a few **PowerShell Gallery** modules the profile leans on. Each installs for your user only (`CurrentUser` scope, no admin) the first time it is actually needed. Nothing to choose here — this step exists so it is not a surprise.'
+        Show-PwshProfileInventory -Row (Get-PwshProfileModuleInventory) -Color $s.Accent
+        # Every other step pauses on a prompt of its own; a step that only discloses has nothing to
+        # ask, and without this the next step's header would scroll it away the instant it drew. The
+        # answer is deliberately discarded -- -AllowEmpty makes a bare Enter the expected input.
+        $null = Read-SpectreText -Message 'Press Enter to continue' -AllowEmpty
+    }
+
+    # Ordered step table — drives the forward pass and the review hub's Edit choices. Theme must stay
     # ahead of Banner and Step icon, which pre-fill from the branding it seeds.
     $steps = [ordered]@{
-        'Fonts'     = $stepFonts
-        'Winget'    = $stepWinget
-        'Theme'     = $stepTheme
-        'Banner'    = $stepBanner
-        'Step icon' = $stepIcon
-        'Features'  = $stepFeatures
+        'Fonts'        = $stepFonts
+        'Winget'       = $stepWinget
+        'Modules'      = $stepModules
+        'Theme'        = $stepTheme
+        'Banner'       = $stepBanner
+        'Step icon'    = $stepIcon
+        'Wiring'       = $stepWiring
     }
 
     # Forward pass — thread each step's 1-based position and the total so its header shows "N of M".
@@ -508,15 +429,14 @@ function Invoke-PwshProfileWizard {
     for ($n = 0; $n -lt $total; $n++) { & $steps[$keys[$n]] $state ($n + 1) $total }
 
     # --- Review hub -------------------------------------------------------------------------
-    # Color the values directly: known-safe slugs (theme/font/feature tokens) get a color tag, while
-    # user-controlled text (banner text/color, custom path, icon shortcode) is escaped via $esc first
-    # so it can never inject markup — then tinted. Labels stay bold.
+    # Escape user-controlled text (banner text/color, custom path, icon shortcode) via $esc before
+    # tinting it, so it can never inject markup. Known-safe slugs are tinted directly.
     $accent = $state.Accent
     $code = $state.Code
     while ($true) {
         $set = $state.Settings
         $themeLine = if ($set.CustomTheme) {
-            "custom: [$code]$(& $esc $set.CustomTheme)[/]"
+            "custom: [$code]$(ConvertTo-EscapedText $set.CustomTheme)[/]"
         }
         else { "[$accent]$($set.Theme)[/]" }
         $bannerOff = [bool]$set.NoBanner
@@ -524,36 +444,41 @@ function Invoke-PwshProfileWizard {
             '[grey]off[/]'
         }
         else {
-            "'$(& $esc $set.BannerText)' [grey]/[/] $(Format-PwshProfileColorValue $set.BannerColor) [grey]/[/] $($set.BannerAlignment) [grey]/[/] [$code]$($set.BannerFont)[/]"
+            "'$(ConvertTo-EscapedText $set.BannerText)' [grey]/[/] $(Format-PwshProfileColorValue $set.BannerColor) [grey]/[/] $($set.BannerAlignment) [grey]/[/] [$code]$($set.BannerFont)[/]"
         }
-        # Feature summary: everything (and future), the chosen set, or nothing.
-        $enabledList = @($set.Enable)
-        $featuresLine = if ($set.EnableAll) {
-            '[grey]all tools + future additions[/]'
-        }
-        elseif ($enabledList.Count) {
-            "[$code]$($enabledList -join ', ')[/]"
-        }
-        else { '[grey]none[/]' }
-        $batOn = $set.EnableAll -or ($enabledList -contains 'Bat')
-        $lessOn = $set.EnableAll -or ($enabledList -contains 'Less')
-        $fzfOn = $set.EnableAll -or ($enabledList -contains 'Fzf')
-        # Note the cat -> bat takeover, when opted in and bat is enabled.
-        if ($set.ReplaceCat -and $batOn) {
-            $featuresLine += " [grey]·[/] [$code]cat→bat[/]"
-        }
-        # Note the more -> less takeover, when opted in and less is enabled.
-        if ($set.ReplaceMore -and $lessOn) {
-            $featuresLine += " [grey]·[/] [$code]more→less[/]"
-        }
-        # Note fzf keybinding tuning: git chords enabled (off by default), and/or a non-default tab chord.
-        if ($fzfOn) {
-            if ($set.FzfGitKeyBindings) { $featuresLine += " [grey]·[/] [$code]git chords[/]" }
-            if ($set.FzfTabChord -and $set.FzfTabChord -ne 'Ctrl+Spacebar') {
-                $featuresLine += " [grey]·[/] [$code]tab: $(& $esc $set.FzfTabChord)[/]"
+        # Wiring summary, projected from the same catalog the tree renders — so a toggle cannot exist
+        # in the tree and be silently missing from the review. Only the "on" side is listed; a row
+        # left at Off contributes nothing rather than a noisy negative.
+        $wiringParts = @(
+            foreach ($row in Get-PwshProfileWiringCatalog) {
+                if ($set.ContainsKey($row.Setting) -and $set[$row.Setting] -eq $row.On) {
+                    "[$code]$(ConvertTo-EscapedText $row.Label)[/]"
+                }
             }
-        }
-        $fontsLine = if (@($set.NerdFont).Count) {
+            if ($set.FzfTabChord -and $set.FzfTabChord -ne 'Ctrl+Spacebar') {
+                "[$code]tab: $(ConvertTo-EscapedText $set.FzfTabChord)[/]"
+            }
+            if ($set.ShowChordGuidance) {
+                "[$code]chord guidance: on[/]"
+            }
+        )
+        $featuresLine = if ($wiringParts.Count -gt 0) { $wiringParts -join " [grey]·[/] " }
+        else { '[grey]nothing taken over[/]' }
+
+        # What the install phase will actually do, so it isn't a surprise after Submit. Probed here
+        # rather than carried in $Settings because the answer can change between passes through the
+        # hub -- a tool could be installed in another window while the wizard is open.
+        $inventory = @(Get-PwshProfileToolInventory)
+        $toInstall = @($inventory | Where-Object { -not $_.Installed })
+        $toolsLine = if ($toInstall.Count -eq 0) { "[grey]all $($inventory.Count) already installed[/]" }
+        else { "[$code]$($toInstall.Count) to install[/] [grey]·[/] [grey]$($inventory.Count - $toInstall.Count) present[/]" }
+        # The gallery modules are installed on demand by Import-ModuleSafe, not by setup, so this is
+        # disclosure rather than a plan -- a conditional row may never be fetched at all.
+        $modules = @(Get-PwshProfileModuleInventory)
+        $modulesMissing = @($modules | Where-Object { -not $_.Installed })
+        $modulesLine = if ($modulesMissing.Count -eq 0) { "[grey]all $($modules.Count) already installed[/]" }
+        else { "[$code]$($modulesMissing.Count) to install[/] [grey]·[/] [grey]$($modules.Count - $modulesMissing.Count) present[/]" }
+        $fontsLine = if (@($set.NerdFont).Count -gt 0) {
             (@($set.NerdFont) | ForEach-Object { "[$accent]$_[/]" }) -join ', '
         }
         else { '[grey]none[/]' }
@@ -570,8 +495,12 @@ function Invoke-PwshProfileWizard {
         $summary = @(
             "[bold]Theme:[/]      $themeLine"
             "[bold]Banner:[/]     $bannerLine"
-            "[bold]Step icon:[/]  [$code]$(& $esc $set.StepIcon)[/]"
-            "[bold]Features:[/]   $featuresLine"
+            "[bold]Step icon:[/]  [$code]$(ConvertTo-EscapedText $set.StepIcon)[/]"
+            "[bold]Wiring:[/]     $featuresLine"
+            "[bold]Tools:[/]      $toolsLine"
+            "[bold]Modules:[/]    $modulesLine"
+            "[bold]bat:[/]        [$code]$(ConvertTo-EscapedText $set.BatTheme)[/] [grey]/[/] [$code]$(ConvertTo-EscapedText $set.BatStyle)[/]"
+            "[bold]less:[/]       [$code]$(ConvertTo-EscapedText $set.LessOptions)[/]"
             "[bold]Nerd Fonts:[/] $fontsLine"
             "[bold]WT font:[/]    $wtFontLine"
             "[bold]WT scheme:[/]  $wtSchemeLine"

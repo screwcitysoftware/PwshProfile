@@ -67,6 +67,8 @@ Describe 'Get-BundledThemeBranding' {
             # fd (LS_COLORS) and fzf color specs blend with the purple/cyan palette.
             $b.LsColors    | Should -Match 'di=1;38;2;201;170;255'
             $b.FzfColors   | Should -Match 'pointer:#c9aaff'
+            $b.MarkdownHeaderColor | Should -Be '[1;38;2;201;170;255m'
+            $b.MarkdownCodeColor   | Should -Be '[38;2;95;215;255m'
         }
     }
 
@@ -80,6 +82,8 @@ Describe 'Get-BundledThemeBranding' {
             # fd (LS_COLORS) and fzf color specs blend with the green/gold palette.
             $b.LsColors    | Should -Match 'di=1;38;2;143;206;114'
             $b.FzfColors   | Should -Match 'pointer:#8fce72'
+            $b.MarkdownHeaderColor | Should -Be '[1;38;2;143;206;114m'
+            $b.MarkdownCodeColor   | Should -Be '[38;2;102;217;197m'
         }
     }
 

@@ -1,164 +1,154 @@
+# Parameters this function used to accept and no longer does. Declared here, at file top outside the
+# function (the same module-state shape Invoke-Step uses), so that "add the name here when you retire
+# a parameter" is a findable instruction rather than folklore. Naming them buys a targeted message:
+# a retired name means the caller's profile block is stale, which has a different fix from a typo.
+$script:RetiredParameter = @('Enable', 'EnableAll')
+
 function Initialize-PwshProfile {
     <#
     .SYNOPSIS
-        Runs the default Screw City profile startup: banner, shell config, prompt, tools, and
-        shell completions.
+        Runs the Screw City profile startup: banner, shell config, prompt, tools, and completions.
 
     .DESCRIPTION
-        Runs the profile startup as a single call. In order it:
-          1. Shows the startup banner (Write-Figlet), unless -NoBanner.
-          2. Runs "Core" (always): the `which` global alias, PSReadLine, oh-my-posh (the prompt engine,
-             always on), Terminal-Icons, posh-git, and the shell completions (winget, Azure CLI,
-             Tailscale, Docker, 1Password, GitHub CLI — registration only; they detect external CLIs and
-             install nothing). Everything here except the `which` alias and oh-my-posh is opt-in.
-          3. Runs "WinGet" (only when ≥1 winget tool is enabled): zoxide, fzf, fnm, xh, jq, bat, fd,
-             less, and lazygit — the CLIs installed via WinGet. fzf sits next to zoxide (zoxide's
-             interactive picker auto-uses fzf when on PATH); fnm registers a LocationChangedAction so
-             it auto-switches the node version on any directory change (independent of zoxide and call
-             order); fd follows fzf so it can wire fzf to use fd as its file source; less is bat's
-             pager (and PowerShell's, via $env:PAGER); and lazygit is a standalone git TUI.
+        Runs the whole profile startup as a single call:
+          1. The startup banner (Write-Figlet), unless -NoBanner.
+          2. "Core" (always renders): the `which` alias, git, PSReadLine, oh-my-posh, Terminal-Icons,
+             posh-git, and the shell completions (winget, Azure CLI, Tailscale, Docker, 1Password,
+             GitHub CLI — registration only; they detect external CLIs and install nothing).
+          3. "WinGet": zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, and uv. Order matters
+             twice — git leads Core so it is on PATH for posh-git and lazygit, and fd follows fzf so
+             it can wire fzf to use fd as its file source.
 
-        The two groups mirror the install model: WinGet = tools installed via WinGet (opt-in), Core =
-        everything else. Each is its own top-level Invoke-Step (its own status spinner + summary line).
-        Steps that depend on a missing tool degrade silently (guarded by Get-Command / Import-ModuleSafe),
-        so this never throws out of profile startup.
+        The two groups mirror the install model: WinGet = the CLIs installed via WinGet, Core =
+        everything else. Each is its own top-level Invoke-Step (status spinner + summary line). A step
+        whose tool is missing degrades silently, so this never throws out of profile startup.
 
-        Use -Theme to choose a bundled theme ('screwcity' or 'forestcity'), or -CustomTheme to point
-        oh-my-posh at a theme file of your own (the two are mutually exclusive). The banner text
-        defaults to the machine name ($env:COMPUTERNAME) regardless of theme; the bundled themes each
-        carry a matching banner color and step marker — picking 'forestcity' defaults the banner to
-        the theme's green with a 🌳 marker, while 'screwcity' keeps purple / 🔩 — applied only to the
-        banner color/icon you don't set explicitly. The theme likewise seeds bat's syntax theme
-        (-BatTheme), fd's LS_COLORS palette (-FdColors), and fzf's picker palette (-FzfColors) so
-        those tools' colors blend with the prompt (screwcity -> Dracula/purple, forestcity ->
-        gruvbox-dark/green). fzf also gets the `full` UI style and — via the PSFzf module — Ctrl+T
-        (file picker, with a bat preview when bat is in play) and Ctrl+R (fuzzy history) key
-        bindings, fd-backed traversal, and the Ctrl+G fuzzy-git chords (when git is present). Those
-        PSFzf pickers are sized to fill the shell (--height=100%), overriding PSFzf's inline 40%
-        default; a bare fzf and zoxide's `cdi` keep their native alternate-screen fullscreen.
-        Tool selection is opt-in. Pass -Enable with the tools you want (e.g. -Enable Zoxide,Bat); only
-        those run, so a tool added to the module in a later version never installs until you ask for it.
-        Pass -EnableAll to enable every current tool and auto-adopt future additions. -Enable wins if
-        both are given (the explicit list is the safer choice) and a warning notes -EnableAll was
-        ignored. A bare call (neither, e.g. a hand-typed Initialize-PwshProfile) prompts before
-        enabling everything when interactive, and enables nothing in a non-interactive session.
-        oh-my-posh and the `which` alias always run; the banner is on by default and suppressed with
-        -NoBanner. A tool-specific parameter (e.g. -ReplaceCat) for a tool that isn't enabled is warned
-        about and ignored rather than throwing.
+        Every tool runs — there is no tool selection. Install-PwshProfile installs the CLIs during
+        setup, so at startup each Enable-* Install substep short-circuits on Get-Command and costs
+        almost nothing; a tool that is genuinely missing (a fresh machine, or one added by a later
+        module version) is installed here instead. What the wizard configures is how each tool is
+        *wired* — which builtins it replaces, which chords it binds — not whether it is present.
 
-        Use -ZoxideCommand to rename zoxide's jump command, -StepIcon to rebrand the step marker,
-        -BatTheme / -BatStyle to tune bat's appearance, -ReplaceCat to alias cat -> bat, -ReplaceMore
-        to route the pager (more.com -> less) through $env:PAGER and alias more -> less, and -FdColors /
-        -FzfColors to tune fd's and fzf's colors.
+        The theme drives more than the prompt. Unless set explicitly, it also supplies the banner color,
+        the step icon, bat's syntax theme, fd's LS_COLORS palette, and fzf's picker palette, so every
+        tool's colors blend with the prompt (screwcity -> Dracula/purple, forestcity -> gruvbox-dark/
+        green). Banner *text* is not themed — it defaults to the machine name for every theme.
 
-        It deliberately runs only the module's own startup — any other personal profile scripts you
-        keep in $PROFILE are left untouched.
+        Only the module's own startup runs here; anything else in your $PROFILE is left untouched.
 
     .PARAMETER BannerText
-        Text rendered by the startup banner. When omitted, defaults to the machine name
-        ($env:COMPUTERNAME) for every theme. Must be non-empty — to render no banner, use -NoBanner.
+        Text rendered by the startup banner. Defaults to the machine name ($env:COMPUTERNAME) for every
+        theme. Must be non-empty — to render no banner, use -NoBanner.
 
     .PARAMETER BannerColor
-        Spectre color name or hex for the banner. When omitted, defaults to the selected theme's
-        signature color (screwcity's purple '#c9aaff' or forestcity's green '#8fce72').
+        Spectre color name or hex for the banner. Defaults to the selected theme's signature color.
 
     .PARAMETER BannerAlignment
-        Banner alignment: 'Left', 'Center', or 'Right'. Defaults to 'Left'.
+        Banner alignment: 'Left' (default), 'Center', or 'Right'.
 
     .PARAMETER BannerFont
         A bundled FIGlet font for the banner (tab-completes), forwarded to Write-Figlet as -Font.
-        Mutually exclusive with -BannerFontPath. When neither is given, Write-Figlet's default
-        ('ANSIShadow') is used. Run Show-FigletFont to list the bundled fonts (or -Preview to see
-        samples).
+        Mutually exclusive with -BannerFontPath; Write-Figlet's default is used when neither is given.
+        Run Show-FigletFont to list the bundled fonts, or Show-FigletFont -Preview to see samples.
 
     .PARAMETER BannerFontPath
-        Path to a custom .flf FIGlet font for the banner, forwarded to Write-Figlet as -FontPath.
-        Mutually exclusive with -BannerFont. Validated to exist at call time.
+        Path to a custom .flf FIGlet font, forwarded to Write-Figlet as -FontPath. Mutually exclusive
+        with -BannerFont. Validated to exist at call time.
 
     .PARAMETER Theme
-        The bundled oh-my-posh theme to use (tab-completes): 'screwcity' (default) or 'forestcity'.
-        Resolved to its file under Assets/Themes and forwarded to Enable-OhMyPosh as -Configuration.
-        The choice also seeds the banner color and step icon for any you don't set explicitly (the
-        banner text defaults to the machine name regardless of theme). Mutually exclusive with
-        -CustomTheme. Run Get-OhMyPoshTheme to dump a bundled theme's JSON as a starting point for your own.
+        The bundled oh-my-posh theme to use (tab-completes), default 'screwcity'. Resolved to its file
+        under Assets/Themes and forwarded to Enable-OhMyPosh as -Configuration; it also seeds the
+        branding described above. Mutually exclusive with -CustomTheme. Run Get-OhMyPoshTheme to dump a
+        bundled theme's JSON as a starting point for your own.
 
     .PARAMETER CustomTheme
-        Path (relative or absolute) to a custom oh-my-posh theme file, forwarded to Enable-OhMyPosh
-        as -Configuration in place of a bundled theme. The path is validated to exist at call time,
-        so a typo surfaces immediately rather than silently falling back to the bundle. Mutually
-        exclusive with -Theme; banner branding falls back to the screwcity defaults.
+        Path to your own oh-my-posh theme file, used in place of a bundled theme. Validated to exist at
+        call time, so a typo surfaces immediately rather than silently falling back to the bundle.
+        Mutually exclusive with -Theme; branding falls back to the screwcity defaults.
 
     .PARAMETER ZoxideCommand
-        The command name zoxide binds for jumping, forwarded to Enable-Zoxide as -Command.
-        Defaults to 'cd' (replacing the built-in cd); pass e.g. 'z' to keep cd intact.
+        The command name zoxide binds for jumping, forwarded to Enable-Zoxide as -Command. Defaults to
+        'cd' (replacing the built-in); pass 'z' to keep cd intact.
 
     .PARAMETER BatTheme
-        The bat syntax-highlighting theme, forwarded to Enable-Bat as -Theme (sets $env:BAT_THEME).
-        When omitted, defaults to the selected theme's branding (screwcity's 'Dracula' or forestcity's
-        'gruvbox-dark') so bat's colors blend with the prompt. A value from `bat --list-themes`.
+        bat's syntax-highlighting theme (a value from `bat --list-themes`), forwarded to Enable-Bat as
+        -Theme. Defaults to the selected theme's branding.
 
     .PARAMETER BatStyle
-        The bat layout, forwarded to Enable-Bat as -Style (sets $env:BAT_STYLE) — a comma-separated
-        list of components. Defaults to 'numbers,changes,header'.
+        bat's layout — a comma-separated component list forwarded to Enable-Bat as -Style. Defaults to
+        'numbers,changes,header'.
 
     .PARAMETER ReplaceCat
-        Forwarded to Enable-Bat as -ReplaceCat: when set, aliases cat -> bat for the session (so the
-        built-in cat, an alias for Get-Content, is replaced by bat). Off by default.
+        Alias cat -> bat for the session, replacing the built-in cat (an alias for Get-Content).
+        Forwarded to Enable-Bat; off by default.
+
+    .PARAMETER LessOptions
+        The option string assigned to $env:LESS, forwarded to Enable-Less as -Options. Defaults to
+        '-R -F -i': raw color passthrough, quit-if-one-screen, and smart-case search.
+
+    .PARAMETER SetPager
+        Set $env:PAGER to less, so `help`, bat, git, delta and gh page through it. Forwarded to
+        Enable-Less; off by default. Independent of -ReplaceMore.
 
     .PARAMETER ReplaceMore
-        Forwarded to Enable-Less as -ReplaceMore: when set, sets $env:PAGER to 'less' (so PowerShell's
-        `help`, bat, git, delta, and gh page through less instead of more.com) and aliases more -> less
-        for the session. Off by default.
+        Alias more -> less. Forwarded to Enable-Less; off by default. Independent of -SetPager: this
+        shadows the `more` command, that redirects programs which consult $env:PAGER (`help` invokes
+        the literal string more.com, so the alias alone does not reach it).
+
+    .PARAMETER ReplaceHttp
+        Alias http -> xh and https -> xhs, widening each generated completer to match. Forwarded to
+        Enable-Xh; off by default. Unlike cat and more these are not built-in commands, so this claims
+        two free names rather than shadowing anything.
 
     .PARAMETER FdColors
-        The LS_COLORS spec, forwarded to Enable-Fd as -LsColors (sets $env:LS_COLORS) so fd's output
-        is tinted to match the prompt. When omitted, defaults to the selected theme's branding
-        (screwcity's purple-led palette or forestcity's green-led one). fd stays a standalone utility
-        and never replaces Get-ChildItem. Note: LS_COLORS is shared with ls/eza.
+        The LS_COLORS spec forwarded to Enable-Fd as -LsColors, so fd's output matches the prompt.
+        Defaults to the selected theme's branding. Note LS_COLORS is shared with ls/eza.
 
     .PARAMETER FzfColors
-        The fzf `--color` spec, forwarded to Enable-Fzf as -Colors (folded into $env:FZF_DEFAULT_OPTS)
-        so fzf's picker palette matches the prompt. When omitted, defaults to the selected theme's
-        branding (screwcity's purple/cyan or forestcity's green/gold).
+        The fzf `--color` spec forwarded to Enable-Fzf as -Colors, so the picker matches the prompt.
+        Defaults to the selected theme's branding.
 
     .PARAMETER StepIcon
-        The marker printed before each top-level step description, forwarded to Invoke-Step as
-        -Icon. Defaults to ':nut_and_bolt:' (a Spectre emoji shortcode, rendered as 🔩). No trailing
-        space is needed — the separator between the icon and the step text is added at render time.
+        The marker printed before each top-level step, forwarded to Invoke-Step as -Icon. A Spectre
+        emoji shortcode, e.g. ':nut_and_bolt:'. No trailing space — the separator is added at render
+        time. Defaults to the selected theme's branding.
 
     .PARAMETER FzfGitKeyBindings
-        Bind PSFzf's Ctrl+G git chords (fzf-powered pickers for branches, commits, files). Off by
-        default (opt-in) — pass -FzfGitKeyBindings to enable them; they're off by default because
-        lazygit already covers git workflows. Only applies when Fzf is enabled (a warning notes it
-        otherwise); Enable-Fzf drops the chords regardless if git isn't on PATH.
+        Bind PSFzf's Ctrl+G,Ctrl+<key> git chords (fzf pickers for branches, files, hashes, pull
+        requests, stashes, and tags). Off by default, since lazygit already covers git workflows.
+        Enable-Fzf drops the chords when git isn't on PATH.
 
     .PARAMETER FzfTabChord
-        The PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (Tab itself stays
-        MenuComplete). Defaults to 'Ctrl+Spacebar' — Enable-Fzf also binds 'Ctrl+@' to the same picker
-        (many terminals emit the same byte for both and report it under either name). Only applies when
-        Fzf is enabled (a warning notes it otherwise).
+        The PSReadLine chord for PSFzf's fuzzy tab-completion picker; Tab itself stays MenuComplete.
+        Defaults to 'Ctrl+Spacebar', and Enable-Fzf also binds 'Ctrl+@' to the same picker (many
+        terminals emit the same byte for both).
 
-    .PARAMETER Enable
-        The tools to enable (opt-in): any of 'PSReadLine', 'TerminalIcons', 'PoshGit', 'Zoxide', 'Fzf',
-        'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit', 'Completions'. Only the listed tools run (and the
-        auto-installing ones install); everything else is skipped, so a tool added in a later module
-        version never installs unless you add it here. Pass -Enable @() to enable nothing. The set mirrors
-        Get-PwshProfileToolCatalog. oh-my-posh and the `which` alias always run and are not tokens.
-
-    .PARAMETER EnableAll
-        Enable every tool in the catalog, including any added in future module versions. Convenient but
-        opts into auto-installing future tools. If both -EnableAll and -Enable are given, -Enable wins
-        (the explicit list is the safer choice) and a warning notes -EnableAll was ignored.
+    .PARAMETER ShowChordGuidance
+        Print Show-PwshProfileChord once at the end of startup — every chord this profile actually
+        wires up for this session (fzf's Ctrl+T/Ctrl+R/Ctrl+Spacebar always, Ctrl+G only when
+        -FzfGitKeyBindings is on, Initialize-PSReadline's Up/Down/Tab/Alt+w/Alt+( always), plus a
+        couple of related defaults that aren't this module's choice. Off by default;
+        Show-PwshProfileChord runs standalone any time regardless.
 
     .PARAMETER NoBanner
-        Render no startup banner. Use this to suppress the banner instead of clearing -BannerText (which
-        rejects empty). Passing banner params (e.g. -BannerColor) alongside -NoBanner warns and ignores them.
+        Render no startup banner. Use this rather than clearing -BannerText, which rejects empty.
+        Banner params passed alongside it are warned about and ignored.
+
+    .PARAMETER LegacyArgument
+        Not passed directly. Collects any argument the parameter binder could not match, so that a
+        retired parameter warns rather than throwing. A profile block written by an older version of
+        the module — every one of them passed -Enable or -EnableAll, which no longer exist — would
+        otherwise die on a ParameterBindingException before this function's body ran, leaving the
+        shell with no prompt, no tools and no completions. Retired names get a message naming
+        Install-PwshProfile; anything else is reported as a possible typo. Both are warnings, so
+        startup always continues.
 
     .EXAMPLE
         Initialize-PwshProfile
 
-        A bare call has no tool selection: interactively it asks whether to enable all tools;
-        non-interactively it enables none. Generated profiles pass -Enable/-EnableAll, so they never prompt.
+        The whole startup with every default: the screwcity theme, a machine-name banner, and every
+        tool wired with its default behavior. This is what a generated profile calls when nothing was
+        customized.
 
     .EXAMPLE
         Initialize-PwshProfile -BannerText 'HELLO' -BannerColor Green -BannerAlignment Center
@@ -173,18 +163,17 @@ function Initialize-PwshProfile {
     .EXAMPLE
         Initialize-PwshProfile -Theme forestcity
 
-        Uses the bundled Forest City theme, with the machine-name banner in the theme's green and a 🌳
-        step marker applied automatically.
+        Uses the bundled Forest City theme, with the banner and step marker branded to match.
 
     .EXAMPLE
-        Initialize-PwshProfile -Enable Zoxide,Bat,Fd
+        Initialize-PwshProfile -ReplaceCat -ZoxideCommand 'z'
 
-        Enables only zoxide, bat, and fd (plus the always-on prompt and `which`); no other tool installs.
+        Aliases cat -> bat, and binds zoxide's jump to `z` so the built-in cd is left alone.
 
     .EXAMPLE
-        Initialize-PwshProfile -CustomTheme '~/.config/themes/custom.omp.json' -EnableAll -NoBanner
+        Initialize-PwshProfile -CustomTheme '~/.config/themes/custom.omp.json' -NoBanner
 
-        Uses a custom oh-my-posh theme, enables every tool (and future additions), and shows no banner.
+        Uses a custom oh-my-posh theme and shows no banner.
 
     .NOTES
         Call from $PROFILE right after Import-Module of the manifest. The Completions step uses the
@@ -193,9 +182,8 @@ function Initialize-PwshProfile {
     #>
     [CmdletBinding(DefaultParameterSetName = 'Bundled')]
     param(
-        # Banner text defaults to the machine name; color/icon default to the selected theme's
-        # branding (color/icon are unset by default, resolved in the body via PSBoundParameters). BannerText
-        # takes a real default and rejects empty — use -NoBanner to suppress the banner, not an empty string.
+        # Color/icon are unset by default and resolved in the body from the theme branding.
+        # BannerText has a real default and rejects empty — use -NoBanner to suppress the banner.
         [Parameter(Position = 0)]
         [ValidateNotNullOrEmpty()]
         [string]$BannerText = $env:COMPUTERNAME,
@@ -227,15 +215,9 @@ function Initialize-PwshProfile {
         [Parameter(ParameterSetName = 'Bundled')]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                # Completers run in the caller's scope, where the module-private Get-BundledThemeName
-                # is not visible — resolve the bundled themes from the loaded module's base path.
-                $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
-                if ($base) {
-                    Get-ChildItem -Path (Join-Path -Path $base -ChildPath 'Assets\Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
-                        ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
-                        Where-Object { $_ -like "$wordToComplete*" } |
-                        ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-                }
+                # Completers run in the caller's scope; reach the shared completer through the module.
+                $module = Get-Module ScrewCitySoftware.PwshProfile
+                if ($module) { & $module { param($w) Get-BundledThemeCompletion -WordToComplete $w } $wordToComplete }
             })]
         [ValidateScript({ $_ -in (Get-BundledThemeName) },
             ErrorMessage = "'{0}' is not a bundled theme. Run Get-OhMyPoshTheme or check Assets/Themes for the available themes.")]
@@ -249,8 +231,7 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$ZoxideCommand = 'cd',
 
-        # Unset sentinel resolved in the body from the selected theme's branding (like
-        # BannerColor), so -Theme alone gives bat a matching syntax theme.
+        # Unset sentinel; resolved in the body from the theme branding (like BannerColor).
         [Parameter()]
         [string]$BatTheme,
 
@@ -261,10 +242,19 @@ function Initialize-PwshProfile {
         [switch]$ReplaceCat,
 
         [Parameter()]
+        [string]$LessOptions = '-R -F -i',
+
+        # Two independent halves of "make less the pager": $env:PAGER, and the `more` alias.
+        [Parameter()]
+        [switch]$SetPager,
+
+        [Parameter()]
         [switch]$ReplaceMore,
 
-        # Unset sentinels resolved in the body from the selected theme's branding (like
-        # BatTheme), so -Theme alone gives fd and fzf matching color palettes.
+        [Parameter()]
+        [switch]$ReplaceHttp,
+
+        # Unset sentinels; resolved in the body from the theme branding (like BatTheme).
         [Parameter()]
         [string]$FdColors,
 
@@ -274,35 +264,57 @@ function Initialize-PwshProfile {
         [Parameter()]
         [string]$StepIcon,
 
-        # PSFzf git keybindings (the Ctrl+G git chords). Off by default (opt-in) — pass
-        # -FzfGitKeyBindings to bind them; lazygit already covers git workflows, so they're not on by
-        # default. Only applies when Fzf is enabled; Enable-Fzf drops the chords anyway if git isn't on PATH.
+        # Opt-in: lazygit already covers git.
         [Parameter()]
         [switch]$FzfGitKeyBindings,
 
-        # The PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (Tab stays
-        # MenuComplete). Defaults to 'Ctrl+Spacebar' (Enable-Fzf also binds 'Ctrl+@', which many
-        # terminals emit identically). Only applies when Fzf is enabled.
+        # Tab stays MenuComplete. Enable-Fzf also binds Ctrl+@ (same byte on many terminals).
         [Parameter()]
         [string]$FzfTabChord = 'Ctrl+Spacebar',
 
-        # Opt-in tool selection. The ValidateSet mirrors Get-PwshProfileToolCatalog -Token; a test
-        # (Tests/ToolCatalog.Tests.ps1) keeps the two in sync. No default, so PSBoundParameters tells
-        # "passed empty (= nothing)" apart from "not passed (= bare-call confirm)".
+        # Off by default; the wizard surfaces this as an explicit question rather than a silent default.
         [Parameter()]
-        [ValidateSet('PSReadLine', 'TerminalIcons', 'PoshGit', 'Completions', 'Zoxide', 'Fzf', 'Fnm', 'Xh', 'Jq', 'Bat', 'Fd', 'Less', 'Lazygit')]
-        [string[]]$Enable,
+        [switch]$ShowChordGuidance,
 
         [Parameter()]
-        [switch]$EnableAll,
+        [switch]$NoBanner,
 
-        [Parameter()]
-        [switch]$NoBanner
+        # Absorbs anything the binder can't match, so a profile block written by an older version of
+        # the module warns instead of dying on a ParameterBindingException. Without this, a retired
+        # parameter throws BEFORE the body runs -- no banner, no prompt, no tools, nothing -- which
+        # is exactly the "never throw out of profile startup" rule this module is built on.
+        [Parameter(ValueFromRemainingArguments)]
+        [object[]]$LegacyArgument
     )
 
-    # Resolve the oh-my-posh configuration and the matching banner branding from the chosen theme.
-    # A custom theme has no bundled branding, so it falls back to the screwcity defaults ($Theme
-    # keeps its 'screwcity' default value even in the Custom parameter set).
+    # Report anything the binder could not match, then carry on. Guard on $null, NOT on .Count: with
+    # no remaining arguments $LegacyArgument is $null, and $null.Count throws under
+    # Set-StrictMode -Version Latest (which the suite and CI run), so the naive check would make this
+    # shim the very thing it exists to prevent. @($null).Count is 1, so that is no use either.
+    if ($null -ne $LegacyArgument) {
+        $caught = @($LegacyArgument | Where-Object { $null -ne $_ } | ForEach-Object { "$_" })
+        # A retired parameter arrives as its own element ('-Enable'), with any value following as a
+        # separate one; only the flag-shaped elements are worth naming back to the user.
+        $flags = @($caught | Where-Object { $_ -like '-*' } | ForEach-Object { $_.TrimStart('-') })
+        $retired = @($flags | Where-Object { $_ -in $script:RetiredParameter })
+        if ($retired.Count -gt 0) {
+            Write-Warning ("Initialize-PwshProfile ignored retired parameter(s): -$($retired -join ', -'). " +
+                'Your profile block was written by an older version of the module and every tool now ' +
+                'runs regardless — run Install-PwshProfile to regenerate it.')
+        }
+        else {
+            $shown = if ($flags.Count -gt 0) { @($flags | ForEach-Object { "-$_" }) } else { $caught }
+            Write-Warning ("Initialize-PwshProfile ignored unrecognized argument(s): $($shown -join ', '). " +
+                'Check for a typo, or run Install-PwshProfile to regenerate your profile block.')
+        }
+    }
+
+    # Fresh slate for the startup-installed notice reported at the end: an earlier call in this
+    # session that threw partway would otherwise leave entries behind for this one to re-report.
+    $script:StartupInstall.Clear()
+
+    # Resolve the oh-my-posh config and matching branding. A custom theme has no bundled branding, so
+    # it falls back to screwcity ($Theme keeps its default even in the Custom parameter set).
     if ($PSCmdlet.ParameterSetName -eq 'Custom') {
         $resolvedTheme = $CustomTheme
         $branding = Get-BundledThemeBranding -Name 'screwcity'
@@ -320,130 +332,103 @@ function Initialize-PwshProfile {
     if (-not $PSBoundParameters.ContainsKey('FdColors'))    { $FdColors    = $branding.LsColors }
     if (-not $PSBoundParameters.ContainsKey('FzfColors'))   { $FzfColors   = $branding.FzfColors }
 
-    # Resolve the opt-in tool set. -Enable wins over -EnableAll (the explicit list is the safer, more
-    # conservative choice); a bare call (neither) asks before installing everything. These run before
-    # any Invoke-Step, so the warnings land in scrollback rather than tearing a live spinner.
-    $catalog = Get-PwshProfileToolCatalog -Token
-    $hasEnable = $PSBoundParameters.ContainsKey('Enable')
-    if ($hasEnable -and $EnableAll) {
-        Write-Warning '-Enable and -EnableAll were both supplied; -EnableAll is ignored in favor of the explicit -Enable list.'
-    }
-    $enabled = if ($hasEnable) { @($Enable) }
-               elseif ($EnableAll) { @($catalog) }
-               else { if (Confirm-PwshProfileEnableAll -Catalog $catalog) { @($catalog) } else { @() } }
-
-    # Soft-validate tool-specific params: a flag for a tool that isn't enabled is a no-op, so warn
-    # (don't throw) rather than silently ignore it. Build-PwshProfileInitializeCall only emits these
-    # for enabled tools, so a generated profile never trips this — only a hand-edited call does.
-    $paramTool = [ordered]@{
-        ZoxideCommand = 'Zoxide'; BatTheme = 'Bat'; BatStyle = 'Bat'; ReplaceCat = 'Bat'
-        ReplaceMore = 'Less'; FdColors = 'Fd'; FzfColors = 'Fzf'
-        FzfGitKeyBindings = 'Fzf'; FzfTabChord = 'Fzf'
-    }
-    foreach ($p in $paramTool.Keys) {
-        if ($PSBoundParameters.ContainsKey($p) -and $enabled -notcontains $paramTool[$p]) {
-            Write-Warning "-$p was supplied but $($paramTool[$p]) is not enabled; ignoring -$p."
-        }
-    }
-    # Banner coupling: the banner params are moot under -NoBanner.
-    if ($NoBanner) {
-        foreach ($p in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath') {
-            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied with -NoBanner; ignoring it (no banner is rendered)." }
+    # Banner params are moot when no banner will render — either -NoBanner, or a banner text that
+    # resolved empty (an unset $env:COMPUTERNAME), which is suppressed below rather than thrown.
+    # Includes BannerFontPath, which Build never emits — the schema's Banner column covers every
+    # banner parameter, and the Emit column is what separates the ones a profile can carry. Reads the
+    # FULL schema, not -Wizard, so the runtime-only BannerFontPath is covered.
+    $bannerParam = @((Get-PwshProfileSettingSchema | Where-Object Banner).Name)
+    $bannerIgnored = if ($NoBanner) { 'with -NoBanner; ignoring it (no banner is rendered)' }
+    elseif ([string]::IsNullOrWhiteSpace($BannerText)) { 'but no banner text resolved (banner suppressed); ignoring it' }
+    if ($bannerIgnored) {
+        foreach ($p in $bannerParam) {
+            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied $bannerIgnored." }
         }
     }
 
-    # Belt-and-suspenders on the banner text: [ValidateNotNullOrEmpty()] guards an explicit value but
-    # NOT the $env:COMPUTERNAME default, so a host where COMPUTERNAME is unset would otherwise reach
-    # Write-Figlet -Text '' (a Mandatory param) and throw out of startup. Guard on non-empty here too.
+    # [ValidateNotNullOrEmpty()] guards an explicit value but not the $env:COMPUTERNAME default, so
+    # re-check: an unset COMPUTERNAME would otherwise throw out of Write-Figlet's Mandatory -Text.
     if (-not $NoBanner -and -not [string]::IsNullOrWhiteSpace($BannerText)) {
-        # Forward the font only when supplied; -Font and -FontPath are mutually exclusive on
-        # Write-Figlet, so pass at most one.
+        # -Font and -FontPath are mutually exclusive on Write-Figlet, so pass at most one.
         $bannerFontArgs = @{}
         if ($PSBoundParameters.ContainsKey('BannerFont'))     { $bannerFontArgs.Font = $BannerFont }
         elseif ($PSBoundParameters.ContainsKey('BannerFontPath')) { $bannerFontArgs.FontPath = $BannerFontPath }
 
         Write-Figlet -Text $BannerText -Color $BannerColor -Alignment $BannerAlignment @bannerFontArgs
-        # Write-Figlet no longer emits a trailing blank line; add the gap before the Shell step
-        # (guarded like the rest of the module so a missing PwshSpectreConsole never throws).
+        # Write-Figlet emits no trailing blank line, so add the gap before the first step.
         if (Get-Command Write-SpectreHost -ErrorAction SilentlyContinue) { Write-SpectreHost '' }
     }
-    elseif (-not $NoBanner) {
-        # Banner text resolved empty (e.g. $env:COMPUTERNAME unset) so the banner is suppressed above
-        # to avoid throwing into Write-Figlet. Warn for any explicitly-bound banner param so the silent
-        # drop is visible, matching the -NoBanner coupling warnings.
-        foreach ($p in 'BannerText', 'BannerColor', 'BannerAlignment', 'BannerFont', 'BannerFontPath') {
-            if ($PSBoundParameters.ContainsKey($p)) { Write-Warning "-$p was supplied but no banner text resolved (banner suppressed); ignoring it." }
-        }
-    }
 
-    # Core always renders. oh-my-posh and the `which` alias are always-on (not catalog tokens); the
-    # rest are opt-in. PSReadLine runs before oh-my-posh, so PSFzf (in the WinGet section, which runs
-    # after Core) still initializes after PSReadLine. Shell completions register here (Core): they
-    # detect external CLIs and install nothing, so their position relative to the WinGet tools is free.
+    # Core always renders, and so does every step in it -- there is nothing opt-in left. git and
+    # oh-my-posh run HERE rather than in the WinGet section even though they are winget packages and
+    # catalog rows: git has to be on PATH before posh-git and the git-aware WinGet tools, so the
+    # catalog groups by install model while this orders by dependency. Only the `which` alias is
+    # outside the catalog -- it installs nothing. PSReadLine runs before oh-my-posh, and PSFzf (WinGet
+    # section, after Core) therefore initializes after it. Completions only register, so their
+    # position is free.
     Invoke-Step "Core" -Icon $StepIcon {
         Invoke-Step "Global Aliases" {
             Set-Alias -Name which -Value where.exe -Scope Global
         }
-        # git is always-on (not a token): posh-git, PSFzf's git chords, lazygit, and gh all want it.
-        # Installed first in Core so git is on PATH for posh-git (below) and the WinGet-section tools.
+        # Always-on, and first in Core so git is on PATH for posh-git and the WinGet-section tools.
         Invoke-Step "Git" { Enable-Git }
-        if ($enabled -contains 'PSReadLine') { Invoke-Step "PSReadLine" { Initialize-PSReadline } }
+        Invoke-Step "PSReadLine" { Initialize-PSReadline }
         Invoke-Step "Oh-My-Posh" { Enable-OhMyPosh -Configuration $resolvedTheme }
-        if ($enabled -contains 'TerminalIcons') { Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } } }
-        if ($enabled -contains 'PoshGit') { Invoke-Step "Posh-Git" { Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true } } }
-        if ($enabled -contains 'Completions') {
-            Invoke-Step "Completions" {
-                Invoke-Step "Winget Completions"    { Enable-WingetCompletion }
-                Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
-                Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
-                Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
-                Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
-                Invoke-Step "GitHub CLI Completions" { Enable-GithubCliCompletion }
-            }
+        Invoke-Step "Terminal-Icons" { Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache } }
+        Invoke-Step "Posh-Git" { Import-ModuleSafe posh-git -Initialize { $env:POSH_GIT_ENABLED = $true } }
+        Invoke-Step "Completions" {
+            Invoke-Step "Winget Completions"    { Enable-WingetCompletion }
+            Invoke-Step "Azure CLI Completions" { Enable-AzureCliCompletion }
+            Invoke-Step "Tailscale Completions" { Enable-TailscaleCompletion }
+            Invoke-Step "Docker Completions"    { Enable-DockerCompletion }
+            Invoke-Step "1Password Completions" { Enable-1PasswordCompletion }
+            Invoke-Step "GitHub CLI Completions" { Enable-GithubCliCompletion }
         }
     }
 
-    # WinGet renders only when at least one winget tool is enabled, so it isn't an empty section. The
-    # token set is the catalog's WinGet group (Install -eq 'winget'), not a hardcoded list.
-    $wingetTokens = @((Get-PwshProfileToolCatalog)['WinGet'].Token)
-    if (@($enabled | Where-Object { $wingetTokens -contains $_ }).Count) {
-        Invoke-Step "WinGet" -Icon $StepIcon {
-            if ($enabled -contains 'Zoxide') { Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand } }
-            if ($enabled -contains 'Fzf') {
-                Invoke-Step "fzf" {
-                    # Preview files with bat only when bat is in play (enabled). The preview runs at
-                    # fzf-use time — by then the bat step (which follows) has installed bat; bat
-                    # inherits $env:BAT_THEME so the preview colors match the prompt.
-                    $fzfPreview = if ($enabled -contains 'Bat') { 'bat --color=always --style=numbers {}' } else { '' }
-                    # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell);
-                    # -UseFd follows whether fd is enabled (PSFzf uses fd for traversal). -GitKeyBindings
-                    # (the Ctrl+G git chords) is wizard-configurable via -FzfGitKeyBindings (off by
-                    # default, opt-in; lazygit covers git) — Enable-Fzf drops it anyway when git isn't
-                    # on PATH. -Height '~100%' makes those PSFzf widgets adaptive —
-                    # they fill the shell for large result sets but shrink to fit small ones — instead of
-                    # PSFzf's inline 40% default. -TabExpansionChord puts PSFzf's fuzzy completion picker
-                    # on the wizard-configurable $FzfTabChord (default Ctrl+Spacebar, a chord that
-                    # otherwise just duplicates Tab's MenuComplete), leaving Tab = MenuComplete. When that
-                    # chord is Ctrl+Spacebar Enable-Fzf also binds Ctrl+@ to the same picker (many
-                    # terminals emit the same byte for both and report it under either name).
-                    Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' -PreviewCommand $fzfPreview `
-                        -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord $FzfTabChord `
-                        -UseFd:($enabled -contains 'Fd') -GitKeyBindings:$FzfGitKeyBindings
-                }
-            }
-            if ($enabled -contains 'Fnm')    { Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager } }
-            if ($enabled -contains 'Xh')     { Invoke-Step "xh" { Enable-Xh } }
-            if ($enabled -contains 'Jq')     { Invoke-Step "jq" { Enable-Jq } }
-            if ($enabled -contains 'Bat')    { Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat } }
-            # fd follows fzf so fzf.exe is already on PATH when -IntegrateFzf is evaluated; fd wires
-            # fzf to use fd as its source only when fzf is itself enabled and present.
-            if ($enabled -contains 'Fd')     { Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf:($enabled -contains 'Fzf') } }
-            # less is bat's pager (and PowerShell's via $env:PAGER); it has no init-time dependency
-            # on the other tools, so its position is free. -ReplaceMore is opt-in (set by the wizard).
-            if ($enabled -contains 'Less')   { Invoke-Step "less" { Enable-Less -ReplaceMore:$ReplaceMore } }
-            # lazygit is a standalone git TUI with no shell-init/completion and no dependency on the
-            # other tools, so its position is free (kept last in the WinGet run order).
-            if ($enabled -contains 'Lazygit') { Invoke-Step "lazygit" { Enable-Lazygit } }
+    Invoke-Step "WinGet" -Icon $StepIcon {
+        Invoke-Step "Zoxide" { Enable-Zoxide -Command $ZoxideCommand }
+        Invoke-Step "fzf" {
+            # PSFzf supplies the Ctrl+T/Ctrl+R bindings (fzf ships none for PowerShell) and uses fd
+            # for traversal. -GitKeyBindings is opt-in (lazygit covers git); Enable-Fzf drops it when
+            # git isn't on PATH. -Height overrides PSFzf's inline 40% default with an adaptive one.
+            # -TabExpansionChord leaves Tab as MenuComplete. The Ctrl+T preview is scoped to
+            # $env:FZF_CTRL_T_OPTS by Enable-Fzf and inherits $env:BAT_THEME.
+            Enable-Fzf -Colors $FzfColors -Style 'full' -Height '~100%' `
+                -PreviewCommand 'bat --color=always --style=numbers {}' `
+                -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -TabExpansionChord $FzfTabChord `
+                -UseFd -GitKeyBindings:$FzfGitKeyBindings
         }
+        Invoke-Step "Fast Node Manager (fnm)" { Enable-FastNodeManager }
+        Invoke-Step "xh" { Enable-Xh -ReplaceHttp:$ReplaceHttp }
+        Invoke-Step "jq" { Enable-Jq }
+        Invoke-Step "bat" { Enable-Bat -Theme $BatTheme -Style $BatStyle -ReplaceCat:$ReplaceCat }
+        # After fzf so fzf.exe is on PATH when -IntegrateFzf is evaluated.
+        Invoke-Step "fd" { Enable-Fd -LsColors $FdColors -IntegrateFzf }
+        # fd's content-search counterpart; no init-time dependency, so its position is free.
+        Invoke-Step "ripgrep" { Enable-Ripgrep }
+        # No init-time dependency on the other tools, so its position is free.
+        Invoke-Step "less" { Enable-Less -Options $LessOptions -SetPager:$SetPager -ReplaceMore:$ReplaceMore }
+        # Standalone git TUI: no shell init, no completion, no dependencies.
+        Invoke-Step "lazygit" { Enable-Lazygit }
+        # Standalone Python toolchain; no init-time dependency, so its position is free — kept last.
+        Invoke-Step "uv" { Enable-Uv }
+    }
+
+    # Startup normally installs nothing: Install-PwshProfile did it, so every Install substep
+    # short-circuits on Get-Command. When it DID install something -- a fresh machine, or a tool
+    # added by a module update -- say so once, here, rather than per package. This sits after the
+    # WinGet step so the spinner has cleared; a Write-Host inside a step would tear the render, which
+    # is why the notice is a warning at all.
+    if ($script:StartupInstall.Count -gt 0) {
+        Write-Warning ("Installed $($script:StartupInstall -join ', ') during startup — this normally " +
+            'happens during setup. Run Install-PwshProfile to install new tools ahead of time.')
+    }
+
+    # Sits after every Invoke-Step has cleared its spinner, same as the notice above -- a Format-*
+    # render mid-step would tear it. Forwards the same fzf settings Enable-Fzf just wired up, so the
+    # guidance reflects this session's actual configuration rather than a fresh-install default.
+    if ($ShowChordGuidance) {
+        Show-PwshProfileChord -FzfGitKeyBindings:$FzfGitKeyBindings -FzfTabChord $FzfTabChord
     }
 }

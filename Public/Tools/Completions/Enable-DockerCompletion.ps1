@@ -26,7 +26,7 @@ function Enable-DockerCompletion {
     [CmdletBinding()]
     param()
 
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return }
+    if (-not (Test-CommandAvailable -Name 'docker')) { return }
 
     Import-ModuleSafe DockerCompletion
 }

@@ -10,45 +10,43 @@ function Invoke-Step {
         per-top-level-step summary line.
 
     .DESCRIPTION
-        Invokes the supplied script block and renders it through PwshSpectreConsole:
+        Invokes the supplied script block and renders it through PwshSpectreConsole.
 
-        - While running, the first (top-level) call opens a transient status spinner and
-          stashes its [Spectre.Console.StatusContext] in the module-scoped
-          $script:StepStatusContext. Nested calls push their description onto the
-          $script:StepPath breadcrumb and update the spinner text to the full path (e.g.
-          "🔩 WinGet › fnm › Install"), restoring the parent's breadcrumb when they finish.
-          Only the top-level step's icon is shown (nested custom icons don't appear).
+        The first (top-level) call opens a transient status spinner and stashes its
+        [Spectre.Console.StatusContext] in the module-scoped $script:StepStatusContext. Nested calls
+        see that context and only push their description onto the $script:StepPath breadcrumb,
+        updating the spinner text to the full path (e.g. "🔩 WinGet › fnm › Install") and restoring
+        the parent's breadcrumb when they finish. Only the top-level step's icon is shown.
 
-        - When the top-level step completes, the spinner clears itself and a single summary
-          line is written with the step's total elapsed time, e.g.:
-          🔩 Completions...................................... [ 352ms]
-          Nested substeps leave no output of their own.
+        When the top-level step completes, the spinner clears itself and a single summary line is
+        written with the total elapsed time:
 
-        If PwshSpectreConsole isn't available, the step body still runs — silently, with no
-        rendering — so profile startup never fails over presentation.
+            🔩 Completions...................................... [ 352ms]
 
-        A Write-Warning raised inside a step would otherwise be torn off-screen when the live
-        spinner clears itself. To keep warnings readable, the top-level call captures the body's
-        warning stream (including warnings from any nested steps) instead of letting it paint,
-        then re-emits the captured warnings after the spinner has cleared and the summary line is
-        written — so they persist in scrollback, grouped under the top-level step's summary line.
+        Nested substeps leave no output of their own.
 
-        The step body's pipeline output is discarded. An exception thrown by the body
-        propagates out of Invoke-Step (and suppresses the summary line); the module-scoped
-        state is restored in finally blocks so a failing step cannot wedge later steps, and any
-        warnings captured before the throw are still replayed.
+        A Write-Warning raised inside a step would be torn off-screen when the spinner clears, so the
+        top-level call captures the body's warning stream instead of letting it paint, then re-emits
+        the warnings once the spinner is gone and the summary line is written. They persist in
+        scrollback, grouped under the top-level step — which is why a warning appears after its
+        summary line rather than inline.
+
+        The body's pipeline output is discarded. An exception propagates out of Invoke-Step and
+        suppresses the summary line, but the module-scoped state is restored in finally blocks so a
+        failing step cannot wedge later ones, and warnings captured before the throw are still
+        replayed. If PwshSpectreConsole is unavailable the body still runs, silently and unrendered,
+        so startup never fails over presentation.
 
     .PARAMETER Description
-        The text shown for the step (e.g. "Completions"). Required.
+        The text shown for the step, e.g. "Completions". Required.
 
     .PARAMETER ScriptBlock
         The script block to run. Nested Invoke-Step calls may appear inside it. Required.
 
     .PARAMETER Icon
-        The marker printed before the description. Defaults to ':nut_and_bolt:' (a Spectre
-        emoji shortcode, rendered as 🔩). The separating space between the icon and the text is
-        added at render time (via Get-StepIconPrefix), so the value itself carries no trailing
-        space. Only the top-level step's icon is shown in the spinner and the summary line.
+        The marker printed before the description — a Spectre emoji shortcode, default
+        ':nut_and_bolt:'. It carries no trailing space; the separator is added at render time by
+        Get-StepIconPrefix. Only the top-level step's icon is shown.
 
     .EXAMPLE
         Invoke-Step "Initialize PSReadLine" { Import-Module PSReadLine }
@@ -62,19 +60,18 @@ function Invoke-Step {
             Invoke-Step "Azure"     { Invoke-Step "Subscriptions" { } }
         }
 
-        Runs nested steps. The spinner walks the breadcrumb ("🔩 Completions",
-        "🔩 Completions › Tailscale", "🔩 Completions › Azure › Subscriptions", …), clears when
-        done, and a single summary line is printed for "Completions".
+        Runs nested steps. The spinner walks the breadcrumb, clears when done, and prints a single
+        summary line for "Completions".
 
     .NOTES
-        Module-scoped state lives in this module's private scope, initialized once at import:
-        - $script:StepStatusContext is the renderer's invariant: the top-level call owns the
-          spinner and the context; nested calls see it and only update its Status.
-        - $script:StepPath is the breadcrumb stack of running step descriptions;
-          $script:StepRootIcon is the top-level step's icon that prefixes the breadcrumb.
-        - $script:StepWarnings accumulates warnings captured during the live spinner; the
-          top-level call replays them after the spinner clears so they survive in scrollback.
+        Module-scoped state lives in this file's private scope, initialized once at import:
+        - $script:StepStatusContext is the renderer's invariant — the top-level call owns the spinner
+          and the context; nested calls see it and only update its Status.
+        - $script:StepPath is the breadcrumb stack; $script:StepRootIcon is the top-level icon that
+          prefixes it.
+        - $script:StepWarnings accumulates warnings captured during the live spinner.
     #>
+    [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
         [string]$Description,
@@ -90,34 +87,27 @@ function Invoke-Step {
         return
     }
 
-    # Top-level call: open the status spinner, stash its context for nested calls, run this
-    # same step inside it, then print the summary line. The scriptblock is a plain literal so
-    # $script: binds to this module's scope even though PwshSpectreConsole invokes it (do NOT
-    # add .GetNewClosure() — it rebinds $script: writes to a throwaway dynamic module and
-    # silently breaks the stash). The status helper's result is swallowed because it emits
-    # $null even for a void scriptblock.
+    # Top-level call: open the status spinner, stash its context for nested calls, run this step inside
+    # it, then print the summary line. The scriptblock must stay a plain literal so $script: binds to
+    # this module's scope — .GetNewClosure() rebinds those writes to a throwaway dynamic module and
+    # silently breaks the stash. Swallow the result: the helper emits $null even for a void block.
     if ($null -eq $script:StepStatusContext) {
-        # Warnings written into the live spinner are torn off-screen when it clears, so capture
-        # them (3>&1, below) instead of letting them paint, and replay them once the spinner is
-        # gone. Reset the accumulator for this top-level step.
+        # Warnings painted into the live spinner are torn off-screen when it clears, so capture them
+        # (3>&1, below) and replay them after. Reset the accumulator for this top-level step.
         $script:StepWarnings.Clear()
         $label = Get-SpectreEscapedTextSafe ((Get-StepIconPrefix $Icon) + $Description)
-        # PwshSpectreConsole invokes the inner block below and resolves its free variables
-        # dynamically; reference the step body through a distinctly-named local so it can't be
-        # shadowed by the invoker's own -ScriptBlock parameter (Invoke-SpectreCommandWithStatus
-        # has one) when the block runs.
+        # PwshSpectreConsole resolves the inner block's free variables dynamically, so hold the body in
+        # a distinctly-named local that the invoker's own -ScriptBlock parameter can't shadow.
         $stepBody = $ScriptBlock
         try {
             $elapsed = Measure-Command {
                 $null = Invoke-SpectreCommandWithStatus -Title $label -ScriptBlock {
-                    # $Context is a [Spectre.Console.StatusContext]; left untyped so tests can
-                    # inject a fake context through a mocked Invoke-SpectreCommandWithStatus.
+                    # A [Spectre.Console.StatusContext]; left untyped so tests can inject a fake.
                     param($Context)
                     $script:StepStatusContext = $Context
                     try {
-                        # 3>&1 redirects the body's warning stream into the pipeline so warnings
-                        # don't tear the live spinner; the WarningRecord guard keeps non-warning
-                        # output (already $null'd inside Invoke-StepInternal) from leaking.
+                        # 3>&1 keeps the body's warnings out of the live spinner; the WarningRecord
+                        # guard stops non-warning output from leaking into the pipeline.
                         Invoke-StepInternal -Description $Description -ScriptBlock $stepBody -Icon $Icon 3>&1 |
                             ForEach-Object { if ($_ -is [System.Management.Automation.WarningRecord]) { $script:StepWarnings.Add($_) } }
                     }

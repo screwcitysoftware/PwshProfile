@@ -43,13 +43,9 @@ function Uninstall-WindowsTerminalScheme {
         [Parameter(Position = 0)]
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
-                $base = (Get-Module ScrewCitySoftware.PwshProfile).ModuleBase
-                if ($base) {
-                    Get-ChildItem -Path (Join-Path $base 'Assets' 'Themes') -Filter *.omp.json -ErrorAction SilentlyContinue |
-                        ForEach-Object { $_.Name -replace '\.omp\.json$', '' } |
-                        Where-Object { $_ -like "$wordToComplete*" } |
-                        ForEach-Object { [System.Management.Automation.CompletionResult]::new($_, $_, 'ParameterValue', $_) }
-                }
+                # Completers run in the caller's scope; reach the shared completer through the module.
+                $module = Get-Module ScrewCitySoftware.PwshProfile
+                if ($module) { & $module { param($w) Get-BundledThemeCompletion -WordToComplete $w } $wordToComplete }
             })]
         [ValidateScript({ $_ -in (Get-BundledThemeName) },
             ErrorMessage = "'{0}' is not a bundled theme. Check Assets/Themes for the available themes.")]
@@ -59,13 +55,8 @@ function Uninstall-WindowsTerminalScheme {
         [string]$SettingsPath
     )
 
-    if (-not $SettingsPath) {
-        $SettingsPath = Get-WindowsTerminalSettingsPath
-    }
-    if (-not $SettingsPath -or -not (Test-Path -LiteralPath $SettingsPath -PathType Leaf)) {
-        Write-Warning "Uninstall-WindowsTerminalScheme: Windows Terminal settings.json not found. Pass -SettingsPath to override."
-        return
-    }
+    $SettingsPath = Resolve-WindowsTerminalSettingsPath -Path $SettingsPath -CallerName 'Uninstall-WindowsTerminalScheme'
+    if (-not $SettingsPath) { return }
 
     $schemeName = (Get-BundledThemeBranding -Name $Theme).TerminalScheme['name']
 

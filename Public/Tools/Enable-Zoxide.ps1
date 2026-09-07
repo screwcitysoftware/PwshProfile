@@ -54,27 +54,18 @@ function Enable-Zoxide {
     }
 
     Invoke-Step "Initialize" {
-        if (Get-Command zoxide.exe -ErrorAction SilentlyContinue) {
-            # Run in the global scope (not this module's) so the emitted __zoxide_* helpers and
-            # cd/cdi aliases aren't tagged to the module — see Private/Invoke-InGlobalScope.ps1.
-            # `--hook none` skips zoxide's default prompt wrapper (we track directories via
-            # LocationChangedAction below instead — the prompt wrap is wiped by oh-my-posh's
-            # remove/re-add of its prompt module on reload, so directories silently stop tracking).
+        if (Test-CommandAvailable -Name 'zoxide.exe') {
+            # Global scope so the emitted __zoxide_* helpers and cd/cdi aliases aren't tagged to this
+            # module. `--hook none` skips zoxide's prompt wrapper — oh-my-posh's remove/re-add of its
+            # prompt module on reload wipes it, silently stopping directory tracking.
             Invoke-InGlobalScope (zoxide init powershell --cmd $Command --hook none | Out-String)
 
-            # Record each directory you change into via PowerShell's LocationChangedAction (fires for
-            # cd, z/cdi, Set-Location, Push-Location, .., etc.), which is immune to prompt redefinition
-            # — unlike zoxide's prompt hook. Run in the global scope so the handler and its
-            # $global:__zoxide_loc_base capture aren't tagged to the module and resolve when the hook
-            # fires later from the prompt.
-            #
-            # Capture any pre-existing handler ONCE (guarded by $global:__zoxide_loc_hooked) so a
-            # profile reload doesn't re-capture our own wrapper and stack zoxide add calls. But always
-            # (re)install the wrapper, so reloading the profile in a live session repairs the hook
-            # rather than leaving a stale one frozen behind the guard. This composes with
-            # Enable-FastNodeManager's LocationChangedAction (each captures the other as its base and
-            # both fire); Enable-Zoxide runs before Enable-FastNodeManager, so zoxide's base is the
-            # pre-existing handler (usually $null) and fnm chains onto zoxide's wrapper.
+            # Track directories via LocationChangedAction (fires for cd, z/cdi, Set-Location,
+            # Push-Location, .., etc.), which survives prompt redefinition unlike zoxide's own hook.
+            # Global scope so the handler and its $global:__zoxide_loc_base capture resolve when it
+            # fires later from the prompt. Capture the pre-existing handler once
+            # ($global:__zoxide_loc_hooked) so a reload doesn't stack zoxide add calls, but always
+            # reinstall the wrapper so a reload repairs it. Enable-FastNodeManager chains onto this one.
             Invoke-InGlobalScope @'
 if (-not (Get-Variable -Name __zoxide_loc_hooked -Scope Global -ErrorAction SilentlyContinue)) {
     $global:__zoxide_loc_base = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
@@ -84,9 +75,8 @@ $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = {
     param($source, $eventArgs)
     # The captured base is an EventHandler delegate (the property's type), so call .Invoke.
     if ($null -ne $global:__zoxide_loc_base) { $global:__zoxide_loc_base.Invoke($source, $eventArgs) }
-    # Only record real filesystem directories: guard on the FileSystem provider so cd into
-    # Registry:/Cert: is a no-op. The event fires only on actual location changes, so zoxide add's
-    # natural dedup (by path) is all we need. zoxide add prints nothing, so no Out-Host is required.
+    # Only real filesystem directories: guard on the provider so cd into Registry:/Cert: is a no-op.
+    # zoxide add dedups by path and prints nothing, so no extra gating or Out-Host is needed.
     $new = $eventArgs.NewPath
     if ($new -and $new.Provider.Name -eq 'FileSystem') {
         zoxide add "--" $new.ProviderPath

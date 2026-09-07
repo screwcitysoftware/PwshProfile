@@ -4,47 +4,41 @@ function Repair-TerminalIconsCache {
         Removes corrupted Terminal-Icons user theme-cache files so a re-import can regenerate them.
 
     .DESCRIPTION
-        Terminal-Icons persists the user's icon and color themes as CLIXML under
-        `…\powershell\Community\Terminal-Icons\` (`*_icon.xml` / `*_color.xml`). It rewrites those
-        files via `Export-Clixml -Force` at the END of every import and reads them back with
-        `Import-CliXml` at the START of the NEXT import — and those reads are NOT wrapped in a
-        try/catch. When two PowerShell sessions import the module at the same instant their writes
-        interleave and one file is left truncated; the next import then throws an
-        `System.Xml.XmlException` (e.g. "The 'DCT' start tag … does not match the end tag of 'En'")
-        and the whole module fails to load.
+        Terminal-Icons persists the user's icon and color themes as CLIXML (`*_icon.xml` / `*_color.xml`).
+        It rewrites them with `Export-Clixml -Force` at the END of every import and reads them back with
+        `Import-CliXml` at the START of the next one — and those reads are not wrapped in a try/catch.
+        When two sessions import the module at the same instant their writes interleave, one file is
+        left truncated, and the next import throws an XmlException that fails the whole module load.
 
-        This validates each `*_icon.xml` / `*_color.xml` in the theme-storage directory with a trial
-        `Import-Clixml` and deletes only the ones that fail to parse. Terminal-Icons recreates the
-        deleted built-in themes (and re-exports fresh copies) on the next import, so a follow-up
-        import succeeds — that is the intended "purge corrupt cache, then retry" recovery wired into
-        `Import-ModuleSafe`'s `-Repair` hook from the Terminal-Icons startup step. `prefs.xml` is
-        intentionally left alone: Terminal-Icons already guards that read and falls back to defaults
-        on a parse error, so it never throws out of import.
+        This validates each cache file with a trial Import-Clixml and deletes only the ones that fail to
+        parse. Terminal-Icons recreates the deleted built-in themes on the next import, which is the
+        "purge corrupt cache, then retry" recovery wired into Import-ModuleSafe's -Repair hook.
+        `prefs.xml` is deliberately left alone: Terminal-Icons already guards that read and falls back
+        to defaults, so it never throws out of import.
 
-        Guarded and failure-tolerant per the module's design rules: it is a no-op when the storage
-        directory does not exist, never throws, and is idempotent — valid (including custom) theme
-        files are preserved, so it is safe to call on every import attempt.
+        Failure-tolerant per the module's design rules: a no-op when the storage directory is missing,
+        never throws, and idempotent — valid and custom theme files are preserved, so it is safe to call
+        on every import attempt.
 
     .PARAMETER Path
-        The Terminal-Icons theme-storage directory to repair. Defaults to the same location
-        Terminal-Icons' own `Get-ThemeStoragePath` computes: `$env:APPDATA\powershell\Community\Terminal-Icons`
-        on Windows, or `$XDG_CONFIG_HOME` (falling back to `~/.local/share`) `…/powershell/Community/Terminal-Icons`
-        on Linux/macOS. Exposed mainly so tests can point it at a temp directory.
+        The theme-storage directory to repair. Defaults to the same location Terminal-Icons' own
+        Get-ThemeStoragePath computes, per platform. Exposed mainly so tests can point at a temp
+        directory.
 
     .EXAMPLE
         Import-ModuleSafe Terminal-Icons -Repair { Repair-TerminalIconsCache }
 
-        If the initial Terminal-Icons import fails, purge the corrupted theme cache and retry once
-        before warning — how the profile's Terminal-Icons startup step invokes it.
+        If the initial import fails, purge the corrupted cache and retry once before warning — how the
+        profile's Terminal-Icons startup step invokes it.
 
     .EXAMPLE
         Repair-TerminalIconsCache
 
-        Manually clean any corrupted Terminal-Icons theme-cache files in the default storage path.
+        Manually clean any corrupted theme-cache files in the default storage path.
 
     .NOTES
-        The path-resolution mirrors Terminal-Icons.psm1's Get-ThemeStoragePath exactly so the
-        repaired directory is the same one the module reads at import time.
+        The path resolution mirrors Terminal-Icons.psm1's Get-ThemeStoragePath exactly, so the repaired
+        directory is the same one the module reads at import time.
     #>
     [CmdletBinding()]
     param(

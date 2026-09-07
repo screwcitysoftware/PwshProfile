@@ -47,7 +47,7 @@ identity. (The banner *text* defaults to your machine name for either theme.) Se
   `Microsoft.PowerShell.PSResourceGet` (`Install-PSResource`) in the box, which the module uses to
   self-install its dependencies. It won't load under Windows PowerShell 5.1.
 - **Windows with [winget](https://learn.microsoft.com/windows/package-manager/winget/)** — the
-  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, and lazygit through the
+  `Enable-*` tool steps install git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, and uv through the
   first-party `Microsoft.WinGet.Client` module (auto-installed CurrentUser the first time a tool is
   missing; winget ships with Windows 11). Without winget those steps degrade silently; the rest of
   startup is unaffected.
@@ -80,10 +80,10 @@ Nerd Fonts and show how to point your terminal at them:
 Install-PwshProfile        # interactive wizard
 ```
 
-To remove the bootstrap later, run `Uninstall-PwshProfile` (it leaves your installed tools and
-fonts in place). For more on what the wizard writes and how to call the orchestrator yourself, see
-[Usage](#usage). The Nerd Font and terminal steps below are the manual equivalents of what the
-wizard offers.
+To remove the bootstrap later, run `Uninstall-PwshProfile` (interactively it also offers to remove
+installed tools/modules/scheme; fonts are always left in place). For more on what the wizard writes
+and how to call the orchestrator yourself, see [Usage](#usage). The Nerd Font and terminal steps
+below are the manual equivalents of what the wizard offers.
 
 ### Install a Nerd Font
 
@@ -131,30 +131,32 @@ terminal setup). To remove it, run **`Uninstall-PwshProfile`**:
 
 ```powershell
 Install-PwshProfile        # interactive wizard; re-run any time to change options
-Uninstall-PwshProfile      # remove the bootstrap (installed tools/fonts are left in place)
+Uninstall-PwshProfile      # remove the bootstrap; interactively, also offers to remove tools/modules/scheme
 ```
 
-The bootstrap it writes is a `# Tools available:` snapshot comment plus a call to
+The bootstrap it writes is a short guidance comment plus a call to
 **`Initialize-PwshProfile`** — the orchestrator that runs on every new session. There's no
-`Import-Module` line: invoking `Initialize-PwshProfile` auto-loads the module. Tool selection is
-**opt-in** — you call it with the tools you want:
+`Import-Module` line: invoking `Initialize-PwshProfile` auto-loads the module. **Every tool runs**;
+there is no tool selection, so an install that customized nothing is simply:
 
 ```powershell
-Initialize-PwshProfile -Enable Zoxide,Fzf,Bat,Fd   # only these tools run
+Initialize-PwshProfile
 ```
 
-A few common variations:
+The wizard's job is not *which* tools you get but *how* they are wired into your shell — which
+built-in commands they take over, and how they look. Those choices become arguments:
 
 ```powershell
-Initialize-PwshProfile -Enable Zoxide,Bat -BannerColor Green -BannerAlignment Center
-Initialize-PwshProfile -EnableAll                  # every tool, plus any added in future updates
-Initialize-PwshProfile -EnableAll -NoBanner        # everything, no startup banner
+Initialize-PwshProfile -ReplaceCat -ZoxideCommand 'z'   # cat -> bat; zoxide on `z`, cd untouched
+Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -NoBanner                        # no startup banner
 ```
 
-A **bare** `Initialize-PwshProfile` has no selection: interactively it asks whether to enable all
-tools, and non-interactively it enables none — so prefer `-Enable`/`-EnableAll` (the wizard always
-writes one of them). `Initialize-PwshProfile` takes a handful of other options — banner text/color/font,
-a custom theme — all covered under [Exported functions](#exported-functions).
+`Install-PwshProfile` installs the CLIs during setup, so startup normally finds everything already
+present and each install step costs nothing. A tool that *is* missing — a fresh machine, or one added
+by a later module version — is installed at startup instead. `Initialize-PwshProfile` takes a handful
+of other options — banner text/color/font, a custom theme — all covered under
+[Exported functions](#exported-functions).
 
 Changing the managed block is best done by **re-running `Install-PwshProfile`** rather than editing
 the call by hand — on a re-run the installer reads the call and the tools snapshot to pre-fill your
@@ -197,7 +199,8 @@ fzf adds interactive fuzzy pickers bound to keys in your shell (via PSFzf):
 
 - **Ctrl+T** — fuzzy-pick a file or directory and drop its path at the cursor (with a `bat` preview).
 - **Ctrl+R** — fuzzy-search your command history.
-- **Ctrl+G** chords — fuzzy git pickers (files, branches, hashes, …) when you're inside a repo.
+- **Ctrl+G**, then a second key — fuzzy git pickers when you're inside a repo: `Ctrl+B` branches,
+  `Ctrl+F` files, `Ctrl+H` hashes, `Ctrl+P` pull requests, `Ctrl+S` stashes, `Ctrl+T` tags.
 - **Ctrl+Spacebar** — fuzzy completion: opens an fzf picker over what `Tab` would complete (paths, command/parameter names, and every registered completer — `gh`, `az`, `winget`, …, all inserting cleanly). `Tab` itself stays the classic `MenuComplete` menu.
 
 In any picker: type to filter, arrows or Tab to move, Enter to accept, Esc to cancel.
@@ -216,6 +219,22 @@ fd pattern ./src          # search within a specific path
 
 fd is standalone — it never replaces `Get-ChildItem` / `ls`.
 
+### ripgrep — fast content search
+
+fd's counterpart: where fd searches file *names*, `rg` searches file *contents*. It walks the tree
+recursively, respects `.gitignore`, and skips binaries — fast enough to grep a whole repo as you type:
+
+```powershell
+rg Invoke-Step            # every match under the current directory, with file:line
+rg -i todo                # case-insensitive (rg is case-sensitive by default)
+rg --type ps1 function    # only PowerShell files (rg --type-list shows all types)
+rg -l Enable-             # just the file names that match
+```
+
+ripgrep is standalone — it never replaces `Select-String` / `sls`. It isn't themed either: rg has no
+color environment variable, and its only knob for default flags (colors, `--smart-case`, and the rest)
+is a config file you point `$env:RIPGREP_CONFIG_PATH` at yourself.
+
 ### bat — `cat` with highlighting
 
 Prints files with syntax highlighting, line numbers, and git change marks, paging long files through
@@ -229,15 +248,17 @@ bat -p script.ps1         # plain output, no decorations
 ### less — the pager
 
 The pager long output scrolls through — and what `bat`, `git`, and PowerShell's `help` page through
-when `-ReplaceMore` is on. While it's open: arrows / `Space` to scroll, `/text` to search, `q` to quit.
+when `-SetPager` is on. While it's open: arrows / `Space` to scroll, `/text` to search, `q` to quit.
 
 ### xh — HTTP client
 
-A fast, friendly HTTP client (HTTPie-style). `http` and `https` are aliased to it:
+A fast, friendly HTTP client (HTTPie-style). Invoke it as `xh`/`xhs` — or, if you turned on
+`-ReplaceHttp`, as `http`/`https`:
 
 ```powershell
-http GET httpbin.org/get                     # GET, pretty-printed JSON
-https POST api.example.com/users name=jo     # POST a JSON body over HTTPS
+xh GET httpbin.org/get                       # GET, pretty-printed JSON
+xhs POST api.example.com/users name=jo       # POST a JSON body over HTTPS
+http GET httpbin.org/get                     # same, with -ReplaceHttp on
 ```
 
 ### jq — JSON processor
@@ -264,7 +285,7 @@ fnm list            # show installed versions
 
 ### git — version control
 
-git is **always installed** (like oh-my-posh — it isn't a `-Enable` token). Several profile
+git is **always installed** — there is no opt-out. Several profile
 features lean on it — posh-git's status prompt, PSFzf's `Ctrl+G` git pickers, lazygit, and the
 GitHub CLI — so the profile installs `Git.Git` via winget if `git` isn't already on PATH (the
 common case short-circuits, and a failed/elevation-blocked install just warns and startup
@@ -278,6 +299,22 @@ conflicts without leaving the keyboard. Launch it in any repo:
 ```powershell
 lazygit             # open the TUI in the current repo (press ? for keybindings, q to quit)
 ```
+
+### uv — Python packages, environments, and interpreters
+
+One fast binary in place of pip, pip-tools, pipx, venv, and pyenv. It creates and manages a project's
+virtual environment for you, so `uv run` works without ever activating one:
+
+```powershell
+uv init myproj              # start a project (pyproject.toml + a lockfile)
+uv add requests             # add a dependency and update the lock
+uv run script.py            # run inside the project env, syncing it first
+uv python install 3.13      # install an interpreter, no system Python required
+uvx ruff check .            # run a tool in a throwaway env, nothing installed
+```
+
+uv is standalone — it never aliases or replaces `python`, `pip`, or `py`. `uvx` tab-completes; `uv`
+itself doesn't, because its completer is large enough to cost ~244 ms of every shell startup.
 
 ## Themes
 
@@ -295,9 +332,10 @@ color palettes, and a **Windows Terminal color scheme** (install it with
 
 **The installer's first step is the theme choice.** `Install-PwshProfile` opens with a theme prompt —
 pick a bundled theme or supply a path to a theme of your own — and the rest of the wizard pre-fills
-its color/icon prompts from the chosen theme's branding. For a **custom theme** those prompts start
-from neutral defaults (a neutral color, a generic ⚙️ icon) so you brand it fresh. The banner **text**
-defaults to your machine name (`$env:COMPUTERNAME`) for every theme, custom included.
+its branded prompts (banner color, step icon, **bat** syntax theme) from the chosen theme. For a
+**custom theme** those prompts start from neutral defaults (a neutral color, a generic ⚙️ icon, and
+bat's `ansi` theme, which follows your terminal's own colors) so you brand it fresh. The banner
+**text** defaults to your machine name (`$env:COMPUTERNAME`) for every theme, custom included.
 Whatever you pick is written into the generated bootstrap as `-Theme <name>` (or `-CustomTheme '<path>'`).
 
 Choosing a theme outside the wizard, or by hand in `$PROFILE`:
@@ -352,7 +390,13 @@ its own file named after the function:
 ```
 ScrewCitySoftware.PwshProfile/
 ├── ScrewCitySoftware.PwshProfile.psd1   # manifest: version, explicit FunctionsToExport list
-├── ScrewCitySoftware.PwshProfile.psm1   # loader: recursively dot-sources Public/ (+ Private/), exports
+├── ScrewCitySoftware.PwshProfile.psm1   # dev loader: recursively dot-sources Public/ (+ Private/), exports
+├── Prefix.ps1                          # console-encoding preamble + $script:ModuleRoot (shared with the build)
+├── Suffix.ps1                          # ensures PwshSpectreConsole (shared with the build)
+├── build.psd1                          # ModuleBuilder settings for build.ps1 -Task Build
+├── RequiredModules.psd1                # dev-dependency pins (Pester/PSScriptAnalyzer/ModuleBuilder), read by Bootstrap
+├── GitVersion.yml                      # computes the shipped SemVer from git tag/commit history at build time
+├── .config/dotnet-tools.json           # pins the GitVersion.Tool local dotnet tool, restored by Bootstrap
 ├── Public/                              # one exported function per file
 │   ├── Install/
 │   │   ├── Install-PwshProfile.ps1   # wizard: write the bootstrap into a profile file
@@ -365,7 +409,7 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-OhMyPoshTheme.ps1          # emit the bundled oh-my-posh theme JSON
 │   │   └── Export-OhMyPoshTheme.ps1       # copy the bundled theme to a file you own
 │   ├── Tools/
-│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (not a -Enable token)
+│   │   ├── Enable-Git.ps1                 # always-on: installs Git.Git (%ProgramFiles%\Git\cmd)
 │   │   ├── Enable-Zoxide.ps1
 │   │   ├── Enable-Fzf.ps1
 │   │   ├── Enable-FastNodeManager.ps1
@@ -373,8 +417,10 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Enable-Jq.ps1
 │   │   ├── Enable-Bat.ps1
 │   │   ├── Enable-Fd.ps1
+│   │   ├── Enable-Ripgrep.ps1
 │   │   ├── Enable-Less.ps1
 │   │   ├── Enable-Lazygit.ps1
+│   │   ├── Enable-Uv.ps1
 │   │   ├── Set-WingetSetting.ps1          # merges client prefs (scope, progress bar, …) into winget's settings.json
 │   │   ├── Select-Fzf.ps1                 # pipe objects through fzf; returns the selected object(s) (bundles its private Invoke-FzfRaw seam in-file)
 │   │   └── Completions/                   # one Enable-<Tool>Completion per CLI
@@ -393,22 +439,35 @@ ScrewCitySoftware.PwshProfile/
 │   │   └── Set-WindowsTerminalFont.ps1          # set WT's default profile font (face) in settings.json
 │   ├── Docs/
 │   │   ├── Show-PwshProfileReadme.ps1       # renders this README (Show-Markdown) or opens it (-Open)
-│   │   └── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
+│   │   ├── Show-NerdFontSetup.ps1         # panel: point Windows Terminal / VS Code at a Nerd Font
+│   │   └── Show-PwshProfileChord.ps1      # panel: keyboard chords this profile wires up (+ related defaults)
 │   └── Core/
 │       └── Import-ModuleSafe.ps1
 ├── Private/                             # internal helpers (loaded, not exported)
 │   ├── Install/                         # Install/Uninstall helpers: marker + block builders, the
-│   │   └── *PwshProfile*.ps1       #   wizard, feature tree, file writer, defaults, call builder, and
-│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser)
-│   ├── Startup/                         # opt-in resolution helpers (shared by startup + the wizard)
-│   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool token set
-│   │   └── Confirm-PwshProfileEnableAll.ps1   # bare-call "enable all?" confirm (guarded, no-hang)
+│   │   └── *PwshProfile*.ps1       #   wizard, file writer, defaults, call builder,
+│   │                               #   Read-PwshProfileInstalledSetting (re-run prefill parser),
+│   │                               #   Get-PwshProfileSettingSchema (source of truth for the
+│   │                               #   settable parameters and their metadata), and
+│   │                               #   Get-PwshProfileWiringCatalog / Read-PwshProfileWiringTree
+│   │                               #   (the wizard's wiring toggles and their checkbox tree), plus
+│   │                               #   Get-PwshProfileToolInventory / Get-PwshProfileModuleInventory,
+│   │                               #   the shared Show-PwshProfileInventory renderer, and
+│   │                               #   Get-PwshProfileRemovalInventory / Read-PwshProfileUninstallTree
+│   │                               #   (Uninstall-PwshProfile's removal checkbox tree)
+│   ├── Startup/                         # startup helpers shared with the wizard
+│   │   ├── Get-PwshProfileToolCatalog.ps1     # single source of truth for the tool set + install kinds
+│   │   └── Get-PwshProfileModuleCatalog.ps1   # single source of truth for the PSGallery modules it installs
+│   ├── Docs/
+│   │   └── Get-PwshProfileChordCatalog.ps1    # single source of truth for Show-PwshProfileChord's rows
 │   ├── Prompt/
 │   │   ├── Get-BundledThemePath.ps1     # resolves Assets/Themes/<theme>.omp.json (default screwcity)
 │   │   ├── Get-BundledThemeName.ps1     # lists bundled theme names (drives -Theme validation/completion)
 │   │   └── Get-BundledThemeBranding.ps1 # banner + bat/fd/fzf colors + WT color scheme paired with each bundled theme
 │   ├── Tools/
 │   │   ├── Install-WingetPackageSafe.ps1 # shared Install step (Install-WinGetPackage) for the Enable-* enablers (-PathDir defaults to the WinGet\Links dir)
+│   │   ├── Uninstall-WingetPackageSafe.ps1 # inverse of the above (Uninstall-WinGetPackage), for Uninstall-PwshProfile's removal checkbox
+│   │   ├── Uninstall-ModuleSafe.ps1      # removes a gallery module (Uninstall-PSResource), for Uninstall-PwshProfile's removal checkbox
 │   │   ├── Get-WingetSettingDefault.ps1  # current winget user-setting values (else module defaults) for the wizard
 │   │   ├── Get-FzfVersion.ps1            # parses `fzf --version` so Enable-Fzf only adds --style on fzf 0.54+
 │   │   └── Completions/
@@ -418,9 +477,13 @@ ScrewCitySoftware.PwshProfile/
 │   │   ├── Get-BundledFontPath.ps1      # resolves Assets/Fonts/<name>.flf
 │   │   ├── Get-BundledFontName.ps1      # lists bundled font names (drives -Font validation/completion)
 │   │   ├── Get-WindowsTerminalSettingsPath.ps1 # locates WT settings.json (stable/preview/unpackaged)
+│   │   ├── Resolve-WindowsTerminalSettingsPath.ps1 # resolves + validates it, warning when absent
+│   │   ├── Get-WindowsTerminalSchemeName.ps1   # read-only: which scheme names are actually present
 │   │   └── Edit-WindowsTerminalSettings.ps1    # shared read/backup/write engine for the scheme install/uninstall
 │   └── Core/
-│       └── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
+│       ├── Invoke-InGlobalScope.ps1     # runs tool-init output in global scope, unattributed
+│       ├── Test-ModuleAvailable.ps1     # cheap loaded/installed probe (avoids -ListAvailable)
+│       └── Test-CommandAvailable.ps1    # cheap CLI-presence probe (avoids Get-Command's ~130ms miss)
 ├── Assets/                              # bundled assets
 │   ├── Themes/
 │   │   ├── screwcity.omp.json   # default oh-my-posh theme — Screw City (purple/blue)
@@ -428,8 +491,19 @@ ScrewCitySoftware.PwshProfile/
 │   └── Fonts/                           # 25 bundled FIGlet fonts (see Write-Figlet / Show-FigletFont)
 │       ├── *.flf                        # ANSIShadow, Colossal, Doom, Slant, Small, ... (run Show-FigletFont)
 │       └── README.md                    # font sources + license/attribution
-└── Tests/                               # Pester 5 tests
+└── Tests/                               # Pester 6 tests
 ```
+
+Before it loads anything, the `.psm1` sets `[Console]::InputEncoding`, `[Console]::OutputEncoding`
+and `$OutputEncoding` to BOM-less UTF-8 (one shared `UTF8Encoding` instance, wrapped in
+`try`/`catch` so a host without a real console can't break the import). This is required for
+rendering, not cosmetic: PwshSpectreConsole writes through `[Console]::Out`, so at the default OEM
+code page every non-ASCII glyph the module emits — step icons, dotted leaders, nerd-font prompt
+segments, figlet banners — is mangled by the encoder before it reaches the terminal. Two
+consequences worth knowing: the `[Console]` properties are *console-wide*
+(`SetConsoleCP`/`SetConsoleOutputCP`), so the code page change is inherited by child processes and
+outlives the session if you launched `pwsh` from another console; and native tools that still emit
+OEM-encoded text will render as mojibake, since PowerShell now decodes their stdout as UTF-8.
 
 To add a function: create `Verb-Noun.ps1` in the matching `Public/` subfolder (file name ==
 function name), add the name to `FunctionsToExport` in the `.psd1`, and document it below. Pick
@@ -443,13 +517,18 @@ them.
 ### `Install-PwshProfile`
 
 A one-time, re-runnable setup wizard (built on PwshSpectreConsole) that writes the module's
-bootstrap — a tools snapshot comment plus a tailored `Initialize-PwshProfile` call (no `Import-Module`
+bootstrap — a guidance comment plus a tailored `Initialize-PwshProfile` call (no `Import-Module`
 line; the call auto-loads the module) — into a profile file, wrapped in managed marker comments. By
-default it targets `$PROFILE`. On a re-run it reads the existing block to pre-fill your prior choices
-and flag tools added since. It **wires the module into your profile file**; it does not install the
+default it targets `$PROFILE`. On a re-run it reads the existing block to pre-fill your prior choices.
+It **wires the module into your profile file**; it does not install the
 module itself from the gallery (use `Install-PSResource ScrewCitySoftware.PwshProfile` for that).
 
-Each step opens with a rounded header panel — its title, a `step N of 6` progress counter, and a
+It also **installs the tool CLIs** — all thirteen, git and oh-my-posh included — so the first shell
+after setup starts fast: every `Enable-*` install step then short-circuits on `Get-Command`. The
+packages come from the tool catalog rather than from calling the `Enable-*` functions, which would also
+*wire* the setup session (aliasing `cat`, rebinding `cd`) halfway through the wizard.
+
+Each step opens with a rounded header panel — its title, a `step N of 7` progress counter, and a
 short description — and secondary prompts carry an indented hint line beneath them (the feature step
 shows a one-line-per-feature legend). The descriptions are syntax-highlighted: tool names in the
 accent color, code literals (file types, commands like `cd` / `z`, paths) in cyan, body prose in soft
@@ -465,46 +544,137 @@ The wizard walks one forward pass, then lets you revise anything before committi
    (**defaulting to No**) offers to set **`MesloLGM Nerd Font`** as your Windows Terminal default font
    via [`Set-WindowsTerminalFont`](#set-windowsterminalfont) — applied to `settings.json` when you
    submit (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
-2. **Winget** — a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
+2. **Winget** — first, **what winget is about to install**: a check for each tool already on this
+   machine, a down-arrow for each one setup will fetch, and a count. This is the *full* list — git
+   and oh-my-posh are on it too, rather than appearing unannounced at first startup as they used to.
+   Each name is a clickable link to its project in a terminal that supports it.
+
+   ```text
+     ✓ git (version control)    already installed
+     ↓ oh-my-posh (prompt)      will install
+     ✓ zoxide (smart cd)        already installed
+     ✓ bat (cat replacement)    already installed
+     ↓ uv (Python toolchain)    will install
+     10 present · 3 to install
+   ```
+
+   Then a few [winget](https://learn.microsoft.com/windows/package-manager/winget/) client
    settings: default install **scope** (`user` / `machine`), **progress-bar** style, whether to
    **anonymize displayed paths**, and whether to **suppress install notes**. It shows your current
    values first (noting any that differ from the recommended default) and asks whether to change them
    — **defaulting to No**, so pressing Enter keeps them and skips the per-setting prompts. The values
    are merged into your `settings.json` via [`Set-WingetSetting`](#set-wingetsetting) when you submit
    (a one-time machine change, not part of the bootstrap block; skipped under `-WhatIf`).
-3. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
-   your own (see [Themes](#themes)). The choice seeds the banner color and step icon the later prompts
-   are pre-filled with; a custom path seeds neutral color/icon so you brand those fresh. The banner
-   text defaults to your machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to
-   install the matching **Windows Terminal color scheme** via
+3. **Modules** — the other half of what lands on your machine: the PowerShell Gallery modules the
+   profile leans on, each installed for your user only (`CurrentUser` scope, no admin) the first time
+   it is actually needed. Nothing to answer — the step exists so nothing installs unannounced, and a
+   module that is only fetched under some condition says so instead of promising an install. Each name
+   is a clickable link to its project too:
+
+   ```text
+     ✓ PwshSpectreConsole (console UI)            already installed
+     ↓ Terminal-Icons (file icons)                will install
+     ✓ posh-git (git in the prompt)               already installed
+     ↓ PSFzf (fzf key bindings)                   will install
+     ✓ Microsoft.WinGet.Client (winget installs)  already installed
+     · NerdFonts (font downloads)                 only if you opt into Nerd Fonts
+     · DockerCompletion (docker completion)       only when docker is on PATH
+     3 present · 2 to install · 2 only if needed
+   ```
+
+4. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
+   your own (see [Themes](#themes)). The choice seeds every branded setting the later prompts are
+   pre-filled with — banner color, step icon, and bat's syntax theme; a custom path seeds neutral
+   ones (`Silver`, `:gear:`, `ansi`) so you brand those fresh. The banner text defaults to your
+   machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to install the
+   matching **Windows Terminal color scheme** via
    [`Install-WindowsTerminalScheme`](#install-windowsterminalscheme-uninstall-windowsterminalscheme)
    (**defaulting to No**) and, only if accepted, whether to set it as the default color scheme
    (**defaulting to Yes**) — applied to `settings.json` when you submit (a one-time
    machine change, not part of the bootstrap; skipped under `-WhatIf`). A custom theme has no matching
    scheme, so it installs the neutral **Screw City** scheme.
-4. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
+5. **Banner** — shows the current banner config (shown/hidden plus text, color, alignment, font,
    noting anything off the theme default) and asks whether to change it — **defaulting to No**. On
    yes, a show/hide question gates the rest: say no and the banner is suppressed (`-NoBanner`) and
    the theming prompts are skipped; say yes and you're prompted for text, color, alignment, and font.
-5. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
+6. **Step icon** — always asked (the icon marks every startup step, banner or not), with the
    current icon floated to the top and a "custom shortcode" escape.
-6. **Features** (opt-in) — first a **mode** choice: *pick specific tools*, or *enable everything
-   including tools added in future updates* (emits `-EnableAll`). "Specific" shows a grouped tree under
-   two sections — **Core** (PSReadLine, Terminal-Icons, posh-git, shell completions) and **WinGet** (the
-   winget-installed CLIs: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit). On a re-run it **pre-checks your prior
-   selection**; on a clean first run **Core is pre-checked and WinGet is left unchecked** (so the
-   light-install Core stuff is on by default, but each winget install is an explicit opt-in). Tools added
-   to the module since your last setup are tagged **(new)**; the checked set becomes `-Enable`.
-   oh-my-posh is always on and isn't listed. If `zoxide` ends up enabled you're prompted for its jump
-   command; if `bat` is enabled, whether to replace the built-in `cat` (**defaulting to Yes**, emitting
-   `-ReplaceCat`); if `less` is enabled, whether to make it the default pager (**defaulting to Yes**,
-   emitting `-ReplaceMore` — sets `$env:PAGER` and aliases `more` → `less`). If `fzf` is enabled you're
-   asked whether to bind the PSFzf `Ctrl+G` git keybindings (**defaulting to No**; lazygit already
-   covers git) and which chord drives the fuzzy tab-completion picker (**default `Ctrl+Spacebar`**);
-   `Ctrl+T`/`Ctrl+R` are bound regardless.
+7. **Wiring** — every tool is installed and enabled, so this asks only how they wire into your shell.
+   A single grouped checkbox tree covers the binary choices, with a one-line explanation per row:
+
+   ```text
+   Replacements
+     [x] cd -> zoxide (smart jump)          [ ] more -> less (the command)
+     [ ] cat -> bat (syntax highlighting)   [ ] http / https -> xh
+     [ ] $env:PAGER -> less
+   Keybindings
+     [ ] Ctrl+G git pickers
+   ```
+
+   Only `cd` → zoxide starts checked; nothing else claims one of your existing command names unless
+   you ask. On a re-run the tree opens pre-checked from your prior choices, and **unchecking a box is
+   a real "no"** — it clears the setting rather than leaving last time's value behind. `Ctrl+T` and
+   `Ctrl+R` are bound regardless and aren't listed.
+
+   Four free-text settings a checkbox can't express follow: bat's syntax **theme** and **style**
+   components (both pre-filled, the theme from your prompt theme's branding, so Enter keeps them),
+   less's **options** (`$env:LESS`, default `-R -F -i`), and the chord for the fuzzy tab-completion
+   picker (**default `Ctrl+Spacebar`**). A closing **chord guidance** confirm follows, off by
+   default: opt in and `Show-PwshProfileChord` prints a chord reference once at every startup.
 
 It then shows a **review** screen: **Submit** to write the profile, **Edit** any step to revise it,
 or **Cancel** to exit without writing anything.
+
+The same counts appear on the review screen, so a first run on a fresh machine doesn't surprise you
+with a long download after you've already committed. The review screen's **Submit**/**Cancel** is the
+gate — there's no separate "install these?" prompt, since declining wouldn't avoid the work anyway
+(startup would just install them later, more slowly and with less to show for it).
+
+Each package that actually gets fetched gets its own timed line, so a slow download is attributable
+rather than hidden inside one opaque step:
+
+```text
+⚙ Installing lazygit (git TUI)........................ [ 8421ms]
+⚙ Installing uv (Python toolchain).................... [12043ms]
+```
+
+Tools already present get no line — they cost a single `Get-Command` each. When there's nothing at
+all to fetch, you get one line saying so:
+
+```text
+⚙ Tools — all 13 already present...................... [   47ms]
+```
+
+On submit it applies the one-time machine actions — the Nerd Font install, the winget client settings,
+**the tool CLIs** (one timed step per package, after the winget settings so your scope and progress-bar
+preferences are already in place), and the Windows Terminal font/scheme — then writes the bootstrap.
+None of them are part of the block, so re-running re-applies them, and `-WhatIf` previews the whole run
+without installing or writing anything.
+
+Once the block is written it offers to **apply the new settings right there** — re-running the
+`Initialize-PwshProfile` call it just generated, so your prompt and tools update without opening a new
+shell. It defaults to yes, so Enter finishes the job; declining leaves the file exactly as written and
+the panel's advice standing.
+
+```text
+  › Re-runs Initialize-PwshProfile with the settings you just chose, so your prompt
+    and tools update without opening a new shell. Your own profile code is not re-run.
+Apply these settings to this session now? [Y/n]
+  ✓ Settings applied to this session
+```
+
+It runs that one call rather than dot-sourcing the whole profile on purpose: dot-sourcing would also
+re-execute **your** profile code — duplicate PATH appends, re-registered handlers, whatever else you
+keep there — to apply a change that lives entirely inside the managed block.
+
+It appears on every completed run, not just one that changed the block — a re-run that answers
+everything the same way writes an identical block, and that is precisely when a reload is worth it,
+since the run may have installed a tool your shell started without. Only a `-WhatIf` preview and the
+case where a hand-written import was deliberately left alone skip it. **One caveat on a re-run:** the wiring switches are one-way in-session. Turning one
+**on** applies on a reload; turning one **off** still needs a new shell, because the enablers only
+ever *set* their alias or environment variable (`cat` stays aliased to `bat`, `$env:PAGER` stays
+set). The prompt says so when it's a re-run. A reload that throws warns rather than failing the
+install, which has already succeeded by then.
 
 Your existing profile is never destroyed:
 
@@ -543,17 +713,25 @@ To **change settings**, just re-run `Install-PwshProfile` (it rewrites the block
 Removes the marker-wrapped bootstrap block that `Install-PwshProfile` wrote, leaving every other
 line in the profile intact. By default it targets `$PROFILE`.
 
-It touches **only the profile file** — it does **not** uninstall any tools, Nerd Fonts, or modules
-that were installed during setup; it just stops the module from initializing on future sessions. A
-hand-written, unmanaged `Import-Module ScrewCitySoftware.PwshProfile` (no markers) is left untouched,
-since that's your own code rather than the managed injection.
+The profile-file edit always happens the same way, non-interactively: it just stops the module from
+initializing on future sessions. A hand-written, unmanaged `Import-Module ScrewCitySoftware.PwshProfile`
+(no markers) is left untouched, since that's your own code rather than the managed injection.
+
+**When run in an interactive session** with Spectre prompts available, it additionally offers a
+checkbox tree of the winget tools, PowerShell modules, and Windows Terminal color scheme actually
+installed on this machine, so you can choose which (if any) to remove too — bringing the machine
+closer to its state before setup. Nothing is pre-selected; every removal is opt-in. **Nerd Fonts are
+never offered**, since there is no clean way to uninstall one once installed. This step is skipped
+silently outside an interactive session, so scripted calls behave exactly as before.
 
 - **`-Path`** — the profile file to clean (default `$PROFILE`, current user / current host).
-- **`-PassThru`** — emit a result object (`Path`, `Action` = `Removed` | `NotInstalled`, `Changed`);
-  by default the command returns nothing.
+- **`-PassThru`** — emit a result object (`Path`, `Action` = `Removed` | `NotInstalled`, `Changed`,
+  `Uninstalled` — one entry per item you checked in the removal tree, each with `Group`, `Label`,
+  `Kind`, and whether it was actually `Removed`); by default the command returns nothing.
 
-Supports `-WhatIf` / `-Confirm`. If removing the block leaves the file empty, the empty file is left
-in place rather than deleted.
+Supports `-WhatIf` / `-Confirm` — the bootstrap-block write and each checked removal are all
+individually gated. If removing the block leaves the file empty, the empty file is left in place
+rather than deleted.
 
 ```powershell
 Uninstall-PwshProfile                            # remove the block from $PROFILE
@@ -581,18 +759,50 @@ Show-NerdFontSetup                       # recommended families
 Show-NerdFontSetup -Font Meslo, CascadiaCode
 ```
 
+### `Show-PwshProfileChord`
+
+Renders a panel listing the keyboard chords this profile wires up — fzf's `Ctrl+T`/`Ctrl+R`/`Ctrl+G`/
+`Ctrl+Spacebar` pickers (`Enable-Fzf`) and `Initialize-PSReadline`'s `UpArrow`/`DownArrow`/`Tab`/
+`Alt+w`/`Alt+(` bindings — plus a couple of closely related defaults that aren't this module's own
+choice, for context: PSFzf's own unconditional `Alt+C` binding, and the PSReadLine default that
+`Ctrl+R` replaces. If PwshSpectreConsole isn't loaded, the same text is written plainly.
+
+A chord only appears when it's actually active for the given configuration — `-FzfGitKeyBindings`
+(same name and default as `Enable-Fzf`/`Initialize-PwshProfile`) shows the `Ctrl+G` row only when
+passed **and** git is on PATH, mirroring `Enable-Fzf`'s own exact gate; `-FzfTabChord` (same name and
+default `'Ctrl+Spacebar'`) shows the tab-completion row with whatever chord is actually configured —
+`Ctrl+Spacebar / Ctrl+@` at the default, just the literal chord otherwise, or hidden entirely if
+passed empty. Called with no arguments, this reflects a fresh default install.
+
+Each chord links to the project that owns it — **PSFzf** for its own fzf pickers, **PSReadLine** for
+`Initialize-PSReadline`'s bindings — as a clickable hyperlink in a terminal that supports it (Windows
+Terminal, VS Code, and most modern terminals).
+
+`Initialize-PwshProfile -ShowChordGuidance` prints this automatically at the end of every startup
+(off by default), forwarding its own `-FzfGitKeyBindings`/`-FzfTabChord` so the guidance matches this
+session's actual configuration; this cmdlet also runs standalone any time.
+
+```powershell
+Show-PwshProfileChord                                        # what a fresh default install has
+Show-PwshProfileChord -FzfGitKeyBindings -FzfTabChord 'Ctrl+j' # what this session's config actually wired up
+```
+
 ### `Initialize-PwshProfile`
 
 The headline entry point: one call that runs the profile startup, so `$PROFILE` shrinks to just this
-call (it auto-loads the module). Tool selection is **opt-in** via `-Enable`/`-EnableAll` (see below).
+call (it auto-loads the module). **Every tool runs** — there is no tool selection; its parameters
+configure how each tool is wired, not whether it is present.
 In order it shows the startup banner, then runs two top-level `Invoke-Step` sections split by install
 model — **Core** (the `which` global alias, git, PSReadLine, oh-my-posh, Terminal-Icons, posh-git, and the
 shell **completions** for winget/Azure CLI/Tailscale/Docker/1Password/GitHub CLI — registration only, no
-installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit — fzf
+installs) and **WinGet** (the CLIs installed via WinGet: zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, uv — fzf
 next to zoxide, fnm auto-switching the node version on any directory change, fd after fzf so it can wire
-fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI). git, oh-my-posh, and the `which` alias always run; everything
-else is enabled only when listed in `-Enable` (or via `-EnableAll`). The Core section always renders; the
-WinGet section renders only when at least one winget tool is enabled. Each section renders its own spinner
+fzf to use fd as its source, less as bat's/PowerShell's pager, lazygit a standalone git TUI, uv a standalone Python toolchain). git and oh-my-posh run in **Core** for ordering reasons — git
+first, so it is on PATH for posh-git and the git-aware WinGet tools — but they are winget packages
+like the rest, and the catalog groups them by that install model, which is how setup knows to fetch
+them. Only the `which` alias sits outside the catalog: it installs nothing. Both sections always render. `Install-PwshProfile` installs the CLIs during
+setup, so at startup each install step short-circuits on `Get-Command` and costs almost nothing; a tool
+that is genuinely missing is installed here instead. Each section renders its own spinner
 and summary line, and steps that depend on a missing tool degrade silently, so startup never throws. It
 deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or `aliases.ps1`)
 — those stay in `$PROFILE`.
@@ -622,9 +832,17 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   `numbers,changes,header`.
 - **`-ReplaceCat`** — forwarded to `Enable-Bat -ReplaceCat`: aliases `cat` → `bat` for the session
   (replacing the built-in `cat`, an alias for `Get-Content`). Off by default.
-- **`-ReplaceMore`** — forwarded to `Enable-Less -ReplaceMore`: sets `$env:PAGER` to `less` (so
-  PowerShell's `help`, `bat`, `git`, `delta`, and `gh` page through less instead of `more.com`) and
-  aliases `more` → `less` for the session. Off by default.
+- **`-LessOptions`** — the option string forwarded to `Enable-Less -Options` (sets `$env:LESS`);
+  default `-R -F -i` (raw color passthrough, quit-if-one-screen, smart-case search).
+- **`-SetPager`** — forwarded to `Enable-Less -SetPager`: sets `$env:PAGER` to `less`, so PowerShell's
+  `help`, `bat`, `git`, `delta`, and `gh` page through less instead of `more.com`. Off by default.
+- **`-ReplaceMore`** — forwarded to `Enable-Less -ReplaceMore`: aliases `more` → `less` for the
+  session. Off by default. Independent of `-SetPager` — this shadows the `more` *command*, that
+  redirects programs which consult `$env:PAGER`. (`help` invokes the literal string `more.com`, so the
+  alias alone never reaches it, which is why they're separate switches.)
+- **`-ReplaceHttp`** — forwarded to `Enable-Xh -ReplaceHttp`: aliases `http` → `xh` and `https` → `xhs`,
+  widening each generated completer to match. Off by default: unlike `cat` and `more`, these aren't
+  built-in commands, so this claims two previously-free names rather than shadowing anything.
 - **`-FdColors`** — fd's `LS_COLORS` palette, forwarded to `Enable-Fd -LsColors` (sets
   `$env:LS_COLORS`). Defaults to the active theme's blend (purple-led for screwcity, green-led for
   forestcity). fd stays standalone — it never replaces `Get-ChildItem`. (`LS_COLORS` is shared with
@@ -632,41 +850,59 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-FzfColors`** — fzf's picker palette, forwarded to `Enable-Fzf -Colors` (folded into
   `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for screwcity,
   green/gold for forestcity).
-- **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G` git chords (branch/commit/file
-  pickers), forwarded to `Enable-Fzf -GitKeyBindings`. **Off by default** (opt-in) — pass
-  `-FzfGitKeyBindings` to enable them; they're off because lazygit already covers git workflows.
-  Only applies when `Fzf` is enabled (warned-and-ignored otherwise); `Enable-Fzf` drops the chords
-  anyway if git isn't on PATH.
+- **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G,Ctrl+<key>` git chords (branch,
+  file, hash, pull request, stash, and tag pickers), forwarded to `Enable-Fzf -GitKeyBindings`.
+  **Off by default** (opt-in) — pass `-FzfGitKeyBindings` to enable them; they're off because
+  lazygit already covers git workflows. `Enable-Fzf` drops the chords if git isn't on PATH.
 - **`-FzfTabChord`** — the PSReadLine chord that triggers PSFzf's fuzzy tab-completion picker (`Tab`
   stays `MenuComplete`), forwarded to `Enable-Fzf -TabExpansionChord`. Default `Ctrl+Spacebar`
-  (which also binds `Ctrl+@`). Only applies when `Fzf` is enabled.
+  (which also binds `Ctrl+@`).
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
   theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
   No trailing space needed — the separator before the step text is added at render time.
-- **`-Enable`** — the tools to enable (opt-in): any of `PSReadLine`, `TerminalIcons`, `PoshGit`,
-  `Zoxide`, `Fzf`, `Fnm`, `Xh`, `Jq`, `Bat`, `Fd`, `Less`, `Lazygit`, `Completions`. Only the listed tools run
-  (and the auto-installing ones install), so a tool added in a later module version never installs
-  unless you add it here. `-Enable @()` enables nothing. oh-my-posh and the `which` alias always run
-  and are not tokens.
-- **`-EnableAll`** — enable every tool in the catalog, including any added in future module versions
-  (opts into auto-installing future tools). If both `-EnableAll` and `-Enable` are given, `-Enable`
-  wins (the explicit list is the safer choice) and a warning notes `-EnableAll` was ignored.
+- **`-ShowChordGuidance`** — a switch that prints `Show-PwshProfileChord` once at the end of startup,
+  forwarding `-FzfGitKeyBindings`/`-FzfTabChord` so the guidance reflects this session's actual
+  configuration (the `Ctrl+G` row only if git bindings are on, the tab-completion row with the real
+  chord). **Off by default** — the install wizard asks explicitly rather than defaulting it silently;
+  `Show-PwshProfileChord` runs standalone any time regardless.
 - **`-NoBanner`** — render no startup banner. Use this to suppress the banner rather than clearing
   `-BannerText` (which rejects empty); banner params passed alongside it are warned-and-ignored.
 
-A tool-specific parameter (e.g. `-ReplaceCat`, `-ZoxideCommand`) for a tool that isn't enabled is
-warned about and ignored rather than throwing — and a wizard-generated call only ever emits one for an
-enabled tool.
+Startup normally installs nothing — `Install-PwshProfile` already did it, so every install step
+short-circuits on `Get-Command`. On the occasions it *does* have to install something (a fresh
+machine, or a tool added by a module update), it says so once, after the `WinGet` line:
+
+```
+WARNING: Installed astral-sh.uv during startup — this normally happens during setup.
+Run Install-PwshProfile to install new tools ahead of time.
+```
+
+**An argument it doesn't recognize is warned about and ignored, never thrown.** Startup that throws
+leaves you with no prompt, no tools and no completions at all, so an unmatched argument can't be
+allowed to abort it. A parameter this module used to accept and has since retired says so and names
+`Install-PwshProfile`; anything else is reported as a possible typo. If you see either, regenerate
+your profile block:
 
 ```powershell
-Initialize-PwshProfile -Enable Zoxide,Bat,Fd            # Screw City theme; only these tools
-Initialize-PwshProfile -Theme forestcity -EnableAll     # Forest City theme; every tool + future ones
-Initialize-PwshProfile -Enable Zoxide,Bat -BannerColor Green -BannerAlignment Center
-Initialize-PwshProfile -EnableAll -BannerFont ANSIShadow            # large block banner font
-Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json -Enable Zoxide
-Initialize-PwshProfile -EnableAll -NoBanner             # no startup banner
-Initialize-PwshProfile -Enable Bat -ReplaceCat          # alias cat -> bat (themed syntax highlighting)
-Initialize-PwshProfile -Enable Less -ReplaceMore        # make less the default pager (replace more.com)
+WARNING: Initialize-PwshProfile ignored retired parameter(s): -EnableAll. Your profile block was
+written by an older version of the module and every tool now runs regardless — run
+Install-PwshProfile to regenerate it.
+```
+
+Every parameter is optional, and a wizard-generated call carries only the ones you changed — so an
+install that customized nothing writes the bare call.
+
+```powershell
+Initialize-PwshProfile                                  # Screw City theme, every tool, all defaults
+Initialize-PwshProfile -Theme forestcity                # Forest City theme and its branding
+Initialize-PwshProfile -BannerColor Green -BannerAlignment Center
+Initialize-PwshProfile -BannerFont ANSIShadow           # large block banner font
+Initialize-PwshProfile -CustomTheme ~/.config/themes/custom.omp.json
+Initialize-PwshProfile -NoBanner                        # no startup banner
+Initialize-PwshProfile -ReplaceCat                      # alias cat -> bat (themed syntax highlighting)
+Initialize-PwshProfile -SetPager -ReplaceMore            # route $env:PAGER through less AND alias more
+Initialize-PwshProfile -ReplaceHttp                     # alias http/https -> xh/xhs
+Initialize-PwshProfile -ZoxideCommand 'z'               # zoxide on `z`, leaving the built-in cd alone
 ```
 
 ### `Invoke-Step`
@@ -855,8 +1091,8 @@ Set-WindowsTerminalFont -WhatIf                         # preview the change, wr
 ### `Enable-Git`
 
 Installs git (`Git.Git`) with winget if `git.exe` isn't already on PATH, patching the current
-session's PATH so it's usable immediately. Unlike the opt-in tool enablers below, `Enable-Git` is
-**always-on** (it isn't an `-Enable` token) and runs first in the **Core** section — posh-git's
+session's PATH so it's usable immediately. Unlike the tool enablers below, `Enable-Git` is
+**always-on** — there is no opt-out — and runs first in the **Core** section — posh-git's
 status prompt, PSFzf's `Ctrl+G` git chords, lazygit, and the GitHub CLI all want git on PATH. It's
 install-only (git ships no PowerShell shell-init or completion, so Initialize is a
 `Get-Command`-guarded no-op). `Git.Git` is a full installer (not a winget portable), so it targets
@@ -868,7 +1104,7 @@ startup continues.
 Enable-Git
 ```
 
-### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Less`, `Enable-Lazygit`
+### `Enable-OhMyPosh`, `Enable-Zoxide`, `Enable-Fzf`, `Enable-FastNodeManager`, `Enable-Xh`, `Enable-Jq`, `Enable-Bat`, `Enable-Fd`, `Enable-Ripgrep`, `Enable-Less`, `Enable-Lazygit`, `Enable-Uv`
 
 Each installs a CLI tool with winget if it isn't already on PATH (patching the current
 session's PATH so the install is usable immediately), then — for tools that need it — hooks
@@ -921,20 +1157,29 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `Initialize-PwshProfile` passes the theme blend, `full` style, `~100%` height, the bat preview
   (when bat is in play), `Ctrl+t`/`Ctrl+r`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd` (when fd
   is in play), and `-GitKeyBindings`. fzf
-  owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND`)
-  lives in `Enable-Fd`. zoxide's interactive picker (`cdi` / `zi`) reuses
+  owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND` for
+  files, `$env:FZF_ALT_C_COMMAND` for directories) lives in `Enable-Fd`. Note that importing PSFzf
+  also binds **Alt+C** (a set-location directory picker) on its own, whether or not it was asked for;
+  `Enable-Fd`'s `FZF_ALT_C_COMMAND` is what makes that chord actually return results.
+  zoxide's interactive picker (`cdi` / `zi`) reuses
   fzf and inherits the `--color`/`--style` baseline.
 - **`Enable-FastNodeManager`** — installs `Schniz.fnm`, applies `fnm env` (recursive version-file
   strategy) and completions, and registers a `LocationChangedAction` hook that fires on every
-  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). On each filesystem
-  change it runs `fnm use --silent-if-unchanged` — fnm resolves the version recursively (reverting
-  to the default version outside a Node project) and emits nothing unless the active version
-  actually changes, so moving around a non-Node tree is silent (matching fnm's own `--use-on-cd`
-  integration). It fires with or without zoxide and regardless of zoxide's jump command — chaining
+  directory change (`cd`, `z`/`cdi`, `Set-Location`, `Push-Location`, `..`, …). Spawning fnm costs
+  ~41ms, so rather than pay that on every `cd` the hook walks up for the files fnm reads (`.nvmrc`,
+  `.node-version`, `package.json`, ~2ms), stamps each with its write time, and runs
+  `fnm use --silent-if-unchanged` only when that stamp **changes** — which still fires on the way
+  *out* of a project (the transition that reverts to the default) and when a version file is edited
+  in place. Moving inside one project without editing, or between two non-Node directories, spawns
+  nothing. It fires with or without zoxide and regardless of zoxide's jump command — chaining
   any existing `LocationChangedAction` (including zoxide's, which is registered the same way) and not
   re-registering on reload — so there's no ordering requirement relative to `Enable-Zoxide`.
-- **`Enable-Xh`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`), aliases
-  `http`/`https` to them globally, and registers tab completion for all four names.
+- **`Enable-Xh [-ReplaceHttp]`** — installs `ducaale.xh` (which ships `xh.exe` and `xhs.exe`) and
+  registers tab completion for `xh` and `xhs`. With `-ReplaceHttp` it also aliases `http` → `xh` and
+  `https` → `xhs` globally and widens each completer to cover its alias. Off by default: `http` and
+  `https` aren't built-in commands, so this claims two free names rather than shadowing anything. The
+  completer widening rides the same switch — a completion registered for `http` is meaningless when
+  `http` isn't a command.
 - **`Enable-Jq`** — installs `jqlang.jq` (the command-line JSON processor) and puts `jq.exe`
   on PATH. jq is a standalone C program with no built-in shell completion, so this is
   install-only — there's no Initialize work and no completion to register.
@@ -950,18 +1195,33 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   `find` alternative that respects `.gitignore`). In Initialize it sets `$env:LS_COLORS` to
   `-LsColors` (so fd's output matches the prompt — `Initialize-PwshProfile` passes the active
   theme's truecolor blend), registers fd's PowerShell completer (`fd --gen-completions powershell`),
-  and — with `-IntegrateFzf`, when `fzf.exe` is present — points a bare `fzf` at fd as its file
-  source via `$env:FZF_DEFAULT_COMMAND` (`fd --ignore-case …`, case-insensitive; the Ctrl+T picker
-  uses PSFzf's own fd provider). **fd is
+  and — with `-IntegrateFzf`, when `fzf.exe` is present — points fzf at fd as its source via two env
+  vars, both `fd --ignore-case …` so matching stays case-insensitive:
+  `$env:FZF_DEFAULT_COMMAND` (files — read by a bare `fzf`, and preferred by PSFzf's **Ctrl+T**
+  picker over PSFzf's own fd command) and `$env:FZF_ALT_C_COMMAND` (directories — read by PSFzf's
+  **Alt+C** picker, the one lookup that skips `FZF_DEFAULT_COMMAND`; without it PSFzf falls back to a
+  built-in `fd … --fixed-strings .` whose literal `.` pattern matches only paths containing a period,
+  leaving the picker empty). **fd is
   standalone — it never aliases or replaces `Get-ChildItem`/`ls`.** (`LS_COLORS` is shared with
   `ls`/`eza`.) Enabled after `Enable-Fzf`
   so `fzf.exe` is on PATH when integration is evaluated.
-- **`Enable-Less [-Options <string>] [-ReplaceMore]`** — installs `jftuga.less` (GNU less compiled
-  standalone for Windows — a full-featured pager with color, search, and backward scroll, far beyond
-  the built-in `more.com`). In Initialize it sets `$env:LESS` to `-Options` (default `-R -F -i`: raw
-  color passthrough, quit-if-one-screen, smart-case search) and — with `-ReplaceMore` — sets
-  `$env:PAGER` to `less` (so PowerShell's own `help`, `bat`, `git`, `delta`, and `gh` page through
-  less rather than `more.com`) and aliases `more` → `less` globally. less is also what gives
+- **`Enable-Ripgrep`** — installs `BurntSushi.ripgrep.MSVC` (a very fast recursive search of file
+  *contents* that respects `.gitignore` — the content-search counterpart to fd's filename search) and
+  puts `rg.exe` on PATH. In Initialize it registers ripgrep's own PowerShell completer, which it
+  spells `rg --generate complete-powershell` — **not** fd's `--gen-completions powershell`. Takes no
+  parameters. **ripgrep is standalone — it never aliases or replaces `Select-String`/`sls`.** Like
+  less it isn't themed, but for a different reason: rg exposes no color environment variable at all,
+  and its only knob for default flags (colors, `--smart-case`, …) is a config file pointed at by
+  `$env:RIPGREP_CONFIG_PATH` — writing that file is left to you rather than done at startup. It has
+  no init-time dependency on the other tools, so its position in the startup order is free.
+- **`Enable-Less [-Options <string>] [-SetPager] [-ReplaceMore]`** — installs `jftuga.less` (GNU less
+  compiled standalone for Windows — a full-featured pager with color, search, and backward scroll, far
+  beyond the built-in `more.com`). In Initialize it sets `$env:LESS` to `-Options` (default `-R -F -i`:
+  raw color passthrough, quit-if-one-screen, smart-case search), and applies two **independent**
+  overrides: `-SetPager` sets `$env:PAGER` to `less` (so PowerShell's own `help`, `bat`, `git`,
+  `delta`, and `gh` page through less rather than `more.com`), while `-ReplaceMore` aliases `more` →
+  `less` globally. Neither implies the other — `help` invokes the literal string `more.com`, so the
+  alias alone would not redirect it, which is exactly why they are two switches. less is also what gives
   `Enable-Bat` color paging: bat's default pager is less, so without it on PATH bat can't page colored
   output. Unlike bat/fd, less ships no PowerShell completer and has no palette, so it registers no
   completion and isn't themed — `$env:LESS` carries functional defaults only.
@@ -969,18 +1229,32 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   puts `lazygit.exe` on PATH. lazygit is a self-contained TUI you launch by typing `lazygit`, with
   no built-in shell completion, so this is install-only — there's no Initialize work and no
   completion to register (like `Enable-Jq`).
+- **`Enable-Uv`** — installs `astral-sh.uv` (Astral's single-binary Python package and project
+  manager — dependency resolution, per-project virtual environments, interpreter installs, and
+  throwaway tool runs via `uvx`) and puts `uv.exe`, `uvx.exe`, and `uvw.exe` on PATH. In Initialize
+  it registers a completer for **`uvx` only**. A PowerShell completer is bound to a command name, so
+  `uv` would need its own — but `uv`'s is ~754 KB of generated PowerShell and costs about **244 ms of
+  every shell startup** to produce and parse, against ~49 ms for `uvx` and ~42 ms for ripgrep. That
+  made it the single most expensive step in the profile, so it's deliberately skipped; `uv` itself
+  does not tab-complete. (`uvw`, the console-less variant, is left uncompleted too.) Takes no
+  parameters. **uv is standalone —
+  it never aliases or replaces `python`, `pip`, or `py`.** Like ripgrep it isn't themed: it has no
+  color environment variable, and its defaults live in `pyproject.toml`/`uv.toml` files you own. It
+  has no init-time dependency on the other tools, so its position in the startup order is free.
 
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
 Enable-Zoxide
 Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '~100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
 Enable-FastNodeManager
-Enable-Xh
+Enable-Xh -ReplaceHttp
 Enable-Jq
 Enable-Bat -Theme Dracula -ReplaceCat
 Enable-Fd -LsColors 'di=1;38;2;201;170;255:ln=38;2;95;215;255' -IntegrateFzf
-Enable-Less -ReplaceMore
+Enable-Ripgrep
+Enable-Less -Options '-R -F -i' -SetPager -ReplaceMore
 Enable-Lazygit
+Enable-Uv
 ```
 
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
@@ -1086,7 +1360,7 @@ runs with `--delimiter` / `--with-nth=2..` so the index column is hidden and `--
 the display **and the fuzzy search** to the text column (no `--nth` — it would re-index the
 post-`--with-nth` view and break matching), then the selected line's leading index maps back to the
 original object. It's invoked with `--ansi` and
-inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-less-enable-lazygit) has themed fzf the
+inherits `$env:FZF_DEFAULT_OPTS`, so when [`Enable-Fzf`](#enable-ohmyposh-enable-zoxide-enable-fzf-enable-fastnodemanager-enable-xh-enable-jq-enable-bat-enable-fd-enable-ripgrep-enable-less-enable-lazygit-enable-uv) has themed fzf the
 picker matches your prompt palette automatically. Requires `fzf` on PATH (it warns and returns nothing
 otherwise); an empty pipeline or an Esc cancel also returns nothing — it never throws.
 
@@ -1111,16 +1385,23 @@ Get-Process | Select-Fzf -Display { "{0} ({1})" -f $_.Name, $_.Id } -Multiple -P
 ### `Show-PwshProfileReadme`
 
 Renders this README straight from the installed module so the docs are one command away from any
-session. By default it prints to the console via `Show-Markdown`; pass `-Open` to hand `README.md`
-to the application registered for `.md` files instead (via `Invoke-Item`). Throws if the bundled
-README can't be found.
+session. By default it prints to the console via `Show-Markdown`, using the chosen bundled theme's
+header/code colors (PowerShell's own `Show-Markdown` defaults — reverse-video headers, a hardcoded
+gray-background code block — render badly against most terminal color schemes); the session's prior
+markdown-rendering settings are restored afterward, since `Set-MarkdownOption` would otherwise leak
+into any other `Show-Markdown` call for the rest of the session. Pass `-Open` to hand `README.md` to
+the application registered for `.md` files instead (via `Invoke-Item`); `-Theme` has no effect in
+that case. Throws if the bundled README can't be found.
 
+- **`-Theme`** — the bundled theme (tab-completes) whose header/code colors to render with, default
+  `screwcity`.
 - **`-Open`** — open the README in your default Markdown application instead of rendering it in the
   console.
 
 ```powershell
-Show-PwshProfileReadme          # render in the console with Show-Markdown
-Show-PwshProfileReadme -Open    # open README.md in the default Markdown app
+Show-PwshProfileReadme                     # render in the console with the screwcity theme's colors
+Show-PwshProfileReadme -Theme forestcity   # render with the Forest City theme's colors
+Show-PwshProfileReadme -Open               # open README.md in the default Markdown app
 ```
 
 ## Development
@@ -1148,7 +1429,7 @@ Invoke-Step "Demo" { Start-Sleep -Milliseconds 50 }
 
 ### Tests
 
-The `Tests/` folder holds Pester 5 tests: module-level checks (valid manifest, exports match
+The `Tests/` folder holds Pester 6 tests: module-level checks (valid manifest, exports match
 the manifest, every function documented) plus per-function behavior tests across the module —
 `Invoke-Step` rendering, `Import-ModuleSafe` install/import/failure paths, the profile
 install/uninstall/wizard logic, and the rest. Install Pester with `Install-PSResource Pester`
@@ -1171,8 +1452,12 @@ See [Build & release](#build--release) for the full task list.
 
 ### Build & release
 
-[`build.ps1`](build.ps1) is a dependency-free task runner — each `-Task` maps to a function and
-they run in order. The default chain lints, tests, and stages a shippable copy of the module:
+[`build.ps1`](build.ps1) is a self-contained task runner — no psake or InvokeBuild, each `-Task` just
+maps to a function and they run in order. `Bootstrap` installs the dev dependencies pinned in
+[`RequiredModules.psd1`](RequiredModules.psd1) (Pester, PSScriptAnalyzer, ModuleBuilder) when they
+are missing, and restores the [GitVersion](https://gitversion.net/) local dotnet tool pinned in
+`.config/dotnet-tools.json`. The default chain lints, tests, and stages a shippable copy of the
+module:
 
 Run it in a **clean** PowerShell session (`-NoProfile`) so a profile-loaded module / global state
 can't mask or alter results — that's what CI does:
@@ -1182,20 +1467,50 @@ pwsh -NoProfile -NoLogo -Command "& .\build.ps1"                      # Bootstra
 pwsh -NoProfile -NoLogo -Command "& .\build.ps1 -Task Analyze, Test"  # what CI runs on pull requests
 ```
 
-`Build` stages **only** the shippable files (`.psd1`, `.psm1`, `Public/`, `Private/`, `Assets/`,
-`README.md`, `LICENSE`) into `Output/ScrewCitySoftware.PwshProfile/`, so `Tests/`, `CLAUDE.md`,
-and `.github/` never reach the gallery package.
+`Build` stages **only** the shippable files (`.psd1`, `Assets/`, `README.md`, `LICENSE`) into
+`Output/ScrewCitySoftware.PwshProfile/`, so `Tests/`, `CLAUDE.md`, and `.github/` never reach the
+gallery package. `Public/` and `Private/` are not copied: **[ModuleBuilder](https://github.com/PoshCode/ModuleBuilder)**
+compiles every function into a single `.psm1`, Private before Public, so a helper is always defined
+before the function that calls it. Settings live in `build.psd1`.
+
+One function per file is right for editing, but each dot-source costs roughly 9 ms of fixed overhead
+at import — several hundred ms across the tree, on every shell start. Compiling collapses that to one
+parse: **a full `Import-Module` drops from ~790 ms to ~254 ms.**
+
+ModuleBuilder is preferred over a hand-rolled merge because it hoists `using` statements to the top of
+the compiled file (a naive concatenation breaks the moment a source file gains one), regenerates
+`FunctionsToExport` from `Public/**/*.ps1`, and emits `#Region` markers naming the source file and
+line offset — so `Convert-LineNumber` maps a stack trace in the compiled module back to the file it
+came from. `Prefix.ps1` and `Suffix.ps1` are shared verbatim with the dev loader in the `.psm1`, so
+the console-encoding preamble and the renderer check cannot drift between an in-repo import and the
+shipped module. Bundled-asset paths hang off `$script:ModuleRoot` rather than a per-file
+`$PSScriptRoot` precisely so they survive compilation.
+
+Because the Pester suite imports the repo tree rather than the staged copy, `Build` finishes by
+importing the staged module in a clean child process and asserting it exports exactly what the
+manifest declares — so the merged artifact is never published untested.
+
+**Versioning is computed by [GitVersion](https://gitversion.net/), not hand-bumped.** The source
+manifest's `ModuleVersion` is a static placeholder (`0.0.1`) — `Build` computes the real SemVer from
+git tag/commit history (config in [`GitVersion.yml`](GitVersion.yml)) and stamps it onto the
+*staged* manifest only. Run `./build.ps1 -Task Version` for a quick standalone check of what the
+current commit computes to.
 
 CI runs lint + tests on every push and pull request
 ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)). Publishing to the PowerShell Gallery is
 automated on release ([`.github/workflows/publish.yml`](.github/workflows/publish.yml)). To cut a
 release:
 
-1. Bump `ModuleVersion` in the manifest (and set `Prerelease` for a preview, e.g. `preview1`).
-2. Push, then create a GitHub release tagged `vX.Y.Z` (or `vX.Y.Z-preview1`) with notes describing
-   the changes — the [Releases page](https://github.com/screwcitysoftware/PwshProfile/releases) is
-   the changelog. The workflow guards that the tag and manifest version agree, then builds and runs
-   `Publish-PSResource`.
+1. Push a `vX.Y.Z` tag (or `vX.Y.Z-preview1`, e.g. `v0.5.0-preview1`) at the commit to release.
+2. Create a GitHub release from that tag with notes describing the changes — the
+   [Releases page](https://github.com/screwcitysoftware/PwshProfile/releases) is the changelog.
+   Because GitVersion resolves an exactly-tagged commit's version as that tag, the workflow's
+   computed version agrees with the tag by construction; it sanity-checks that before building and
+   running `Publish-PSResource`.
+
+A deliberate minor/major bump needs an explicit `+semver: minor` / `+semver: major` commit-message
+trailer somewhere since the last tag — this repo's `feat:`/`fix:`-style commit messages don't drive
+version bumps on their own; every commit on `main` bumps Patch by default.
 
 The publish workflow reads the gallery API key from the `PSGALLERY_API_KEY` repository secret.
 
@@ -1212,7 +1527,7 @@ Two carve-outs:
   [FIGlet font license](http://www.figlet.org/), with each font's original author/credit line
   preserved inside its `.flf` header. See [`Assets/Fonts/README.md`](Assets/Fonts/README.md) for
   sources and attribution.
-- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, less, lazygit,
+- **Third-party CLI tools and modules** (git, oh-my-posh, zoxide, fzf, fnm, xh, jq, bat, fd, ripgrep, less, lazygit, uv,
   PwshSpectreConsole,
   Terminal-Icons, posh-git, PSFzf, the Cobra-based CLIs, and the first-party `Microsoft.WinGet.Client`
   module used for package installs and winget user-setting changes) are *invoked* at runtime, never

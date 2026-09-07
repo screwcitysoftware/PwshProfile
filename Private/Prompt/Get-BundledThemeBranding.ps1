@@ -1,55 +1,51 @@
 function Get-BundledThemeBranding {
     <#
     .SYNOPSIS
-        Returns the display name, banner color, step icon, bat theme, fd/fzf color specs, and Windows
-        Terminal color scheme paired with a bundled theme.
+        Returns the display name, banner color, step icon, bat theme, fd/fzf color specs, markdown
+        header/code colors, and Windows Terminal color scheme paired with a bundled theme.
 
     .DESCRIPTION
-        Each bundled theme has a matching identity so the startup banner, step marker, and the
-        colors of bat, fd, and fzf feel cohesive with the prompt colors:
+        Each bundled theme has a matching identity, so the startup banner, step marker, and the colors
+        of bat, fd, fzf and README rendering feel cohesive with the prompt:
 
-          screwcity  -> 'Screw City'  / banner #4c81c8 (signature purple #c9aaff stays in the palettes)
-                                       / :nut_and_bolt:   (🔩) / Dracula
-          forestcity -> 'Forest City' / banner #8fce72 (also the signature green)
-                                       / :deciduous_tree: (🌳) / gruvbox-dark
+          screwcity  -> 'Screw City'  / :nut_and_bolt:   (🔩) / Dracula
+          forestcity -> 'Forest City' / :deciduous_tree: (🌳) / gruvbox-dark
 
-        DisplayName is the theme's friendly label (shown in the install wizard's theme picker); it is
-        NOT the banner text — the default banner text is uniformly $env:COMPUTERNAME for every theme
-        (see Get-PwshProfileDefault / Initialize-PwshProfile). The step icon is stored without a
-        trailing space; the separator between the glyph and the step text is added at render time
-        (Get-StepIconPrefix). BatTheme is the `bat --list-themes` value Enable-Bat assigns to
-        $env:BAT_THEME so bat's highlighting matches the prompt palette.
+        DisplayName is the friendly label shown in the wizard's theme picker — it is NOT the banner
+        text, which is uniformly $env:COMPUTERNAME for every theme. The step icon is stored without a
+        trailing space; the separator is added at render time by Get-StepIconPrefix. BatTheme,
+        LsColors and FzfColors are the values Enable-Bat, Enable-Fd and Enable-Fzf assign so those
+        tools match the prompt; the color specs are fixed truecolor RGB, so they render identically
+        across terminals rather than following the terminal's own scheme.
 
-        LsColors is an LS_COLORS spec Enable-Fd assigns to $env:LS_COLORS so fd's output is tinted to
-        match the prompt; it uses truecolor (38;2;R;G;B) matching the signature hex exactly. FzfColors
-        is an fzf `--color` spec Enable-Fzf folds into $env:FZF_DEFAULT_OPTS so fzf's picker matches
-        the prompt (also truecolor hex). Both are fixed RGB, so they render identically across
-        terminals rather than following the terminal's own scheme.
+        MarkdownHeaderColor and MarkdownCodeColor are Set-MarkdownOption SGR-body strings (the format
+        Set-MarkdownOption/Get-MarkdownOption store: a leading '[', no ESC char, e.g. '[7m') that
+        Show-PwshProfileReadme applies before rendering. They reuse each theme's already-established
+        accent colors rather than inventing new ones: MarkdownHeaderColor is bold plus the same
+        truecolor accent as LsColors' 'di=' entry, MarkdownCodeColor is foreground-only (deliberately
+        no background, so it doesn't fight the terminal's own background) using the same accent as
+        LsColors' 'ln=' entry.
 
-        TerminalScheme is a Windows Terminal color scheme (a hashtable in the shape Windows Terminal's
-        settings.json `schemes` array expects: `name`, `background`, `foreground`, `cursorColor`,
-        `selectionBackground`, and the 16 ANSI keys black..white + bright*). Install-WindowsTerminalScheme
-        writes it into the user's settings.json so the terminal's own palette matches the prompt. Its
-        `name` is the DisplayName, so it reads nicely in Windows Terminal's color-scheme dropdown. Like
-        LsColors/FzfColors the hex values are hardcoded here (not parsed out of the theme's .omp.json),
-        keeping this map the single source of truth for the theme's color identity.
+        TerminalScheme is a hashtable in the shape Windows Terminal's settings.json `schemes` array
+        expects, written by Install-WindowsTerminalScheme so the terminal's palette matches too. Its
+        `name` is the DisplayName. Like LsColors and FzfColors its hex values are hardcoded here rather
+        than parsed out of the .omp.json, keeping this map the single source of truth for a theme's
+        color identity.
 
-        Both Initialize-PwshProfile (at startup, to fill the banner color/icon not explicitly passed)
-        and Get-PwshProfileDefault (at install time, to pre-fill the wizard and seed the comparison
-        baseline) resolve color/icon through here, so the two stay in sync from one source.
-
-        Any unrecognized name — including a custom theme path chosen at install — falls back to the
-        'screwcity' branding, which is the module's neutral default identity.
+        Both Initialize-PwshProfile (at startup) and Get-PwshProfileDefault (at install time) resolve
+        branding through here, so the two stay in sync. Any unrecognized name — including a custom theme
+        chosen at install — falls back to 'screwcity', the module's neutral default identity.
 
     .PARAMETER Name
-        The bundled theme name (e.g. 'screwcity', 'forestcity'). Unknown names fall back to
-        'screwcity'.
+        The bundled theme name. Unknown names fall back to 'screwcity'.
 
     .EXAMPLE
         Get-BundledThemeBranding -Name forestcity
 
         Returns @{ DisplayName = 'Forest City'; BannerColor = '#8fce72'; StepIcon = ':deciduous_tree:';
-        BatTheme = 'gruvbox-dark'; LsColors = '…'; FzfColors = '…'; TerminalScheme = @{ … } }.
+        BatTheme = 'gruvbox-dark'; LsColors = '…'; FzfColors = '…';
+        MarkdownHeaderColor = '[1;38;2;143;206;114m'; MarkdownCodeColor = '[38;2;102;217;197m';
+        TerminalScheme = @{ … } }.
     #>
     [CmdletBinding()]
     param(
@@ -66,6 +62,10 @@ function Get-BundledThemeBranding {
             # Purple dirs / cyan symlinks / green executables / amber archives / magenta images.
             LsColors    = 'di=1;38;2;201;170;255:ln=38;2;95;215;255:ex=1;38;2;143;206;114:*.zip=38;2;255;175;95:*.tar=38;2;255;175;95:*.gz=38;2;255;175;95:*.7z=38;2;255;175;95:*.png=38;2;215;135;255:*.jpg=38;2;215;135;255:*.jpeg=38;2;215;135;255:*.gif=38;2;215;135;255:*.svg=38;2;215;135;255'
             FzfColors   = 'fg:-1,bg:-1,hl:#5fd7ff,fg+:#ffffff,bg+:#3a3a3a,hl+:#c9aaff,info:#c9aaff,prompt:#c9aaff,pointer:#c9aaff,marker:#8fce72,spinner:#5fd7ff,header:#5fd7ff'
+            # Bold + the LsColors 'di=' purple accent (#c9aaff); Code is foreground-only, no
+            # background, using the LsColors 'ln=' cyan accent (#5fd7ff).
+            MarkdownHeaderColor = '[1;38;2;201;170;255m'
+            MarkdownCodeColor   = '[38;2;95;215;255m'
             # Maps the shared palette keys (purple-deep bg, gray-light fg, signature purple-light
             # cursor/brightPurple, violet-mid selection, *-bright/*-light pairs for the ANSI 8+8).
             TerminalScheme = @{
@@ -100,6 +100,10 @@ function Get-BundledThemeBranding {
             # Green dirs / teal symlinks / gold executables / brown archives / light-green images.
             LsColors    = 'di=1;38;2;143;206;114:ln=38;2;102;217;197:ex=1;38;2;229;192;123:*.zip=38;2;191;143;94:*.tar=38;2;191;143;94:*.gz=38;2;191;143;94:*.7z=38;2;191;143;94:*.png=38;2;152;195;121:*.jpg=38;2;152;195;121:*.jpeg=38;2;152;195;121:*.gif=38;2;152;195;121:*.svg=38;2;152;195;121'
             FzfColors   = 'fg:-1,bg:-1,hl:#66d9c5,fg+:#ffffff,bg+:#3a3a3a,hl+:#8fce72,info:#8fce72,prompt:#8fce72,pointer:#8fce72,marker:#e5c07b,spinner:#66d9c5,header:#66d9c5'
+            # Bold + the LsColors 'di=' green accent (#8fce72); Code is foreground-only, no
+            # background, using the LsColors 'ln=' teal accent (#66d9c5).
+            MarkdownHeaderColor = '[1;38;2;143;206;114m'
+            MarkdownCodeColor   = '[38;2;102;217;197m'
             # Same palette-key mapping as screwcity, recolored to the forest palette.
             TerminalScheme = @{
                 name                = 'Forest City'

@@ -3,6 +3,7 @@
 BeforeAll {
     Import-Module (Join-Path $PSScriptRoot '..' 'ScrewCitySoftware.PwshProfile.psd1') -Force
     $script:Module = 'ScrewCitySoftware.PwshProfile'
+    . (Join-Path $PSScriptRoot 'LocationHookGlobal.Helpers.ps1')
 }
 
 Describe 'Enable-Zoxide' {
@@ -13,7 +14,7 @@ Describe 'Enable-Zoxide' {
         Mock -ModuleName $script:Module Invoke-Step { & $ScriptBlock }
         Mock -ModuleName $script:Module Install-WingetPackageSafe { }
         # zoxide.exe is "present" so Initialize runs.
-        Mock -ModuleName $script:Module Get-Command { $true } -ParameterFilter { $Name -eq 'zoxide.exe' }
+        Mock -ModuleName $script:Module Test-CommandAvailable { $true } -ParameterFilter { $Name -eq 'zoxide.exe' }
 
         # A global `zoxide` shim. `zoxide add` records the invocation and emits nothing; `zoxide init`
         # must emit a non-empty string because Invoke-InGlobalScope rejects an empty -Expression. The
@@ -29,7 +30,9 @@ Describe 'Enable-Zoxide' {
         $script:savedLoc = $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction
         $script:savedPwd = $PWD
         $ExecutionContext.SessionState.InvokeCommand.LocationChangedAction = $null
-        Remove-Variable -Name __zoxide_loc_hooked, __zoxide_loc_base -Scope Global -ErrorAction SilentlyContinue
+        # Snapshot (not just clear) any pre-existing hook globals — see LocationHookGlobal.Helpers.ps1.
+        $script:zoxideHookGlobalName = '__zoxide_loc_hooked', '__zoxide_loc_base'
+        $script:savedZoxideGlobals = Backup-PwshProfileLocationHookGlobal -Name $script:zoxideHookGlobalName
 
         # An isolated temp tree with two real directories to move between.
         $script:testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("zoxidetest_" + [guid]::NewGuid().ToString('N'))
@@ -47,7 +50,8 @@ Describe 'Enable-Zoxide' {
         # qualifier in the path, so use the bare name — it resolves to the global function and removes
         # it, unshadowing the cmdlet. Done here (not inline) so a shim never leaks into later test files.
         Remove-Item Function:zoxide -ErrorAction SilentlyContinue
-        Remove-Variable -Name ZoxideAddCalls, BaseRan, __zoxide_loc_hooked, __zoxide_loc_base -Scope Global -ErrorAction SilentlyContinue
+        Remove-Variable -Name ZoxideAddCalls, BaseRan -Scope Global -ErrorAction SilentlyContinue
+        Restore-PwshProfileLocationHookGlobal -Name $script:zoxideHookGlobalName -Saved $script:savedZoxideGlobals
     }
 
     It 'registers a location hook' {
