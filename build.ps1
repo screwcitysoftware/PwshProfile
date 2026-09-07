@@ -234,9 +234,11 @@ function Invoke-Build {
     # it came from.
     $built = Invoke-ModuleBuildWithRetry
 
-    # ModuleBuilder copies sibling .psd1 files out of the source folder; the analyzer config is dev
-    # tooling and has no business in the gallery package.
-    $strays = @('PSScriptAnalyzerSettings.psd1')
+    # ModuleBuilder copies sibling .psd1 files out of the source folder; the analyzer config and the
+    # dev-dependency pins are dev tooling and have no business in the gallery package — left in place,
+    # RequiredModules.psd1 isn't a valid module manifest shape and makes Publish-PSResource's manifest
+    # scan over $StagePath throw.
+    $strays = @('PSScriptAnalyzerSettings.psd1', 'RequiredModules.psd1')
     foreach ($stray in $strays) {
         $strayPath = Join-Path $StagePath $stray
         if (Test-Path $strayPath) { Remove-Item -LiteralPath $strayPath -Force }
