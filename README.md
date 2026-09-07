@@ -762,10 +762,9 @@ Show-NerdFontSetup -Font Meslo, CascadiaCode
 ### `Show-PwshProfileChord`
 
 Renders a panel listing the keyboard chords this profile wires up — fzf's `Ctrl+T`/`Ctrl+R`/`Ctrl+G`/
-`Ctrl+Spacebar` pickers (`Enable-Fzf`) and `Initialize-PSReadline`'s `UpArrow`/`DownArrow`/`Tab`/
-`Alt+w`/`Alt+(` bindings — plus a couple of closely related defaults that aren't this module's own
-choice, for context: PSFzf's own unconditional `Alt+C` binding, and the PSReadLine default that
-`Ctrl+R` replaces. If PwshSpectreConsole isn't loaded, the same text is written plainly.
+`Ctrl+Spacebar`/`Alt+C` pickers (`Enable-Fzf`) and `Initialize-PSReadline`'s `UpArrow`/`DownArrow`/
+`Tab`/`Alt+w`/`Alt+(` bindings — plus the PSReadLine default that `Ctrl+R` replaces, for context. If
+PwshSpectreConsole isn't loaded, the same text is written plainly.
 
 A chord only appears when it's actually active for the given configuration — `-FzfGitKeyBindings`
 (same name and default as `Enable-Fzf`/`Initialize-PwshProfile`) shows the `Ctrl+G` row only when
@@ -1126,7 +1125,8 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   location hook is immune to that (it chains any existing handler and doesn't re-register on reload,
   composing with `Enable-FastNodeManager`'s hook).
 - **`Enable-Fzf [-Colors <spec>] [-Style <preset>] [-Height <value>] [-PreviewCommand <cmd>]
-  [-ProviderChord <chord>] [-HistoryChord <chord>] [-TabExpansionChord <chord>] [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
+  [-ProviderChord <chord>] [-HistoryChord <chord>] [-DirectoryChord <chord>] [-TabExpansionChord <chord>]
+  [-UseFd] [-GitKeyBindings]`** — installs `junegunn.fzf` (the command-line
   fuzzy finder), themes it, and wires up its PowerShell key bindings. It composes
   `$env:FZF_DEFAULT_OPTS` (the baseline for *every* fzf invocation, always with `--ansi --ignore-case`
   — the latter forces case-insensitive matching regardless of query case, since PowerShell/Windows is
@@ -1136,11 +1136,12 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   carries **no** `--preview`, so directory pickers stay clean. `-PreviewCommand` is
   written to `$env:FZF_CTRL_T_OPTS` instead — scoped to the **Ctrl+T file picker** (so the bat
   preview shows for file searches but never for directory pickers like zoxide's `cdi`). Because fzf
-  ships **no** PowerShell key bindings, `-ProviderChord`/`-HistoryChord`/`-UseFd`/`-GitKeyBindings`
-  install/import the **PSFzf** module and call `Set-PsFzfOption` to bind **Ctrl+T** (fd-sourced file
-  picker with the bat preview) and **Ctrl+R** (fuzzy history, overriding native reverse-search), make
-  PSFzf use fd for traversal (`-EnableFd`), and register the **Ctrl+G** fuzzy-git chords (only when
-  git is on PATH). `-TabExpansionChord` binds a chord to PSFzf's `Invoke-FzfTabCompletion` (via
+  ships **no** PowerShell key bindings, `-ProviderChord`/`-HistoryChord`/`-DirectoryChord`/`-UseFd`/
+  `-GitKeyBindings` install/import the **PSFzf** module and call `Set-PsFzfOption` to bind **Ctrl+T**
+  (fd-sourced file picker with the bat preview), **Ctrl+R** (fuzzy history, overriding native
+  reverse-search), and **Alt+C** (fuzzy `cd` into a directory), make PSFzf use fd for traversal
+  (`-EnableFd`), and register the **Ctrl+G** fuzzy-git chords (only when git is on PATH).
+  `-TabExpansionChord` binds a chord to PSFzf's `Invoke-FzfTabCompletion` (via
   `Set-PSReadLineKeyHandler`, since `Set-PsFzfOption -TabExpansion` only ever targets `Tab`), opening a
   fuzzy fzf picker over PowerShell's native completions — paths, command/parameter names, and every
   registered completer — while leaving `Tab` as the classic `MenuComplete`. Passing `Ctrl+Spacebar`
@@ -1155,11 +1156,14 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
   large result sets but shrinking to fit small ones — while
   `$env:FZF_DEFAULT_OPTS` stays height-free so a bare `fzf` keeps its alternate-screen fullscreen.
   `Initialize-PwshProfile` passes the theme blend, `full` style, `~100%` height, the bat preview
-  (when bat is in play), `Ctrl+t`/`Ctrl+r`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd` (when fd
-  is in play), and `-GitKeyBindings`. fzf
+  (when bat is in play), `Ctrl+t`/`Ctrl+r`/`Alt+c`, `Ctrl+Spacebar` for fuzzy completion, `-UseFd`
+  (when fd is in play), and `-GitKeyBindings`. fzf
   owns its own options here; the *"use fd as fzf's source"* wiring (`$env:FZF_DEFAULT_COMMAND` for
-  files, `$env:FZF_ALT_C_COMMAND` for directories) lives in `Enable-Fd`. Note that importing PSFzf
-  also binds **Alt+C** (a set-location directory picker) on its own, whether or not it was asked for;
+  files, `$env:FZF_ALT_C_COMMAND` for directories) lives in `Enable-Fd`. `-DirectoryChord` (passed as
+  `Alt+c` by `Initialize-PwshProfile`) explicitly (re)binds PSFzf's set-location directory picker on
+  every call, rather than relying on PSFzf's own one-time import-time default — PSFzf only binds that
+  chord as top-level module-load script that fires once per process, so a profile reload's no-op
+  re-import would otherwise never restore it once `Initialize-PSReadline`'s `-EditMode` reset wipes it.
   `Enable-Fd`'s `FZF_ALT_C_COMMAND` is what makes that chord actually return results.
   zoxide's interactive picker (`cdi` / `zi`) reuses
   fzf and inherits the `--color`/`--style` baseline.
@@ -1245,7 +1249,7 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 ```powershell
 Enable-OhMyPosh -Configuration '~/OneDrive/.config/PoshThemes/craver.modified.omp.json'
 Enable-Zoxide
-Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '~100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -UseFd -GitKeyBindings
+Enable-Fzf -Colors 'hl:#5fd7ff,pointer:#c9aaff,prompt:#c9aaff' -Style full -Height '~100%' -PreviewCommand 'bat --color=always --style=numbers {}' -ProviderChord 'Ctrl+t' -HistoryChord 'Ctrl+r' -DirectoryChord 'Alt+c' -UseFd -GitKeyBindings
 Enable-FastNodeManager
 Enable-Xh -ReplaceHttp
 Enable-Jq

@@ -117,4 +117,18 @@ Describe 'Enable-Fzf' {
         Should -Invoke -ModuleName $script:Module Set-PSReadLineKeyHandler -Times 1 -Exactly `
             -ParameterFilter { $Key -eq 'Ctrl+j' }
     }
+
+    It 'imports PSFzf when -DirectoryChord is given, the same as -ProviderChord/-HistoryChord' {
+        # PSFzf only binds this chord as a one-time module-load side effect, which a reload's no-op
+        # re-import never re-triggers -- Set-PsFzfOption is what re-asserts it on every call, mirroring
+        # -ProviderChord/-HistoryChord. Not asserted directly here (same as those two): Set-PsFzfOption
+        # only exists once the real PSFzf module is loaded, which CI doesn't have installed.
+        Enable-Fzf -DirectoryChord 'Alt+c'
+        Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 1 -Exactly
+    }
+
+    It 'does not import PSFzf when -DirectoryChord is empty and nothing else needs it' {
+        Enable-Fzf -DirectoryChord ''
+        Should -Invoke -ModuleName $script:Module Import-ModuleSafe -Times 0 -Exactly
+    }
 }

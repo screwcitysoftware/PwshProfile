@@ -19,9 +19,9 @@ function Get-PwshProfileChordCatalog {
                     for every row that doesn't need one — most don't.
           Owner   — the function/module responsible, and whether it's on by default, opt-in, or
                     configurable.
-          Note    — extra context, most usefully "this isn't this module's choice" (PSFzf's own Alt+C)
-                    or "this replaces a PSReadLine/PSFzf default" (Ctrl+R, Up/Down). '' when there's
-                    nothing more to say.
+          Note    — extra context, most usefully "this replaces a PSReadLine/PSFzf default" (Ctrl+R,
+                    Up/Down) or a pointer to a related setting (Alt+C's Enable-Fd dependency). '' when
+                    there's nothing more to say.
           Url     — the project that owns the chord (PSFzf for the fzf-picker rows, PSReadLine for
                     Initialize-PSReadline's own rows), so Show-PwshProfileChord can link the chord to
                     it. PSFzf, not the `fzf` binary itself (already linked from the tool catalog),
@@ -92,7 +92,7 @@ function Get-PwshProfileChordCatalog {
             Chord   = 'Alt+C'
             Action  = 'Fuzzy-pick a directory and cd into it'
             Detail  = ''
-            Owner   = "PSFzf itself — bound automatically on import, not this module's choice"
+            Owner   = 'Enable-Fzf -DirectoryChord (always bound)'
             Note    = "Enable-Fd's -IntegrateFzf is what makes it return real results " +
             '(sets $env:FZF_ALT_C_COMMAND).'
             Url     = $psfzf

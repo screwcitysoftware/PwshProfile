@@ -61,7 +61,8 @@ Describe 'Initialize-PwshProfile' {
             # bindings, fd traversal, and git chords off (opt-in, off by default).
             Should -Invoke -ModuleName $script:Module Enable-Fzf -Times 1 -Exactly `
                 -ParameterFilter { $Colors -like '*pointer:#c9aaff*' -and $Style -eq 'full' -and $Height -eq '~100%' -and $PreviewCommand -like 'bat *' -and `
-                    $ProviderChord -eq 'Ctrl+t' -and $HistoryChord -eq 'Ctrl+r' -and $TabExpansionChord -eq 'Ctrl+Spacebar' -and $UseFd -and -not $GitKeyBindings }
+                    $ProviderChord -eq 'Ctrl+t' -and $HistoryChord -eq 'Ctrl+r' -and $DirectoryChord -eq 'Alt+c' -and `
+                    $TabExpansionChord -eq 'Ctrl+Spacebar' -and $UseFd -and -not $GitKeyBindings }
             Should -Invoke -ModuleName $script:Module Enable-FastNodeManager -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Xh -Times 1 -Exactly
             Should -Invoke -ModuleName $script:Module Enable-Jq -Times 1 -Exactly
