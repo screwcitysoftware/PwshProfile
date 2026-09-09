@@ -36,8 +36,9 @@ bundled oh-my-posh themes: **`screwcity`** (the original — purples and blues, 
 `#c9aaff`) and **`forestcity`** (greens, browns, and grays, signature `#8fce72`). Each theme
 carries a matching banner color and step icon, so picking `forestcity` renders the banner in the
 theme's green with a 🌳 (`:deciduous_tree:`) step marker, while `screwcity` keeps the 🔩 / purple
-identity. (The banner *text* defaults to your machine name for either theme.) See
-[Themes](#themes) for how to choose one.
+identity. (The banner *text* defaults to your machine name for either theme.) Each identity also
+ships a lighter **`-simple`** layout variant (`screwcity-simple`, `forestcity-simple`) — same
+colors and icon, fewer prompt segments. See [Themes](#themes) for how to choose one.
 
 ## Installation
 
@@ -318,13 +319,26 @@ itself doesn't, because its completer is large enough to cost ~244 ms of every s
 
 ## Themes
 
-The module bundles two oh-my-posh themes under `Assets/Themes`, both built on the same palette-keyed
-structure so they differ only in color:
+The module bundles four oh-my-posh themes under `Assets/Themes`, all built on the same
+palette-keyed structure so within an identity they differ only in color, and within a layout
+(full vs. `-simple`) they differ only in which segments are present:
 
-| Theme        | Identity      | Signature color | Step icon            | Palette                  |
-|--------------|---------------|-----------------|----------------------|--------------------------|
-| `screwcity`  | Screw City    | `#c9aaff` purple | 🔩 `:nut_and_bolt:`   | purples, blues, ambers   |
-| `forestcity` | Forest City   | `#8fce72` green  | 🌳 `:deciduous_tree:` | greens, browns, grays    |
+| Theme               | Identity      | Signature color | Step icon            | Palette                  |
+|---------------------|---------------|-----------------|----------------------|--------------------------|
+| `screwcity`          | Screw City    | `#c9aaff` purple | 🔩 `:nut_and_bolt:`   | purples, blues, ambers   |
+| `screwcity-simple`   | Screw City    | `#c9aaff` purple | 🔩 `:nut_and_bolt:`   | purples, blues, ambers   |
+| `forestcity`         | Forest City   | `#8fce72` green  | 🌳 `:deciduous_tree:` | greens, browns, grays    |
+| `forestcity-simple`  | Forest City   | `#8fce72` green  | 🌳 `:deciduous_tree:` | greens, browns, grays    |
+
+The full themes render a root-admin warning, OS icon, path, and git status on the left of the main
+row; an az/dotnet/node/docker toolchain block on the right of that same row; and exit code,
+execution time, and clock as an `rprompt` — right-aligned on the *command* row, next to where you
+type. The **`-simple`** variants drop the **az/dotnet/node/docker toolchain block** entirely — no
+per-render dev-tool probing — and move the exit code/execution time/clock trio onto the main row
+(right-aligned, alongside path and git status), leaving the command row with nothing but the `❯`
+arrow. A `-simple` theme shares its parent's identity byte for byte (banner color, step icon,
+bat/fd/fzf colors, Windows Terminal scheme); only the
+prompt layout differs.
 
 Each theme's identity extends past the prompt: a matching **bat** syntax theme, **fd**/**fzf**
 color palettes, and a **Windows Terminal color scheme** (install it with
@@ -486,8 +500,10 @@ ScrewCitySoftware.PwshProfile/
 │       └── Test-CommandAvailable.ps1    # cheap CLI-presence probe (avoids Get-Command's ~130ms miss)
 ├── Assets/                              # bundled assets
 │   ├── Themes/
-│   │   ├── screwcity.omp.json   # default oh-my-posh theme — Screw City (purple/blue)
-│   │   └── forestcity.omp.json  # alternate theme — Forest City (green/brown/gray)
+│   │   ├── screwcity.omp.json          # default oh-my-posh theme — Screw City (purple/blue)
+│   │   ├── screwcity-simple.omp.json   # lighter layout, same Screw City identity
+│   │   ├── forestcity.omp.json         # alternate theme — Forest City (green/brown/gray)
+│   │   └── forestcity-simple.omp.json  # lighter layout, same Forest City identity
 │   └── Fonts/                           # 25 bundled FIGlet fonts (see Write-Figlet / Show-FigletFont)
 │       ├── *.flf                        # ANSIShadow, Colossal, Doom, Slant, Small, ... (run Show-FigletFont)
 │       └── README.md                    # font sources + license/attribution
@@ -582,8 +598,8 @@ The wizard walks one forward pass, then lets you revise anything before committi
      3 present · 2 to install · 2 only if needed
    ```
 
-4. **Theme** — pick a bundled theme (`screwcity` / `forestcity`) or supply a path to a theme of
-   your own (see [Themes](#themes)). The choice seeds every branded setting the later prompts are
+4. **Theme** — pick a bundled theme (`screwcity`, `forestcity`, or either identity's lighter
+   `-simple` layout) or supply a path to a theme of your own (see [Themes](#themes)). The choice seeds every branded setting the later prompts are
    pre-filled with — banner color, step icon, and bat's syntax theme; a custom path seeds neutral
    ones (`Silver`, `:gear:`, `ansi`) so you brand those fresh. The banner text defaults to your
    machine name (`$env:COMPUTERNAME`) regardless of theme. It then asks whether to install the
@@ -806,8 +822,9 @@ and summary line, and steps that depend on a missing tool degrade silently, so s
 deliberately does **not** run your own personal extras (e.g. `Initialize-WorkTools.ps1` or `aliases.ps1`)
 — those stay in `$PROFILE`.
 
-- **`-Theme`** — the bundled oh-my-posh theme: `screwcity` (default) or `forestcity` (tab-completes,
-  discovered from `Assets/Themes`). Resolved to its file and forwarded to `Enable-OhMyPosh
+- **`-Theme`** — the bundled oh-my-posh theme (default `screwcity`; tab-completes across every
+  theme discovered from `Assets/Themes` — currently `screwcity`, `screwcity-simple`, `forestcity`,
+  and `forestcity-simple`). Resolved to its file and forwarded to `Enable-OhMyPosh
   -Configuration`. The choice also seeds the banner color and step icon below. Mutually
   exclusive with `-CustomTheme`.
 - **`-CustomTheme`** — path (relative or absolute) to a custom oh-my-posh theme, forwarded to
@@ -825,8 +842,8 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
 - **`-ZoxideCommand`** — zoxide's jump command, forwarded to `Enable-Zoxide -Command` (default
   `cd`; pass e.g. `z` to keep the built-in `cd`).
 - **`-BatTheme`** — bat's syntax theme, forwarded to `Enable-Bat -Theme` (sets `$env:BAT_THEME`).
-  Defaults to the active theme's blend (`Dracula` for screwcity, `gruvbox-dark` for forestcity); a
-  value from `bat --list-themes`.
+  Defaults to the active theme's blend (`Dracula` for screwcity/screwcity-simple, `gruvbox-dark`
+  for forestcity/forestcity-simple); a value from `bat --list-themes`.
 - **`-BatStyle`** — bat's layout, forwarded to `Enable-Bat -Style` (sets `$env:BAT_STYLE`); default
   `numbers,changes,header`.
 - **`-ReplaceCat`** — forwarded to `Enable-Bat -ReplaceCat`: aliases `cat` → `bat` for the session
@@ -843,12 +860,12 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   widening each generated completer to match. Off by default: unlike `cat` and `more`, these aren't
   built-in commands, so this claims two previously-free names rather than shadowing anything.
 - **`-FdColors`** — fd's `LS_COLORS` palette, forwarded to `Enable-Fd -LsColors` (sets
-  `$env:LS_COLORS`). Defaults to the active theme's blend (purple-led for screwcity, green-led for
-  forestcity). fd stays standalone — it never replaces `Get-ChildItem`. (`LS_COLORS` is shared with
-  `ls`/`eza`.)
+  `$env:LS_COLORS`). Defaults to the active theme's blend (purple-led for the screwcity identity,
+  green-led for forestcity — shared by each identity's `-simple` variant). fd stays standalone — it
+  never replaces `Get-ChildItem`. (`LS_COLORS` is shared with `ls`/`eza`.)
 - **`-FzfColors`** — fzf's picker palette, forwarded to `Enable-Fzf -Colors` (folded into
-  `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for screwcity,
-  green/gold for forestcity).
+  `$env:FZF_DEFAULT_OPTS`). Defaults to the active theme's blend (purple/cyan for the screwcity
+  identity, green/gold for forestcity — shared by each identity's `-simple` variant).
 - **`-FzfGitKeyBindings`** — a switch that binds PSFzf's `Ctrl+G,Ctrl+<key>` git chords (branch,
   file, hash, pull request, stash, and tag pickers), forwarded to `Enable-Fzf -GitKeyBindings`.
   **Off by default** (opt-in) — pass `-FzfGitKeyBindings` to enable them; they're off because
@@ -857,8 +874,9 @@ deliberately does **not** run your own personal extras (e.g. `Initialize-WorkToo
   stays `MenuComplete`), forwarded to `Enable-Fzf -TabExpansionChord`. Default `Ctrl+Spacebar`
   (which also binds `Ctrl+@`).
 - **`-StepIcon`** — the top-level step marker, forwarded to `Invoke-Step -Icon` (defaults to the
-  theme's branding — `:nut_and_bolt:` → 🔩 for screwcity, `:deciduous_tree:` → 🌳 for forestcity).
-  No trailing space needed — the separator before the step text is added at render time.
+  theme's branding — `:nut_and_bolt:` → 🔩 for screwcity/screwcity-simple, `:deciduous_tree:` → 🌳
+  for forestcity/forestcity-simple). No trailing space needed — the separator before the step text
+  is added at render time.
 - **`-ShowChordGuidance`** — a switch that prints `Show-PwshProfileChord` once at the end of startup,
   forwarding `-FzfGitKeyBindings`/`-FzfTabChord` so the guidance reflects this session's actual
   configuration (the `Ctrl+G` row only if git bindings are on, the tab-completion row with the real
@@ -1042,7 +1060,8 @@ so it applies immediately. `Uninstall-WindowsTerminalScheme` removes the matchin
 `-SetDefault`) in its **Theme** step.
 
 - **`-Theme`** — the bundled theme whose scheme to install/remove (default `screwcity`;
-  tab-completes; custom/unknown themes fall back to the Screw City scheme).
+  tab-completes across every bundled theme; custom/unknown themes fall back to the Screw City
+  scheme). A `-simple` variant installs the exact same scheme as its parent identity.
 - **`-SettingsPath`** — override the `settings.json` location (default: the first existing of the
   stable, preview, and unpackaged Windows Terminal install paths).
 - **`-SetDefault`** (install only) — also set the scheme as the default color scheme for all
@@ -1190,7 +1209,8 @@ and Initialize (also `Get-Command`-guarded) is skipped, so startup continues eit
 - **`Enable-Bat [-Theme <name>] [-Style <list>] [-ReplaceCat]`** — installs `sharkdp.bat`
   (a `cat` clone with syntax highlighting and git integration). In Initialize it sets
   `$env:BAT_THEME` to `-Theme` (so bat's colors match the prompt — `Initialize-PwshProfile`
-  passes the active theme's blend: screwcity → `Dracula`, forestcity → `gruvbox-dark`) and
+  passes the active theme's blend: screwcity/screwcity-simple → `Dracula`,
+  forestcity/forestcity-simple → `gruvbox-dark`) and
   `$env:BAT_STYLE` to `-Style` (default `numbers,changes,header`), registers bat's PowerShell
   completer (`bat --completion ps1`), and — with `-ReplaceCat` — aliases `cat` → `bat` globally
   and extends that completer to the `cat` alias so `cat <Tab>` completes bat's flags too
@@ -1264,7 +1284,8 @@ Enable-Uv
 ### `Get-OhMyPoshTheme`, `Export-OhMyPoshTheme`
 
 Get a starting copy of a bundled oh-my-posh theme so you can customize it. Both take `-Theme`
-(`screwcity` default, or `forestcity`; tab-completes) and read `Assets/Themes/<Theme>.omp.json`;
+(`screwcity` default; tab-completes across every bundled theme) and read
+`Assets/Themes/<Theme>.omp.json`;
 neither exposes that in-module path as an edit target — when the module is installed from a
 repository it lives in a versioned, possibly read-only directory, so edits there would be lost on the
 next update. Customize a copy *you* own and point `Enable-OhMyPosh -Configuration` (or
@@ -1520,8 +1541,8 @@ The publish workflow reads the gallery API key from the `PSGALLERY_API_KEY` repo
 
 ## License
 
-This project's code and original assets (including the `screwcity.omp.json` and
-`forestcity.omp.json` oh-my-posh themes) are released under the MIT License — see
+This project's code and original assets (including the `screwcity.omp.json`, `screwcity-simple.omp.json`,
+`forestcity.omp.json`, and `forestcity-simple.omp.json` oh-my-posh themes) are released under the MIT License — see
 [`LICENSE`](LICENSE).
 
 Two carve-outs:

@@ -11,6 +11,20 @@ function Get-BundledThemeBranding {
           screwcity  -> 'Screw City'  / :nut_and_bolt:   (🔩) / Dracula
           forestcity -> 'Forest City' / :deciduous_tree: (🌳) / gruvbox-dark
 
+        screwcity-simple and forestcity-simple are lighter-weight prompt layouts paired with the same
+        screwcity/forestcity identity: everything the full theme has (root-admin warning, OS icon,
+        path, git, exit code, execution time, clock) except the az/dotnet/node/docker toolchain
+        block, which is dropped entirely rather than just hidden. The exit code/execution
+        time/clock trio also moves row: the full theme renders it as an `rprompt` (right-aligned on
+        the command row, next to where you type), while the `-simple` layout renders it as an
+        ordinary right-aligned segment on the main row (alongside path/git), leaving the command row
+        with nothing but the prompt arrow. They clone their parent's full branding hashtable
+        byte-for-byte and override only DisplayName ('Screw City (Simple)' / 'Forest City (Simple)')
+        so the wizard's theme picker can tell them apart. TerminalScheme.name deliberately keeps the
+        parent's unmodified name ('Screw City' / 'Forest City') since the colors are identical, so
+        installing either variant's scheme writes to the same settings.json entry rather than
+        creating a near-duplicate.
+
         DisplayName is the friendly label shown in the wizard's theme picker — it is NOT the banner
         text, which is uniformly $env:COMPUTERNAME for every theme. The step icon is stored without a
         trailing space; the separator is added at render time by Get-StepIconPrefix. BatTheme,
@@ -130,6 +144,11 @@ function Get-BundledThemeBranding {
             }
         }
     }
+
+    $branding['screwcity-simple'] = $branding['screwcity'].Clone()
+    $branding['screwcity-simple'].DisplayName = 'Screw City (Simple)'
+    $branding['forestcity-simple'] = $branding['forestcity'].Clone()
+    $branding['forestcity-simple'].DisplayName = 'Forest City (Simple)'
 
     if ($branding.ContainsKey($Name)) { $branding[$Name].Clone() } else { $branding['screwcity'].Clone() }
 }
