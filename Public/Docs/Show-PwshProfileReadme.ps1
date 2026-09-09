@@ -54,7 +54,9 @@ function Show-PwshProfileReadme {
         [ArgumentCompleter({
                 param($commandName, $parameterName, $wordToComplete, $commandAst, $fakeBoundParameters)
                 # Completers run in the caller's scope; reach the shared completer through the module.
-                $module = Get-Module ScrewCitySoftware.PwshProfile
+                # Select -Last 1: if more than one copy of the module is loaded (e.g. a dev checkout
+                # alongside a staged build), Get-Module returns an array, and & can't invoke that.
+                $module = Get-Module ScrewCitySoftware.PwshProfile | Select-Object -Last 1
                 if ($module) { & $module { param($w) Get-BundledThemeCompletion -WordToComplete $w } $wordToComplete }
             })]
         [ValidateScript({ $_ -in (Get-BundledThemeName) },
